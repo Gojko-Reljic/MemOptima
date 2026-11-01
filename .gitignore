@@ -1,0 +1,55 @@
+# CMake configuration and generated build directories
+/build/
+/build-*/
+/cmake-build-*/
+/CMakeCache.txt
+/CMakeFiles/
+/CTestTestfile.cmake
+/Testing/
+/cmake_install.cmake
+/install_manifest.txt
+/Makefile
+
+# Compilation and linking artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Debugging, profiling, and memory-analysis outputs
+*.dSYM/
+*.gcda
+*.gcno
+*.gcov
+/coverage/
+/htmlcov/
+/lcov.info
+/valgrind*.log
+/callgrind.out.*
+/massif.out.*
+
+# Compiler and tooling databases generated locally
+/compile_commands.json
+
+# Editor and IDE state
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+
+# Operating-system-generated files
+.DS_Store
+Thumbs.db
+
+# Locally produced distribution packages
+*.deb
+*.rpm
+*.tar.gz
+*.zip
