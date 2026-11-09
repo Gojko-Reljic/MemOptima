@@ -20,7 +20,7 @@ The core library will keep logical areas in dedicated directories:
 
 ```text
 memoptima_core
-├── linux/       # Linux-specific data collection
+├── linux/       # Linux-specific data collection, including /proc/meminfo parsing
 ├── analysis/    # memory-pressure evaluation
 └── ...
 ```
