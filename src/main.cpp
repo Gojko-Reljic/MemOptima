@@ -1,4 +1,8 @@
 #include <memoptima/application_info.hpp>
+#include <memoptima/analysis/memory_status.hpp>
+#include <memoptima/linux/memory_reader.hpp>
+
+#include "cli/status_formatter.hpp"
 
 #include <iostream>
 #include <string_view>
@@ -6,6 +10,7 @@
 namespace {
 
 constexpr int kExitSuccess = 0;
+constexpr int kExitRuntimeError = 1;
 constexpr int kExitUsageError = 2;
 
 void print_help(std::ostream& output) {
@@ -14,7 +19,34 @@ void print_help(std::ostream& output) {
            << "  memoptima [OPTION]\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
+           << "  status           Display current RAM and swap status.\n"
            << "  -v, --version    Display the application version.\n";
+}
+
+void print_memory_read_error(const memoptima::linux::MemoryReadError& error) {
+    std::cerr << "Error: unable to read system memory information:\n";
+
+    if (!error.metric_name.empty()) {
+        std::cerr << error.metric_name;
+        if (error.line_number != 0) {
+            std::cerr << " on line " << error.line_number;
+        }
+        std::cerr << ": ";
+    }
+
+    std::cerr << error.detail << '\n';
+}
+
+int run_status_command() {
+    const auto snapshot = memoptima::linux::read_system_memory_snapshot();
+    if (!snapshot.has_value()) {
+        print_memory_read_error(snapshot.error());
+        return kExitRuntimeError;
+    }
+
+    const memoptima::analysis::MemoryStatus status = memoptima::analysis::evaluate_memory_status(*snapshot);
+    std::cout << memoptima::cli::format_memory_status(status);
+    return kExitSuccess;
 }
 
 int run(int argument_count, char* arguments[]) {
@@ -30,6 +62,10 @@ int run(int argument_count, char* arguments[]) {
     }
 
     const std::string_view option{arguments[1]};
+
+    if (option == "status") {
+        return run_status_command();
+    }
 
     if (option == "-h" || option == "--help") {
         print_help(std::cout);

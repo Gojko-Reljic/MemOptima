@@ -172,36 +172,42 @@ struct ParsedMetrics {
         return std::unexpected(free_swap.error());
     }
 
-    if (total_memory->bytes == 0) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::inconsistent_values,
-            "MemTotal",
-            total_memory->line_number,
-            "MemTotal must be greater than zero."));
+    const auto snapshot = MemorySnapshot::create(
+        total_memory->bytes,
+        available_memory->bytes,
+        total_swap->bytes,
+        free_swap->bytes);
+
+    if (snapshot.has_value()) {
+        return *snapshot;
     }
 
-    if (available_memory->bytes > total_memory->bytes) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::inconsistent_values,
-            "MemAvailable",
-            available_memory->line_number,
-            "MemAvailable cannot exceed MemTotal."));
+    switch (snapshot.error().code) {
+        case SnapshotValidationErrorCode::total_memory_must_be_positive:
+            return std::unexpected(make_error(
+                MemoryReadErrorCode::inconsistent_values,
+                "MemTotal",
+                total_memory->line_number,
+                "MemTotal must be greater than zero."));
+        case SnapshotValidationErrorCode::available_memory_exceeds_total:
+            return std::unexpected(make_error(
+                MemoryReadErrorCode::inconsistent_values,
+                "MemAvailable",
+                available_memory->line_number,
+                "MemAvailable cannot exceed MemTotal."));
+        case SnapshotValidationErrorCode::free_swap_exceeds_total:
+            return std::unexpected(make_error(
+                MemoryReadErrorCode::inconsistent_values,
+                "SwapFree",
+                free_swap->line_number,
+                "SwapFree cannot exceed SwapTotal."));
     }
 
-    if (free_swap->bytes > total_swap->bytes) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::inconsistent_values,
-            "SwapFree",
-            free_swap->line_number,
-            "SwapFree cannot exceed SwapTotal."));
-    }
-
-    return MemorySnapshot{
-        .total_memory_bytes = total_memory->bytes,
-        .available_memory_bytes = available_memory->bytes,
-        .total_swap_bytes = total_swap->bytes,
-        .free_swap_bytes = free_swap->bytes,
-    };
+    return std::unexpected(make_error(
+        MemoryReadErrorCode::inconsistent_values,
+        {},
+        0,
+        "Memory snapshot validation failed."));
 }
 
 }  // namespace

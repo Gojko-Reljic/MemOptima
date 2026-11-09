@@ -20,10 +20,10 @@ TEST(MemInfoParser, ParsesRequiredMetricsAndConvertsKilobytesToBytes) {
     const auto result = parse_memory_info(kValidMemoryInfo);
 
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->total_memory_bytes, 32747752ULL * 1024ULL);
-    EXPECT_EQ(result->available_memory_bytes, 27303452ULL * 1024ULL);
-    EXPECT_EQ(result->total_swap_bytes, 8388604ULL * 1024ULL);
-    EXPECT_EQ(result->free_swap_bytes, 8388604ULL * 1024ULL);
+    EXPECT_EQ(result->total_memory_bytes(), 32747752ULL * 1024ULL);
+    EXPECT_EQ(result->available_memory_bytes(), 27303452ULL * 1024ULL);
+    EXPECT_EQ(result->total_swap_bytes(), 8388604ULL * 1024ULL);
+    EXPECT_EQ(result->free_swap_bytes(), 8388604ULL * 1024ULL);
 }
 
 TEST(MemInfoParser, RejectsMissingRequiredMetric) {

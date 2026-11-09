@@ -6,6 +6,7 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 
 - `memoptima --help` displays the available command-line options.
 - `memoptima --version` displays the application version.
+- `memoptima status` displays current RAM and swap usage.
 
 ## Requirements
 
@@ -40,6 +41,7 @@ The debug preset enables AddressSanitizer and UndefinedBehaviorSanitizer. The re
 ```bash
 ./build/debug/src/memoptima --help
 ./build/debug/src/memoptima --version
+./build/debug/src/memoptima status
 ```
 
 ## License

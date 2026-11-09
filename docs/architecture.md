@@ -14,6 +14,18 @@ memoptima_core
 
 `memoptima_core` is an internal static library. The CLI and unit tests both link against it, so tests exercise the same code used by the application.
 
+Memory collection, analysis, and terminal presentation have distinct responsibilities:
+
+```text
+MemorySnapshot
+        |
+        +-- linux/      reads and validates /proc/meminfo
+        |
+        +-- analysis/   derives memory and swap usage
+        |
+        +-- cli/        formats terminal text
+```
+
 ## Planned evolution
 
 The core library will keep logical areas in dedicated directories:
