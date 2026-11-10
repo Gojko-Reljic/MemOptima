@@ -32,6 +32,29 @@ set_target_properties(memoptima_core_tests PROPERTIES
 include(GoogleTest)
 gtest_discover_tests(memoptima_core_tests DISCOVERY_MODE PRE_TEST)
 
+find_program(MEMOPTIMA_TIMEOUT_EXECUTABLE timeout REQUIRED)
+
+add_test(
+    NAME MemOptimaCli.Help
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/help_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.Version
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/version_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.UsageErrors
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/usage_errors_command_test.cmake"
+)
+
 add_test(
     NAME MemOptimaCli.Status
     COMMAND "${CMAKE_COMMAND}"
@@ -44,4 +67,12 @@ add_test(
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
         -P "${PROJECT_SOURCE_DIR}/tests/processes_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.Monitor
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        "-DMEMOPTIMA_TIMEOUT_EXECUTABLE=${MEMOPTIMA_TIMEOUT_EXECUTABLE}"
+        -P "${PROJECT_SOURCE_DIR}/tests/monitor_command_test.cmake"
 )
