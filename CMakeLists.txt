@@ -96,3 +96,20 @@ if(BUILD_TESTING)
         COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target memoptima_format_check
     )
 endif()
+
+if(BUILD_TESTING AND CMAKE_BUILD_TYPE STREQUAL "Release")
+    find_program(MEMOPTIMA_VALGRIND_EXECUTABLE NAMES valgrind REQUIRED)
+    find_program(MEMOPTIMA_TIMEOUT_EXECUTABLE NAMES timeout REQUIRED)
+
+    add_custom_target(memoptima_valgrind
+        COMMAND "${CMAKE_COMMAND}"
+            "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+            "-DMEMOPTIMA_VALGRIND_EXECUTABLE=${MEMOPTIMA_VALGRIND_EXECUTABLE}"
+            "-DMEMOPTIMA_TIMEOUT_EXECUTABLE=${MEMOPTIMA_TIMEOUT_EXECUTABLE}"
+            -P "${PROJECT_SOURCE_DIR}/tests/valgrind_check.cmake"
+        COMMENT "Running Release CLI checks under Valgrind"
+        DEPENDS memoptima
+        USES_TERMINAL
+        VERBATIM
+    )
+endif()

@@ -45,6 +45,14 @@ ctest --preset release
 
 The debug preset enables AddressSanitizer and UndefinedBehaviorSanitizer. The release preset keeps tests enabled and disables sanitizers.
 
+Run the Release command-line checks under Valgrind:
+
+```bash
+cmake --build --preset release --target memoptima_valgrind
+```
+
+This target checks `status`, `processes`, and a controlled `monitor` interruption for memory errors and definite or indirect leaks.
+
 ## Run
 
 ```bash
