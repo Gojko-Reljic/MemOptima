@@ -21,7 +21,7 @@ MemorySnapshot
         |
         +-- linux/      reads and validates /proc/meminfo
         |
-        +-- analysis/   derives memory and swap usage
+        +-- analysis/   derives memory, swap, and memory-pressure status
         |
         +-- cli/        formats terminal text
 ```

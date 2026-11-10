@@ -1,5 +1,7 @@
 #include "cli/status_formatter.hpp"
 
+#include <memoptima/analysis/memory_pressure.hpp>
+
 #include <gtest/gtest.h>
 
 namespace memoptima::cli {
@@ -17,7 +19,9 @@ TEST(StatusFormatter, FormatsStatusWithIecUnitsAndPercentages) {
         .used_swap_percentage = 75.0,
     };
 
-    EXPECT_EQ(format_memory_status(status), R"(Memory status
+    const analysis::MemoryPressure pressure = analysis::evaluate_memory_pressure(status);
+
+    EXPECT_EQ(format_memory_status(status, pressure), R"(Memory status
 
 RAM
   Total:              1.00 GiB
@@ -28,6 +32,9 @@ Swap
   Total:              2.00 GiB
   Free:               512.00 MiB
   In use:             1.50 GiB (75.0%)
+
+Memory pressure
+  Level:              Warning
 )");
 }
 
@@ -43,7 +50,11 @@ TEST(StatusFormatter, FormatsNoSwapAsNotApplicable) {
         .used_swap_percentage = std::nullopt,
     };
 
-    EXPECT_NE(format_memory_status(status).find("In use:             0 B (N/A)"), std::string::npos);
+    const analysis::MemoryPressure pressure = analysis::evaluate_memory_pressure(status);
+    const std::string output = format_memory_status(status, pressure);
+
+    EXPECT_NE(output.find("In use:             0 B (N/A)"), std::string::npos);
+    EXPECT_NE(output.find("Level:              Critical"), std::string::npos);
 }
 
 }  // namespace

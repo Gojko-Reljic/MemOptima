@@ -1,4 +1,5 @@
 #include <memoptima/application_info.hpp>
+#include <memoptima/analysis/memory_pressure.hpp>
 #include <memoptima/analysis/memory_status.hpp>
 #include <memoptima/linux/memory_reader.hpp>
 #include <memoptima/linux/process_scanner.hpp>
@@ -48,7 +49,8 @@ int run_status_command() {
     }
 
     const memoptima::analysis::MemoryStatus status = memoptima::analysis::evaluate_memory_status(*snapshot);
-    std::cout << memoptima::cli::format_memory_status(status);
+    const memoptima::analysis::MemoryPressure pressure = memoptima::analysis::evaluate_memory_pressure(status);
+    std::cout << memoptima::cli::format_memory_status(status, pressure);
     return kExitSuccess;
 }
 

@@ -42,9 +42,22 @@ constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "
     return output.str();
 }
 
+[[nodiscard]] std::string_view pressure_level_name(analysis::MemoryPressureLevel level) {
+    switch (level) {
+        case analysis::MemoryPressureLevel::Normal:
+            return "Normal";
+        case analysis::MemoryPressureLevel::Warning:
+            return "Warning";
+        case analysis::MemoryPressureLevel::Critical:
+            return "Critical";
+    }
+
+    return "Critical";
+}
+
 }  // namespace
 
-std::string format_memory_status(const analysis::MemoryStatus& status) {
+std::string format_memory_status(const analysis::MemoryStatus& status, const analysis::MemoryPressure& pressure) {
     std::ostringstream output;
     output << "Memory status\n\n"
            << "RAM\n"
@@ -56,7 +69,9 @@ std::string format_memory_status(const analysis::MemoryStatus& status) {
            << "  Total:              " << format_bytes(status.total_swap_bytes) << '\n'
            << "  Free:               " << format_bytes(status.free_swap_bytes) << '\n'
            << "  In use:             " << format_bytes(status.used_swap_bytes) << " ("
-           << format_percentage(status.used_swap_percentage) << ")\n";
+           << format_percentage(status.used_swap_percentage) << ")\n\n"
+           << "Memory pressure\n"
+           << "  Level:              " << pressure_level_name(pressure.level()) << '\n';
     return output.str();
 }
 

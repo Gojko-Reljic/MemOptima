@@ -1,5 +1,6 @@
 add_library(memoptima_core STATIC
     application_info.cpp
+    analysis/memory_pressure.cpp
     analysis/memory_status.cpp
     linux/meminfo_parser.cpp
     linux/memory_reader.cpp
