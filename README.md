@@ -10,6 +10,12 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 - `memoptima monitor` continuously displays the memory status every five seconds until interrupted with `Ctrl+C`.
 - `memoptima processes` displays the top ten processes by resident memory.
 
+## Documentation
+
+- [User Guide](docs/user-guide.md) explains how to build, test, and use MemOptima.
+- [Metrics and Memory Pressure](docs/metrics-and-pressure.md) explains the Linux metrics, calculations, thresholds, and limitations.
+- [MVP Scope](docs/mvp-scope.md) defines the current product boundary, safety and privacy behavior, and post-MVP direction.
+
 ## Requirements
 
 - Linux
