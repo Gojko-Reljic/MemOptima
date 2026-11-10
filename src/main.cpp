@@ -5,10 +5,15 @@
 #include <memoptima/linux/process_scanner.hpp>
 
 #include "cli/processes_formatter.hpp"
+#include "cli/monitor_runner.hpp"
 #include "cli/status_formatter.hpp"
 
+#include <chrono>
+#include <csignal>
+#include <expected>
 #include <iostream>
 #include <string_view>
+#include <thread>
 
 namespace {
 
@@ -16,41 +21,89 @@ constexpr int kExitSuccess = 0;
 constexpr int kExitRuntimeError = 1;
 constexpr int kExitUsageError = 2;
 
+volatile std::sig_atomic_t monitor_stop_requested = 0;
+
+void request_monitor_stop(int) noexcept {
+    monitor_stop_requested = 1;
+}
+
 void print_help(std::ostream& output) {
     output << memoptima::application_name() << " — " << memoptima::application_description() << "\n\n"
            << "Usage:\n"
            << "  memoptima [OPTION]\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
+           << "  monitor          Continuously display memory status every five seconds.\n"
            << "  processes        Display the top memory-consuming processes.\n"
            << "  status           Display current RAM and swap status.\n"
            << "  -v, --version    Display the application version.\n";
 }
 
-void print_memory_read_error(const memoptima::linux::MemoryReadError& error) {
-    std::cerr << "Error: unable to read system memory information:\n";
+[[nodiscard]] std::string format_memory_read_error_detail(const memoptima::linux::MemoryReadError& error) {
+    std::string detail;
 
     if (!error.metric_name.empty()) {
-        std::cerr << error.metric_name;
+        detail += error.metric_name;
         if (error.line_number != 0) {
-            std::cerr << " on line " << error.line_number;
+            detail += " on line ";
+            detail += std::to_string(error.line_number);
         }
-        std::cerr << ": ";
+        detail += ": ";
     }
 
-    std::cerr << error.detail << '\n';
+    detail += error.detail;
+    return detail;
 }
 
-int run_status_command() {
+[[nodiscard]] memoptima::cli::FormattedStatusResult read_formatted_memory_status() {
     const auto snapshot = memoptima::linux::read_system_memory_snapshot();
     if (!snapshot.has_value()) {
-        print_memory_read_error(snapshot.error());
-        return kExitRuntimeError;
+        return std::unexpected(format_memory_read_error_detail(snapshot.error()));
     }
 
     const memoptima::analysis::MemoryStatus status = memoptima::analysis::evaluate_memory_status(*snapshot);
     const memoptima::analysis::MemoryPressure pressure = memoptima::analysis::evaluate_memory_pressure(status);
-    std::cout << memoptima::cli::format_memory_status(status, pressure);
+    return memoptima::cli::format_memory_status(status, pressure);
+}
+
+int run_status_command() {
+    const auto formatted_status = read_formatted_memory_status();
+    if (!formatted_status.has_value()) {
+        std::cerr << "Error: unable to read system memory information:\n"
+                  << formatted_status.error() << '\n';
+        return kExitRuntimeError;
+    }
+
+    std::cout << *formatted_status;
+    return kExitSuccess;
+}
+
+int run_monitor_command() {
+    monitor_stop_requested = 0;
+    const auto previous_signal_handler = std::signal(SIGINT, request_monitor_stop);
+    if (previous_signal_handler == SIG_ERR) {
+        std::cerr << "Error: unable to register the monitor interrupt handler.\n";
+        return kExitRuntimeError;
+    }
+
+    const memoptima::cli::MonitorDependencies dependencies{
+        .current_utc_time = [] { return std::chrono::system_clock::now(); },
+        .current_steady_time = [] { return std::chrono::steady_clock::now(); },
+        .read_formatted_status = [] {
+            const auto formatted_status = read_formatted_memory_status();
+            if (!formatted_status.has_value()) {
+                return memoptima::cli::FormattedStatusResult{std::unexpected(
+                    "unable to read system memory information: " + formatted_status.error())};
+            }
+
+            return formatted_status;
+        },
+        .sleep_for = [](std::chrono::milliseconds duration) { std::this_thread::sleep_for(duration); },
+        .stop_requested = [] { return monitor_stop_requested != 0; },
+    };
+
+    memoptima::cli::run_monitor(dependencies, std::cout, std::cerr);
+    std::signal(SIGINT, previous_signal_handler);
     return kExitSuccess;
 }
 
@@ -81,6 +134,10 @@ int run(int argument_count, char* arguments[]) {
 
     if (option == "status") {
         return run_status_command();
+    }
+
+    if (option == "monitor") {
+        return run_monitor_command();
     }
 
     if (option == "processes") {

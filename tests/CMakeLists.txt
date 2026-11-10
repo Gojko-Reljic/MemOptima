@@ -2,6 +2,7 @@ add_executable(memoptima_core_tests
     application_info_test.cpp
     analysis/memory_pressure_test.cpp
     analysis/memory_status_test.cpp
+    cli/monitor_runner_test.cpp
     cli/processes_formatter_test.cpp
     cli/status_formatter_test.cpp
     linux/process_ranker_test.cpp

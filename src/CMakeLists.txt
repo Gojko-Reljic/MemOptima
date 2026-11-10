@@ -29,6 +29,7 @@ set_target_properties(memoptima_core PROPERTIES
 )
 
 add_library(memoptima_cli_support STATIC
+    cli/monitor_runner.cpp
     cli/processes_formatter.cpp
     cli/status_formatter.cpp
 )
