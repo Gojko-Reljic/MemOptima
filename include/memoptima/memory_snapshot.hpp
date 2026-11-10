@@ -16,28 +16,21 @@ struct SnapshotValidationError {
 };
 
 class MemorySnapshot {
-public:
-    [[nodiscard]] static std::expected<MemorySnapshot, SnapshotValidationError> create(
-        std::uint64_t total_memory_bytes,
-        std::uint64_t available_memory_bytes,
-        std::uint64_t total_swap_bytes,
-        std::uint64_t free_swap_bytes);
+  public:
+    [[nodiscard]] static std::expected<MemorySnapshot, SnapshotValidationError>
+    create(std::uint64_t total_memory_bytes, std::uint64_t available_memory_bytes,
+           std::uint64_t total_swap_bytes, std::uint64_t free_swap_bytes);
 
     [[nodiscard]] std::uint64_t total_memory_bytes() const noexcept;
     [[nodiscard]] std::uint64_t available_memory_bytes() const noexcept;
     [[nodiscard]] std::uint64_t total_swap_bytes() const noexcept;
     [[nodiscard]] std::uint64_t free_swap_bytes() const noexcept;
 
-private:
-    constexpr MemorySnapshot(
-        std::uint64_t total_memory_bytes,
-        std::uint64_t available_memory_bytes,
-        std::uint64_t total_swap_bytes,
-        std::uint64_t free_swap_bytes) noexcept
-        : total_memory_bytes_{total_memory_bytes},
-          available_memory_bytes_{available_memory_bytes},
-          total_swap_bytes_{total_swap_bytes},
-          free_swap_bytes_{free_swap_bytes} {}
+  private:
+    constexpr MemorySnapshot(std::uint64_t total_memory_bytes, std::uint64_t available_memory_bytes,
+                             std::uint64_t total_swap_bytes, std::uint64_t free_swap_bytes) noexcept
+        : total_memory_bytes_{total_memory_bytes}, available_memory_bytes_{available_memory_bytes},
+          total_swap_bytes_{total_swap_bytes}, free_swap_bytes_{free_swap_bytes} {}
 
     std::uint64_t total_memory_bytes_;
     std::uint64_t available_memory_bytes_;
@@ -45,4 +38,4 @@ private:
     std::uint64_t free_swap_bytes_;
 };
 
-}  // namespace memoptima
+} // namespace memoptima

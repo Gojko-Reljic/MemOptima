@@ -117,5 +117,5 @@ SwapFree: 10 kB
     EXPECT_EQ(result.error().line_number, 2U);
 }
 
-}  // namespace
-}  // namespace memoptima::linux::detail
+} // namespace
+} // namespace memoptima::linux::detail

@@ -22,7 +22,8 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 - GCC with C++23 support
 - CMake 3.20 or newer
 - Ninja
-- Internet access during the first configuration, so CMake can retrieve the pinned GoogleTest dependency
+- `clang-format` when tests are enabled
+- Internet access during the first test-enabled configuration, so CMake can retrieve the pinned GoogleTest dependency
 
 ## Build and test
 

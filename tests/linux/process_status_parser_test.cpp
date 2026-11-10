@@ -72,5 +72,5 @@ VmRSS:	256 kB
     EXPECT_EQ(process.error().field_name, "Name");
 }
 
-}  // namespace
-}  // namespace memoptima::linux::detail
+} // namespace
+} // namespace memoptima::linux::detail

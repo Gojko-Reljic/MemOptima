@@ -7,8 +7,7 @@
 
 namespace memoptima::cli {
 
-[[nodiscard]] std::string format_memory_status(
-    const analysis::MemoryStatus& status,
-    const analysis::MemoryPressure& pressure);
+[[nodiscard]] std::string format_memory_status(const analysis::MemoryStatus &status,
+                                               const analysis::MemoryPressure &pressure);
 
-}  // namespace memoptima::cli
+} // namespace memoptima::cli

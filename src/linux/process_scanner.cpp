@@ -35,7 +35,8 @@ constexpr std::size_t kDefaultProcessLimit = 10;
     }
 
     std::uint32_t pid{};
-    const auto [parse_end, parse_error] = std::from_chars(text.data(), text.data() + text.size(), pid);
+    const auto [parse_end, parse_error] =
+        std::from_chars(text.data(), text.data() + text.size(), pid);
     if (parse_error != std::errc{} || parse_end != text.data() + text.size() || pid == 0) {
         return std::unexpected(std::monostate{});
     }
@@ -43,7 +44,8 @@ constexpr std::size_t kDefaultProcessLimit = 10;
     return pid;
 }
 
-[[nodiscard]] std::expected<ProcessMemoryInfo, std::monostate> read_process_memory_info(std::uint32_t pid) {
+[[nodiscard]] std::expected<ProcessMemoryInfo, std::monostate>
+read_process_memory_info(std::uint32_t pid) {
     const std::filesystem::path status_path =
         std::filesystem::path{kProcDirectoryPath} / std::to_string(pid) / "status";
 
@@ -52,9 +54,8 @@ constexpr std::size_t kDefaultProcessLimit = 10;
         return std::unexpected(std::monostate{});
     }
 
-    const std::string contents{
-        std::istreambuf_iterator<char>{status_file},
-        std::istreambuf_iterator<char>{}};
+    const std::string contents{std::istreambuf_iterator<char>{status_file},
+                               std::istreambuf_iterator<char>{}};
     if (status_file.bad()) {
         return std::unexpected(std::monostate{});
     }
@@ -67,18 +68,16 @@ constexpr std::size_t kDefaultProcessLimit = 10;
     return *process;
 }
 
-}  // namespace
+} // namespace
 
 std::expected<ProcessScanResult, ProcessScanError> scan_process_memory() {
     std::error_code error;
     std::filesystem::directory_iterator iterator{
         std::filesystem::path{kProcDirectoryPath},
-        std::filesystem::directory_options::skip_permission_denied,
-        error};
+        std::filesystem::directory_options::skip_permission_denied, error};
     if (error) {
-        return std::unexpected(make_scan_error(
-            ProcessScanErrorCode::proc_directory_open_failed,
-            "Unable to open /proc."));
+        return std::unexpected(make_scan_error(ProcessScanErrorCode::proc_directory_open_failed,
+                                               "Unable to open /proc."));
     }
 
     std::vector<ProcessMemoryInfo> processes;
@@ -100,9 +99,8 @@ std::expected<ProcessScanResult, ProcessScanError> scan_process_memory() {
 
         iterator.increment(error);
         if (error) {
-            return std::unexpected(make_scan_error(
-                ProcessScanErrorCode::directory_iteration_failed,
-                "Unable to continue reading /proc."));
+            return std::unexpected(make_scan_error(ProcessScanErrorCode::directory_iteration_failed,
+                                                   "Unable to continue reading /proc."));
         }
     }
 
@@ -112,4 +110,4 @@ std::expected<ProcessScanResult, ProcessScanError> scan_process_memory() {
     };
 }
 
-}  // namespace memoptima::linux
+} // namespace memoptima::linux

@@ -28,4 +28,4 @@ struct MemoryReadError {
 
 [[nodiscard]] std::expected<MemorySnapshot, MemoryReadError> read_system_memory_snapshot();
 
-}  // namespace memoptima::linux
+} // namespace memoptima::linux

@@ -25,8 +25,7 @@ struct ProcessReadError {
     std::string detail;
 };
 
-[[nodiscard]] std::expected<ProcessMemoryInfo, ProcessReadError> parse_process_status(
-    std::uint32_t pid,
-    std::string_view text);
+[[nodiscard]] std::expected<ProcessMemoryInfo, ProcessReadError>
+parse_process_status(std::uint32_t pid, std::string_view text);
 
-}  // namespace memoptima::linux::detail
+} // namespace memoptima::linux::detail

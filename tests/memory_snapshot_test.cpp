@@ -36,5 +36,5 @@ TEST(MemorySnapshot, RejectsFreeSwapAboveTotalSwap) {
     EXPECT_EQ(snapshot.error().code, SnapshotValidationErrorCode::free_swap_exceeds_total);
 }
 
-}  // namespace
-}  // namespace memoptima
+} // namespace
+} // namespace memoptima

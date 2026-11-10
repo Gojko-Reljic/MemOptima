@@ -19,6 +19,6 @@ struct MemoryStatus {
     std::optional<double> used_swap_percentage;
 };
 
-[[nodiscard]] MemoryStatus evaluate_memory_status(const MemorySnapshot& snapshot) noexcept;
+[[nodiscard]] MemoryStatus evaluate_memory_status(const MemorySnapshot &snapshot) noexcept;
 
-}  // namespace memoptima::analysis
+} // namespace memoptima::analysis

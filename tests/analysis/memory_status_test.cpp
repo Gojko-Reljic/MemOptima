@@ -28,5 +28,5 @@ TEST(MemoryStatus, ReportsNoSwapPercentageWhenSwapIsNotConfigured) {
     EXPECT_FALSE(status.used_swap_percentage.has_value());
 }
 
-}  // namespace
-}  // namespace memoptima::analysis
+} // namespace
+} // namespace memoptima::analysis

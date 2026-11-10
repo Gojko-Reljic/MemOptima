@@ -42,11 +42,8 @@ struct ParsedMetrics {
     return text;
 }
 
-[[nodiscard]] MemoryReadError make_error(
-    MemoryReadErrorCode code,
-    std::string_view metric_name,
-    std::size_t line_number,
-    std::string_view detail) {
+[[nodiscard]] MemoryReadError make_error(MemoryReadErrorCode code, std::string_view metric_name,
+                                         std::size_t line_number, std::string_view detail) {
     return {
         .code = code,
         .metric_name = std::string{metric_name},
@@ -55,20 +52,16 @@ struct ParsedMetrics {
     };
 }
 
-[[nodiscard]] std::expected<std::uint64_t, MemoryReadError> parse_value_in_bytes(
-    std::string_view value_and_unit,
-    std::string_view metric_name,
-    std::size_t line_number) {
+[[nodiscard]] std::expected<std::uint64_t, MemoryReadError>
+parse_value_in_bytes(std::string_view value_and_unit, std::string_view metric_name,
+                     std::size_t line_number) {
     const std::string_view trimmed_value = trim_ascii_whitespace(value_and_unit);
     const std::size_t value_end = trimmed_value.find_first_of(" \t\r");
     const std::string_view value_text = trimmed_value.substr(0, value_end);
 
     if (value_text.empty()) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::invalid_value,
-            metric_name,
-            line_number,
-            "Expected an unsigned integer value."));
+        return std::unexpected(make_error(MemoryReadErrorCode::invalid_value, metric_name,
+                                          line_number, "Expected an unsigned integer value."));
     }
 
     std::uint64_t value_in_kilobytes{};
@@ -76,52 +69,38 @@ struct ParsedMetrics {
         value_text.data(), value_text.data() + value_text.size(), value_in_kilobytes);
 
     if (parse_error == std::errc::result_out_of_range) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::value_overflow,
-            metric_name,
-            line_number,
-            "The value does not fit in an unsigned 64-bit integer."));
+        return std::unexpected(make_error(MemoryReadErrorCode::value_overflow, metric_name,
+                                          line_number,
+                                          "The value does not fit in an unsigned 64-bit integer."));
     }
 
     if (parse_error != std::errc{} || parse_end != value_text.data() + value_text.size()) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::invalid_value,
-            metric_name,
-            line_number,
-            "Expected an unsigned integer value."));
+        return std::unexpected(make_error(MemoryReadErrorCode::invalid_value, metric_name,
+                                          line_number, "Expected an unsigned integer value."));
     }
 
     const std::string_view unit = trim_ascii_whitespace(trimmed_value.substr(value_end));
     if (unit != "kB") {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::unexpected_unit,
-            metric_name,
-            line_number,
-            "Expected the unit kB."));
+        return std::unexpected(make_error(MemoryReadErrorCode::unexpected_unit, metric_name,
+                                          line_number, "Expected the unit kB."));
     }
 
     if (value_in_kilobytes > std::numeric_limits<std::uint64_t>::max() / kBytesPerKilobyte) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::value_overflow,
-            metric_name,
-            line_number,
-            "The value cannot be converted from kB to bytes without overflow."));
+        return std::unexpected(
+            make_error(MemoryReadErrorCode::value_overflow, metric_name, line_number,
+                       "The value cannot be converted from kB to bytes without overflow."));
     }
 
     return value_in_kilobytes * kBytesPerKilobyte;
 }
 
-[[nodiscard]] std::expected<std::monostate, MemoryReadError> store_metric(
-    std::optional<MetricValue>& destination,
-    std::string_view value_and_unit,
-    std::string_view metric_name,
-    std::size_t line_number) {
+[[nodiscard]] std::expected<std::monostate, MemoryReadError>
+store_metric(std::optional<MetricValue> &destination, std::string_view value_and_unit,
+             std::string_view metric_name, std::size_t line_number) {
     if (destination.has_value()) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::duplicate_required_metric,
-            metric_name,
-            line_number,
-            "The metric appears more than once."));
+        return std::unexpected(make_error(MemoryReadErrorCode::duplicate_required_metric,
+                                          metric_name, line_number,
+                                          "The metric appears more than once."));
     }
 
     const auto value_in_bytes = parse_value_in_bytes(value_and_unit, metric_name, line_number);
@@ -136,22 +115,18 @@ struct ParsedMetrics {
     return std::monostate{};
 }
 
-[[nodiscard]] std::expected<MetricValue, MemoryReadError> require_metric(
-    const std::optional<MetricValue>& metric,
-    std::string_view metric_name) {
+[[nodiscard]] std::expected<MetricValue, MemoryReadError>
+require_metric(const std::optional<MetricValue> &metric, std::string_view metric_name) {
     if (!metric.has_value()) {
-        return std::unexpected(make_error(
-            MemoryReadErrorCode::missing_required_metric,
-            metric_name,
-            0,
-            "The required metric is missing."));
+        return std::unexpected(make_error(MemoryReadErrorCode::missing_required_metric, metric_name,
+                                          0, "The required metric is missing."));
     }
 
     return *metric;
 }
 
-[[nodiscard]] std::expected<MemorySnapshot, MemoryReadError> validate_metrics(
-    const ParsedMetrics& metrics) {
+[[nodiscard]] std::expected<MemorySnapshot, MemoryReadError>
+validate_metrics(const ParsedMetrics &metrics) {
     const auto total_memory = require_metric(metrics.total_memory, "MemTotal");
     if (!total_memory.has_value()) {
         return std::unexpected(total_memory.error());
@@ -172,45 +147,33 @@ struct ParsedMetrics {
         return std::unexpected(free_swap.error());
     }
 
-    const auto snapshot = MemorySnapshot::create(
-        total_memory->bytes,
-        available_memory->bytes,
-        total_swap->bytes,
-        free_swap->bytes);
+    const auto snapshot = MemorySnapshot::create(total_memory->bytes, available_memory->bytes,
+                                                 total_swap->bytes, free_swap->bytes);
 
     if (snapshot.has_value()) {
         return *snapshot;
     }
 
     switch (snapshot.error().code) {
-        case SnapshotValidationErrorCode::total_memory_must_be_positive:
-            return std::unexpected(make_error(
-                MemoryReadErrorCode::inconsistent_values,
-                "MemTotal",
-                total_memory->line_number,
-                "MemTotal must be greater than zero."));
-        case SnapshotValidationErrorCode::available_memory_exceeds_total:
-            return std::unexpected(make_error(
-                MemoryReadErrorCode::inconsistent_values,
-                "MemAvailable",
-                available_memory->line_number,
-                "MemAvailable cannot exceed MemTotal."));
-        case SnapshotValidationErrorCode::free_swap_exceeds_total:
-            return std::unexpected(make_error(
-                MemoryReadErrorCode::inconsistent_values,
-                "SwapFree",
-                free_swap->line_number,
-                "SwapFree cannot exceed SwapTotal."));
+    case SnapshotValidationErrorCode::total_memory_must_be_positive:
+        return std::unexpected(make_error(MemoryReadErrorCode::inconsistent_values, "MemTotal",
+                                          total_memory->line_number,
+                                          "MemTotal must be greater than zero."));
+    case SnapshotValidationErrorCode::available_memory_exceeds_total:
+        return std::unexpected(make_error(MemoryReadErrorCode::inconsistent_values, "MemAvailable",
+                                          available_memory->line_number,
+                                          "MemAvailable cannot exceed MemTotal."));
+    case SnapshotValidationErrorCode::free_swap_exceeds_total:
+        return std::unexpected(make_error(MemoryReadErrorCode::inconsistent_values, "SwapFree",
+                                          free_swap->line_number,
+                                          "SwapFree cannot exceed SwapTotal."));
     }
 
-    return std::unexpected(make_error(
-        MemoryReadErrorCode::inconsistent_values,
-        {},
-        0,
-        "Memory snapshot validation failed."));
+    return std::unexpected(make_error(MemoryReadErrorCode::inconsistent_values, {}, 0,
+                                      "Memory snapshot validation failed."));
 }
 
-}  // namespace
+} // namespace
 
 std::expected<MemorySnapshot, MemoryReadError> parse_memory_info(std::string_view text) {
     ParsedMetrics metrics;
@@ -230,13 +193,17 @@ std::expected<MemorySnapshot, MemoryReadError> parse_memory_info(std::string_vie
             std::expected<std::monostate, MemoryReadError> stored_metric{std::monostate{}};
 
             if (metric_name == "MemTotal") {
-                stored_metric = store_metric(metrics.total_memory, value_and_unit, metric_name, line_number);
+                stored_metric =
+                    store_metric(metrics.total_memory, value_and_unit, metric_name, line_number);
             } else if (metric_name == "MemAvailable") {
-                stored_metric = store_metric(metrics.available_memory, value_and_unit, metric_name, line_number);
+                stored_metric = store_metric(metrics.available_memory, value_and_unit, metric_name,
+                                             line_number);
             } else if (metric_name == "SwapTotal") {
-                stored_metric = store_metric(metrics.total_swap, value_and_unit, metric_name, line_number);
+                stored_metric =
+                    store_metric(metrics.total_swap, value_and_unit, metric_name, line_number);
             } else if (metric_name == "SwapFree") {
-                stored_metric = store_metric(metrics.free_swap, value_and_unit, metric_name, line_number);
+                stored_metric =
+                    store_metric(metrics.free_swap, value_and_unit, metric_name, line_number);
             }
 
             if (!stored_metric.has_value()) {
@@ -254,4 +221,4 @@ std::expected<MemorySnapshot, MemoryReadError> parse_memory_info(std::string_vie
     return validate_metrics(metrics);
 }
 
-}  // namespace memoptima::linux::detail
+} // namespace memoptima::linux::detail

@@ -8,7 +8,8 @@
 namespace memoptima::linux::detail {
 namespace {
 
-[[nodiscard]] ProcessMemoryInfo make_process(std::uint32_t pid, std::uint64_t resident_memory_bytes) {
+[[nodiscard]] ProcessMemoryInfo make_process(std::uint32_t pid,
+                                             std::uint64_t resident_memory_bytes) {
     const auto process = ProcessMemoryInfo::create(pid, "process", resident_memory_bytes);
     EXPECT_TRUE(process.has_value());
     return *process;
@@ -29,5 +30,5 @@ TEST(ProcessRanker, SortsByResidentMemoryThenPidAndAppliesLimit) {
     EXPECT_EQ(ranked_processes[2].pid(), 30U);
 }
 
-}  // namespace
-}  // namespace memoptima::linux::detail
+} // namespace
+} // namespace memoptima::linux::detail

@@ -8,4 +8,4 @@ namespace memoptima {
 [[nodiscard]] std::string_view application_description() noexcept;
 [[nodiscard]] std::string_view version() noexcept;
 
-}  // namespace memoptima
+} // namespace memoptima

@@ -2,18 +2,19 @@
 
 namespace memoptima::analysis {
 
-MemoryStatus evaluate_memory_status(const MemorySnapshot& snapshot) noexcept {
+MemoryStatus evaluate_memory_status(const MemorySnapshot &snapshot) noexcept {
     const std::uint64_t used_memory_bytes =
         snapshot.total_memory_bytes() - snapshot.available_memory_bytes();
     const std::uint64_t used_swap_bytes = snapshot.total_swap_bytes() - snapshot.free_swap_bytes();
 
-    const double used_memory_percentage =
-        static_cast<double>(used_memory_bytes) / static_cast<double>(snapshot.total_memory_bytes()) * 100.0;
+    const double used_memory_percentage = static_cast<double>(used_memory_bytes) /
+                                          static_cast<double>(snapshot.total_memory_bytes()) *
+                                          100.0;
 
     std::optional<double> used_swap_percentage;
     if (snapshot.total_swap_bytes() != 0) {
-        used_swap_percentage =
-            static_cast<double>(used_swap_bytes) / static_cast<double>(snapshot.total_swap_bytes()) * 100.0;
+        used_swap_percentage = static_cast<double>(used_swap_bytes) /
+                               static_cast<double>(snapshot.total_swap_bytes()) * 100.0;
     }
 
     return {
@@ -28,4 +29,4 @@ MemoryStatus evaluate_memory_status(const MemorySnapshot& snapshot) noexcept {
     };
 }
 
-}  // namespace memoptima::analysis
+} // namespace memoptima::analysis

@@ -20,20 +20,20 @@ enum class MemoryPressureReason : std::uint8_t {
 };
 
 class MemoryPressure {
-public:
+  public:
     [[nodiscard]] MemoryPressureLevel level() const noexcept;
     [[nodiscard]] bool has_reason(MemoryPressureReason reason) const noexcept;
 
-private:
+  private:
     constexpr MemoryPressure(MemoryPressureLevel level, std::uint8_t reasons) noexcept
         : level_{level}, reasons_{reasons} {}
 
-    friend MemoryPressure evaluate_memory_pressure(const MemoryStatus& status) noexcept;
+    friend MemoryPressure evaluate_memory_pressure(const MemoryStatus &status) noexcept;
 
     MemoryPressureLevel level_;
     std::uint8_t reasons_;
 };
 
-[[nodiscard]] MemoryPressure evaluate_memory_pressure(const MemoryStatus& status) noexcept;
+[[nodiscard]] MemoryPressure evaluate_memory_pressure(const MemoryStatus &status) noexcept;
 
-}  // namespace memoptima::analysis
+} // namespace memoptima::analysis

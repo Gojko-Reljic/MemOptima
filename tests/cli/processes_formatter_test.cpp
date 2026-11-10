@@ -7,10 +7,8 @@
 namespace memoptima::cli {
 namespace {
 
-[[nodiscard]] ProcessMemoryInfo make_process(
-    std::uint32_t pid,
-    std::string name,
-    std::uint64_t resident_memory_bytes) {
+[[nodiscard]] ProcessMemoryInfo make_process(std::uint32_t pid, std::string name,
+                                             std::uint64_t resident_memory_bytes) {
     const auto process = ProcessMemoryInfo::create(pid, std::move(name), resident_memory_bytes);
     EXPECT_TRUE(process.has_value());
     return *process;
@@ -18,10 +16,11 @@ namespace {
 
 TEST(ProcessesFormatter, FormatsProcessTable) {
     linux::ProcessScanResult result{
-        .processes = {
-            make_process(12, "alpha", 1024ULL * 1024ULL * 1024ULL),
-            make_process(34, "beta", 512ULL * 1024ULL * 1024ULL),
-        },
+        .processes =
+            {
+                make_process(12, "alpha", 1024ULL * 1024ULL * 1024ULL),
+                make_process(34, "beta", 512ULL * 1024ULL * 1024ULL),
+            },
         .skipped_process_count = 0,
     };
 
@@ -45,5 +44,5 @@ TEST(ProcessesFormatter, ReportsEmptyResultsAndSkippedProcesses) {
     EXPECT_NE(output.find("2 processes were skipped"), std::string::npos);
 }
 
-}  // namespace
-}  // namespace memoptima::cli
+} // namespace
+} // namespace memoptima::cli

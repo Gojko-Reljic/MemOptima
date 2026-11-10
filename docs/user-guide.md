@@ -12,7 +12,8 @@ To build MemOptima from source, install the following tools:
 - GCC with C++23 support
 - CMake 3.20 or newer
 - Ninja
-- Internet access during the first CMake configuration, so CMake can download the pinned GoogleTest dependency
+- `clang-format` when tests are enabled
+- Internet access during the first test-enabled CMake configuration, so CMake can download the pinned GoogleTest dependency
 
 ## Build from source
 

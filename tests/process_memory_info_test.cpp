@@ -28,5 +28,5 @@ TEST(ProcessMemoryInfo, RejectsEmptyName) {
     EXPECT_EQ(process.error().code, ProcessInfoValidationErrorCode::name_must_not_be_empty);
 }
 
-}  // namespace
-}  // namespace memoptima
+} // namespace
+} // namespace memoptima

@@ -21,27 +21,24 @@ constexpr std::string_view kMemInfoPath{"/proc/meminfo"};
     };
 }
 
-}  // namespace
+} // namespace
 
 std::expected<MemorySnapshot, MemoryReadError> read_system_memory_snapshot() {
     std::ifstream memory_info_file{std::string{kMemInfoPath}};
     if (!memory_info_file.is_open()) {
-        return std::unexpected(make_file_error(
-            MemoryReadErrorCode::file_open_failed,
-            "Unable to open /proc/meminfo."));
+        return std::unexpected(make_file_error(MemoryReadErrorCode::file_open_failed,
+                                               "Unable to open /proc/meminfo."));
     }
 
-    const std::string contents{
-        std::istreambuf_iterator<char>{memory_info_file},
-        std::istreambuf_iterator<char>{}};
+    const std::string contents{std::istreambuf_iterator<char>{memory_info_file},
+                               std::istreambuf_iterator<char>{}};
 
     if (memory_info_file.bad()) {
-        return std::unexpected(make_file_error(
-            MemoryReadErrorCode::file_read_failed,
-            "Unable to read /proc/meminfo."));
+        return std::unexpected(make_file_error(MemoryReadErrorCode::file_read_failed,
+                                               "Unable to read /proc/meminfo."));
     }
 
     return detail::parse_memory_info(contents);
 }
 
-}  // namespace memoptima::linux
+} // namespace memoptima::linux

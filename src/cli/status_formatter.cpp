@@ -22,7 +22,8 @@ constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "
     double display_value = static_cast<double>(bytes);
     std::size_t unit_index{};
 
-    while (display_value >= static_cast<double>(kBytesPerUnit) && unit_index + 1 < kUnitNames.size()) {
+    while (display_value >= static_cast<double>(kBytesPerUnit) &&
+           unit_index + 1 < kUnitNames.size()) {
         display_value /= static_cast<double>(kBytesPerUnit);
         ++unit_index;
     }
@@ -32,7 +33,7 @@ constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "
     return output.str();
 }
 
-[[nodiscard]] std::string format_percentage(const std::optional<double>& percentage) {
+[[nodiscard]] std::string format_percentage(const std::optional<double> &percentage) {
     if (!percentage.has_value()) {
         return "N/A";
     }
@@ -44,12 +45,12 @@ constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "
 
 [[nodiscard]] std::string_view pressure_level_name(analysis::MemoryPressureLevel level) {
     switch (level) {
-        case analysis::MemoryPressureLevel::Normal:
-            return "Normal";
-        case analysis::MemoryPressureLevel::Warning:
-            return "Warning";
-        case analysis::MemoryPressureLevel::Critical:
-            return "Critical";
+    case analysis::MemoryPressureLevel::Normal:
+        return "Normal";
+    case analysis::MemoryPressureLevel::Warning:
+        return "Warning";
+    case analysis::MemoryPressureLevel::Critical:
+        return "Critical";
     }
 
     return "Critical";
@@ -57,21 +58,22 @@ constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "
 
 [[nodiscard]] std::string_view recommendation_for(analysis::MemoryPressureLevel level) {
     switch (level) {
-        case analysis::MemoryPressureLevel::Normal:
-            return "No action is required.";
-        case analysis::MemoryPressureLevel::Warning:
-            return "Review memory-intensive processes.";
-        case analysis::MemoryPressureLevel::Critical:
-            return "Close unnecessary applications and review memory-intensive processes.";
+    case analysis::MemoryPressureLevel::Normal:
+        return "No action is required.";
+    case analysis::MemoryPressureLevel::Warning:
+        return "Review memory-intensive processes.";
+    case analysis::MemoryPressureLevel::Critical:
+        return "Close unnecessary applications and review memory-intensive processes.";
     }
 
     return "Close unnecessary applications and review memory-intensive processes.";
 }
 
-void append_pressure_reasons(std::ostringstream& output, const analysis::MemoryPressure& pressure) {
+void append_pressure_reasons(std::ostringstream &output, const analysis::MemoryPressure &pressure) {
     if (pressure.has_reason(analysis::MemoryPressureReason::AvailableMemoryAtCriticalThreshold)) {
         output << "  Reason:             Available RAM is at or below the critical threshold.\n";
-    } else if (pressure.has_reason(analysis::MemoryPressureReason::AvailableMemoryAtWarningThreshold)) {
+    } else if (pressure.has_reason(
+                   analysis::MemoryPressureReason::AvailableMemoryAtWarningThreshold)) {
         output << "  Reason:             Available RAM is at or below the warning threshold.\n";
     }
 
@@ -80,9 +82,10 @@ void append_pressure_reasons(std::ostringstream& output, const analysis::MemoryP
     }
 }
 
-}  // namespace
+} // namespace
 
-std::string format_memory_status(const analysis::MemoryStatus& status, const analysis::MemoryPressure& pressure) {
+std::string format_memory_status(const analysis::MemoryStatus &status,
+                                 const analysis::MemoryPressure &pressure) {
     std::ostringstream output;
     output << "Memory status\n\n"
            << "RAM\n"
@@ -102,4 +105,4 @@ std::string format_memory_status(const analysis::MemoryStatus& status, const ana
     return output.str();
 }
 
-}  // namespace memoptima::cli
+} // namespace memoptima::cli

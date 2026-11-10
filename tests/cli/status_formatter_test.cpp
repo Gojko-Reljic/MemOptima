@@ -57,10 +57,12 @@ TEST(StatusFormatter, FormatsNoSwapAsNotApplicable) {
 
     EXPECT_NE(output.find("In use:             0 B (N/A)"), std::string::npos);
     EXPECT_NE(output.find("Level:              Critical"), std::string::npos);
-    EXPECT_NE(output.find("Reason:             Available RAM is at or below the critical threshold."), std::string::npos);
     EXPECT_NE(
-        output.find("Recommendation:     Close unnecessary applications and review memory-intensive processes."),
+        output.find("Reason:             Available RAM is at or below the critical threshold."),
         std::string::npos);
+    EXPECT_NE(output.find("Recommendation:     Close unnecessary applications and review "
+                          "memory-intensive processes."),
+              std::string::npos);
 }
 
 TEST(StatusFormatter, FormatsBothReasonsInStableOrder) {
@@ -80,7 +82,8 @@ TEST(StatusFormatter, FormatsBothReasonsInStableOrder) {
 
     const std::size_t available_memory_reason =
         output.find("Reason:             Available RAM is at or below the warning threshold.");
-    const std::size_t swap_usage_reason = output.find("Reason:             Swap usage is at or above 50%.");
+    const std::size_t swap_usage_reason =
+        output.find("Reason:             Swap usage is at or above 50%.");
 
     ASSERT_NE(available_memory_reason, std::string::npos);
     ASSERT_NE(swap_usage_reason, std::string::npos);
@@ -108,5 +111,5 @@ TEST(StatusFormatter, FormatsNormalRecommendationWithoutReasons) {
     EXPECT_NE(output.find("Recommendation:     No action is required."), std::string::npos);
 }
 
-}  // namespace
-}  // namespace memoptima::cli
+} // namespace
+} // namespace memoptima::cli

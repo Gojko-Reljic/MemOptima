@@ -6,16 +6,16 @@
 
 namespace memoptima::linux::detail {
 
-std::vector<ProcessMemoryInfo> rank_processes(
-    std::vector<ProcessMemoryInfo> processes,
-    std::size_t limit) {
-    std::sort(processes.begin(), processes.end(), [](const ProcessMemoryInfo& left, const ProcessMemoryInfo& right) {
-        if (left.resident_memory_bytes() != right.resident_memory_bytes()) {
-            return left.resident_memory_bytes() > right.resident_memory_bytes();
-        }
+std::vector<ProcessMemoryInfo> rank_processes(std::vector<ProcessMemoryInfo> processes,
+                                              std::size_t limit) {
+    std::sort(processes.begin(), processes.end(),
+              [](const ProcessMemoryInfo &left, const ProcessMemoryInfo &right) {
+                  if (left.resident_memory_bytes() != right.resident_memory_bytes()) {
+                      return left.resident_memory_bytes() > right.resident_memory_bytes();
+                  }
 
-        return left.pid() < right.pid();
-    });
+                  return left.pid() < right.pid();
+              });
 
     if (processes.size() > limit) {
         processes.erase(processes.begin() + static_cast<std::ptrdiff_t>(limit), processes.end());
@@ -24,4 +24,4 @@ std::vector<ProcessMemoryInfo> rank_processes(
     return processes;
 }
 
-}  // namespace memoptima::linux::detail
+} // namespace memoptima::linux::detail

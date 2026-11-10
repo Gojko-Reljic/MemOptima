@@ -20,9 +20,7 @@ struct MonitorDependencies {
 
 [[nodiscard]] std::string format_utc_timestamp(std::chrono::system_clock::time_point time_point);
 
-void run_monitor(
-    const MonitorDependencies& dependencies,
-    std::ostream& standard_output,
-    std::ostream& standard_error);
+void run_monitor(const MonitorDependencies &dependencies, std::ostream &standard_output,
+                 std::ostream &standard_error);
 
-}  // namespace memoptima::cli
+} // namespace memoptima::cli

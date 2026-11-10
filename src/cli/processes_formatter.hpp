@@ -6,6 +6,6 @@
 
 namespace memoptima::cli {
 
-[[nodiscard]] std::string format_process_scan_result(const linux::ProcessScanResult& result);
+[[nodiscard]] std::string format_process_scan_result(const linux::ProcessScanResult &result);
 
-}  // namespace memoptima::cli
+} // namespace memoptima::cli

@@ -23,7 +23,8 @@ constexpr int kNameColumnWidth = 21;
 
     double display_value = static_cast<double>(bytes);
     std::size_t unit_index{};
-    while (display_value >= static_cast<double>(bytes_per_unit) && unit_index + 1 < unit_names.size()) {
+    while (display_value >= static_cast<double>(bytes_per_unit) &&
+           unit_index + 1 < unit_names.size()) {
         display_value /= static_cast<double>(bytes_per_unit);
         ++unit_index;
     }
@@ -33,9 +34,9 @@ constexpr int kNameColumnWidth = 21;
     return output.str();
 }
 
-}  // namespace
+} // namespace
 
-std::string format_process_scan_result(const linux::ProcessScanResult& result) {
+std::string format_process_scan_result(const linux::ProcessScanResult &result) {
     if (result.processes.empty()) {
         std::ostringstream output;
         output << "No readable process memory records were found.\n";
@@ -50,11 +51,11 @@ std::string format_process_scan_result(const linux::ProcessScanResult& result) {
 
     std::ostringstream output;
     output << "Top memory processes (VmRSS)\n\n"
-           << std::left << std::setw(kPidColumnWidth) << "PID"
-           << std::setw(kNameColumnWidth) << "NAME"
+           << std::left << std::setw(kPidColumnWidth) << "PID" << std::setw(kNameColumnWidth)
+           << "NAME"
            << "RESIDENT MEMORY\n";
 
-    for (const ProcessMemoryInfo& process : result.processes) {
+    for (const ProcessMemoryInfo &process : result.processes) {
         output << std::left << std::setw(kPidColumnWidth) << process.pid()
                << std::setw(kNameColumnWidth) << process.name()
                << format_bytes(process.resident_memory_bytes()) << '\n';
@@ -70,4 +71,4 @@ std::string format_process_scan_result(const linux::ProcessScanResult& result) {
     return output.str();
 }
 
-}  // namespace memoptima::cli
+} // namespace memoptima::cli

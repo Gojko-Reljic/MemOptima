@@ -1,11 +1,11 @@
-#include <memoptima/application_info.hpp>
 #include <memoptima/analysis/memory_pressure.hpp>
 #include <memoptima/analysis/memory_status.hpp>
+#include <memoptima/application_info.hpp>
 #include <memoptima/linux/memory_reader.hpp>
 #include <memoptima/linux/process_scanner.hpp>
 
-#include "cli/processes_formatter.hpp"
 #include "cli/monitor_runner.hpp"
+#include "cli/processes_formatter.hpp"
 #include "cli/status_formatter.hpp"
 
 #include <chrono>
@@ -23,12 +23,11 @@ constexpr int kExitUsageError = 2;
 
 volatile std::sig_atomic_t monitor_stop_requested = 0;
 
-void request_monitor_stop(int) noexcept {
-    monitor_stop_requested = 1;
-}
+void request_monitor_stop(int) noexcept { monitor_stop_requested = 1; }
 
-void print_help(std::ostream& output) {
-    output << memoptima::application_name() << " — " << memoptima::application_description() << "\n\n"
+void print_help(std::ostream &output) {
+    output << memoptima::application_name() << " — " << memoptima::application_description()
+           << "\n\n"
            << "Usage:\n"
            << "  memoptima [OPTION]\n\n"
            << "Options:\n"
@@ -39,7 +38,8 @@ void print_help(std::ostream& output) {
            << "  -v, --version    Display the application version.\n";
 }
 
-[[nodiscard]] std::string format_memory_read_error_detail(const memoptima::linux::MemoryReadError& error) {
+[[nodiscard]] std::string
+format_memory_read_error_detail(const memoptima::linux::MemoryReadError &error) {
     std::string detail;
 
     if (!error.metric_name.empty()) {
@@ -61,8 +61,10 @@ void print_help(std::ostream& output) {
         return std::unexpected(format_memory_read_error_detail(snapshot.error()));
     }
 
-    const memoptima::analysis::MemoryStatus status = memoptima::analysis::evaluate_memory_status(*snapshot);
-    const memoptima::analysis::MemoryPressure pressure = memoptima::analysis::evaluate_memory_pressure(status);
+    const memoptima::analysis::MemoryStatus status =
+        memoptima::analysis::evaluate_memory_status(*snapshot);
+    const memoptima::analysis::MemoryPressure pressure =
+        memoptima::analysis::evaluate_memory_pressure(status);
     return memoptima::cli::format_memory_status(status, pressure);
 }
 
@@ -89,16 +91,18 @@ int run_monitor_command() {
     const memoptima::cli::MonitorDependencies dependencies{
         .current_utc_time = [] { return std::chrono::system_clock::now(); },
         .current_steady_time = [] { return std::chrono::steady_clock::now(); },
-        .read_formatted_status = [] {
-            const auto formatted_status = read_formatted_memory_status();
-            if (!formatted_status.has_value()) {
-                return memoptima::cli::FormattedStatusResult{std::unexpected(
-                    "unable to read system memory information: " + formatted_status.error())};
-            }
+        .read_formatted_status =
+            [] {
+                const auto formatted_status = read_formatted_memory_status();
+                if (!formatted_status.has_value()) {
+                    return memoptima::cli::FormattedStatusResult{std::unexpected(
+                        "unable to read system memory information: " + formatted_status.error())};
+                }
 
-            return formatted_status;
-        },
-        .sleep_for = [](std::chrono::milliseconds duration) { std::this_thread::sleep_for(duration); },
+                return formatted_status;
+            },
+        .sleep_for =
+            [](std::chrono::milliseconds duration) { std::this_thread::sleep_for(duration); },
         .stop_requested = [] { return monitor_stop_requested != 0; },
     };
 
@@ -110,7 +114,8 @@ int run_monitor_command() {
 int run_processes_command() {
     const auto scan_result = memoptima::linux::scan_process_memory();
     if (!scan_result.has_value()) {
-        std::cerr << "Error: unable to scan process memory information: " << scan_result.error().detail << '\n';
+        std::cerr << "Error: unable to scan process memory information: "
+                  << scan_result.error().detail << '\n';
         return kExitRuntimeError;
     }
 
@@ -118,7 +123,7 @@ int run_processes_command() {
     return kExitSuccess;
 }
 
-int run(int argument_count, char* arguments[]) {
+int run(int argument_count, char *arguments[]) {
     if (argument_count == 1) {
         print_help(std::cout);
         return kExitSuccess;
@@ -159,8 +164,6 @@ int run(int argument_count, char* arguments[]) {
     return kExitUsageError;
 }
 
-}  // namespace
+} // namespace
 
-int main(int argument_count, char* arguments[]) {
-    return run(argument_count, arguments);
-}
+int main(int argument_count, char *arguments[]) { return run(argument_count, arguments); }

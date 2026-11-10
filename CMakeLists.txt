@@ -39,6 +39,30 @@ configure_file(
 
 add_subdirectory(src)
 
+if(BUILD_TESTING)
+    find_program(MEMOPTIMA_CLANG_FORMAT_EXECUTABLE NAMES clang-format REQUIRED)
+
+    file(GLOB_RECURSE MEMOPTIMA_FORMAT_SOURCES CONFIGURE_DEPENDS
+        "${PROJECT_SOURCE_DIR}/include/*.hpp"
+        "${PROJECT_SOURCE_DIR}/src/*.cpp"
+        "${PROJECT_SOURCE_DIR}/src/*.hpp"
+        "${PROJECT_SOURCE_DIR}/tests/*.cpp"
+        "${PROJECT_SOURCE_DIR}/tests/*.hpp"
+    )
+
+    add_custom_target(memoptima_format_check
+        COMMAND "${MEMOPTIMA_CLANG_FORMAT_EXECUTABLE}" --dry-run --Werror ${MEMOPTIMA_FORMAT_SOURCES}
+        COMMENT "Checking C++ formatting with clang-format"
+        VERBATIM
+    )
+
+    add_custom_target(memoptima_format
+        COMMAND "${MEMOPTIMA_CLANG_FORMAT_EXECUTABLE}" -i ${MEMOPTIMA_FORMAT_SOURCES}
+        COMMENT "Formatting C++ sources with clang-format"
+        VERBATIM
+    )
+endif()
+
 install(
     TARGETS memoptima
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
@@ -66,4 +90,9 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
 
     add_subdirectory(tests)
+
+    add_test(
+        NAME MemOptimaFormat
+        COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target memoptima_format_check
+    )
 endif()

@@ -26,4 +26,4 @@ struct ProcessScanResult {
 
 [[nodiscard]] std::expected<ProcessScanResult, ProcessScanError> scan_process_memory();
 
-}  // namespace memoptima::linux
+} // namespace memoptima::linux
