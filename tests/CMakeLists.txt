@@ -76,3 +76,13 @@ add_test(
         "-DMEMOPTIMA_TIMEOUT_EXECUTABLE=${MEMOPTIMA_TIMEOUT_EXECUTABLE}"
         -P "${PROJECT_SOURCE_DIR}/tests/monitor_command_test.cmake"
 )
+
+add_test(
+    NAME MemOptimaInstall
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_BUILD_DIRECTORY=${PROJECT_BINARY_DIR}"
+        "-DMEMOPTIMA_INSTALL_DIRECTORY=${PROJECT_BINARY_DIR}/install-test"
+        "-DMEMOPTIMA_INSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}"
+        "-DMEMOPTIMA_INSTALL_DOCDIR=${CMAKE_INSTALL_DOCDIR}"
+        -P "${PROJECT_SOURCE_DIR}/tests/install_test.cmake"
+)

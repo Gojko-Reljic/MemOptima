@@ -43,6 +43,37 @@ ctest --preset release
 
 Both presets build and run the test suite. The release preset disables sanitizers.
 
+## Install
+
+Build the release version before installing it:
+
+```bash
+cmake --preset release
+cmake --build --preset release
+```
+
+Install into the standard per-user prefix without `sudo`:
+
+```bash
+cmake --install build/release --prefix "$HOME/.local"
+```
+
+This installs the executable at `$HOME/.local/bin/memoptima` and the documentation below `$HOME/.local/share/doc/MemOptima/`.
+
+Check whether the executable directory is already in `PATH`:
+
+```bash
+printf '%s\n' "$PATH"
+```
+
+If `$HOME/.local/bin` is not listed, make it available for the current terminal session:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+This command does not change shell configuration files. After the directory is in `PATH`, run MemOptima as `memoptima` instead of using its build-directory path.
+
 ## Run MemOptima
 
 After a debug build, the executable is located at:

@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(MemOptima VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
+include(GNUInstallDirs)
 
 option(MEMOPTIMA_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer." OFF)
 
@@ -37,6 +38,21 @@ configure_file(
 )
 
 add_subdirectory(src)
+
+install(
+    TARGETS memoptima
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+
+install(
+    FILES
+        "${PROJECT_SOURCE_DIR}/LICENSE"
+        "${PROJECT_SOURCE_DIR}/README.md"
+        "${PROJECT_SOURCE_DIR}/docs/user-guide.md"
+        "${PROJECT_SOURCE_DIR}/docs/metrics-and-pressure.md"
+        "${PROJECT_SOURCE_DIR}/docs/mvp-scope.md"
+    DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+)
 
 if(BUILD_TESTING)
     include(FetchContent)
