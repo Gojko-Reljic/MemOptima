@@ -3,7 +3,11 @@ add_library(memoptima_core STATIC
     analysis/memory_status.cpp
     linux/meminfo_parser.cpp
     linux/memory_reader.cpp
+    linux/process_ranker.cpp
+    linux/process_scanner.cpp
+    linux/process_status_parser.cpp
     memory_snapshot.cpp
+    process_memory_info.cpp
 )
 
 target_include_directories(memoptima_core
@@ -24,6 +28,7 @@ set_target_properties(memoptima_core PROPERTIES
 )
 
 add_library(memoptima_cli_support STATIC
+    cli/processes_formatter.cpp
     cli/status_formatter.cpp
 )
 

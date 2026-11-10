@@ -1,9 +1,13 @@
 add_executable(memoptima_core_tests
     application_info_test.cpp
     analysis/memory_status_test.cpp
+    cli/processes_formatter_test.cpp
     cli/status_formatter_test.cpp
+    linux/process_ranker_test.cpp
+    linux/process_status_parser_test.cpp
     memory_snapshot_test.cpp
     linux/meminfo_parser_test.cpp
+    process_memory_info_test.cpp
 )
 
 target_include_directories(memoptima_core_tests
@@ -31,4 +35,11 @@ add_test(
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
         -P "${PROJECT_SOURCE_DIR}/tests/status_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.Processes
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/processes_command_test.cmake"
 )

@@ -1,7 +1,9 @@
 #include <memoptima/application_info.hpp>
 #include <memoptima/analysis/memory_status.hpp>
 #include <memoptima/linux/memory_reader.hpp>
+#include <memoptima/linux/process_scanner.hpp>
 
+#include "cli/processes_formatter.hpp"
 #include "cli/status_formatter.hpp"
 
 #include <iostream>
@@ -19,6 +21,7 @@ void print_help(std::ostream& output) {
            << "  memoptima [OPTION]\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
+           << "  processes        Display the top memory-consuming processes.\n"
            << "  status           Display current RAM and swap status.\n"
            << "  -v, --version    Display the application version.\n";
 }
@@ -49,6 +52,17 @@ int run_status_command() {
     return kExitSuccess;
 }
 
+int run_processes_command() {
+    const auto scan_result = memoptima::linux::scan_process_memory();
+    if (!scan_result.has_value()) {
+        std::cerr << "Error: unable to scan process memory information: " << scan_result.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    std::cout << memoptima::cli::format_process_scan_result(*scan_result);
+    return kExitSuccess;
+}
+
 int run(int argument_count, char* arguments[]) {
     if (argument_count == 1) {
         print_help(std::cout);
@@ -65,6 +79,10 @@ int run(int argument_count, char* arguments[]) {
 
     if (option == "status") {
         return run_status_command();
+    }
+
+    if (option == "processes") {
+        return run_processes_command();
     }
 
     if (option == "-h" || option == "--help") {
