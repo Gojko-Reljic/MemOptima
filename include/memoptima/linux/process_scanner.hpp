@@ -21,6 +21,7 @@ struct ProcessScanError {
 
 struct ProcessScanResult {
     std::vector<ProcessMemoryInfo> processes;
+    // Counts unreadable individual processes; failures reading /proc itself are returned as errors.
     std::size_t skipped_process_count;
 };
 

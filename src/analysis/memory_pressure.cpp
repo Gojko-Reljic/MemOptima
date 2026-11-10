@@ -5,6 +5,8 @@
 namespace memoptima::analysis {
 namespace {
 
+// These divisors encode the fixed MVP thresholds: 20% available RAM, 10% available RAM, and 50%
+// used swap. Their comparisons use division to avoid multiplying large byte counts.
 constexpr std::uint64_t kWarningAvailableMemoryDivisor = 5;
 constexpr std::uint64_t kCriticalAvailableMemoryDivisor = 10;
 constexpr std::uint64_t kSwapUsageDivisor = 2;
@@ -28,6 +30,7 @@ constexpr std::uint64_t kSwapUsageDivisor = 2;
         return false;
     }
 
+    // Ceiling division represents "at least half" for odd byte counts without multiplying by two.
     const std::uint64_t half_swap_rounded_up =
         status.total_swap_bytes / kSwapUsageDivisor + status.total_swap_bytes % kSwapUsageDivisor;
     return status.used_swap_bytes >= half_swap_rounded_up;

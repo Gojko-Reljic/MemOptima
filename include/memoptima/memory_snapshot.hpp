@@ -15,6 +15,7 @@ struct SnapshotValidationError {
     SnapshotValidationErrorCode code;
 };
 
+// A validated, immutable snapshot of the memory values required by the analysis layer.
 class MemorySnapshot {
   public:
     [[nodiscard]] static std::expected<MemorySnapshot, SnapshotValidationError>

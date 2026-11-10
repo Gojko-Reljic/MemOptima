@@ -8,10 +8,12 @@
 namespace memoptima::cli {
 namespace {
 
+// Measure every five seconds while polling often enough to respond promptly to SIGINT.
 constexpr auto kMeasurementInterval = std::chrono::seconds{5};
 constexpr auto kStopCheckInterval = std::chrono::milliseconds{100};
 
 void wait_until_next_measurement(const MonitorDependencies &dependencies) {
+    // A monotonic clock keeps wall-clock adjustments from changing the measurement interval.
     const auto deadline = dependencies.current_steady_time() + kMeasurementInterval;
 
     while (!dependencies.stop_requested()) {
@@ -36,6 +38,7 @@ std::string format_utc_timestamp(std::chrono::system_clock::time_point time_poin
     const std::time_t calendar_time = std::chrono::system_clock::to_time_t(time_point);
     std::tm utc_time{};
 
+    // gmtime_r avoids the shared static storage used by the older gmtime function.
     if (gmtime_r(&calendar_time, &utc_time) == nullptr) {
         return "unavailable-utc-time";
     }
@@ -55,6 +58,7 @@ void run_monitor(const MonitorDependencies &dependencies, std::ostream &standard
         const FormattedStatusResult status = dependencies.read_formatted_status();
 
         if (status.has_value()) {
+            // Keep measurements pipeable while reserving standard error for timestamped failures.
             standard_output << timestamp << "\n\n" << *status << '\n';
         } else {
             standard_error << timestamp << " Error: " << status.error() << '\n';

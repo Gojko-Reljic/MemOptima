@@ -10,6 +10,7 @@ namespace memoptima::cli {
 
 using FormattedStatusResult = std::expected<std::string, std::string>;
 
+// Inject external effects so the monitor loop can be tested without real time or /proc reads.
 struct MonitorDependencies {
     std::function<std::chrono::system_clock::time_point()> current_utc_time;
     std::function<std::chrono::steady_clock::time_point()> current_steady_time;

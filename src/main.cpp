@@ -21,6 +21,7 @@ constexpr int kExitSuccess = 0;
 constexpr int kExitRuntimeError = 1;
 constexpr int kExitUsageError = 2;
 
+// A signal handler only sets this signal-safe flag; normal code performs all cleanup.
 volatile std::sig_atomic_t monitor_stop_requested = 0;
 
 void request_monitor_stop(int) noexcept { monitor_stop_requested = 1; }
@@ -107,6 +108,7 @@ int run_monitor_command() {
     };
 
     memoptima::cli::run_monitor(dependencies, std::cout, std::cerr);
+    // Restore the process-wide SIGINT behavior after the monitor exits.
     std::signal(SIGINT, previous_signal_handler);
     return kExitSuccess;
 }

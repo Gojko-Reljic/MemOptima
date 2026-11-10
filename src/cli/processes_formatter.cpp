@@ -10,6 +10,7 @@
 namespace memoptima::cli {
 namespace {
 
+// Fixed minimum widths keep the terminal table readable; long process names remain intact.
 constexpr int kPidColumnWidth = 8;
 constexpr int kNameColumnWidth = 21;
 

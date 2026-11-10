@@ -12,6 +12,7 @@
 namespace memoptima::linux::detail {
 namespace {
 
+// /proc/meminfo labels binary kilobytes as kB; MemOptima converts them to bytes internally.
 constexpr std::uint64_t kBytesPerKilobyte = 1024;
 
 struct MetricValue {
@@ -192,6 +193,7 @@ std::expected<MemorySnapshot, MemoryReadError> parse_memory_info(std::string_vie
 
             std::expected<std::monostate, MemoryReadError> stored_metric{std::monostate{}};
 
+            // Ignore unrelated kernel fields while strictly validating the four metrics we require.
             if (metric_name == "MemTotal") {
                 stored_metric =
                     store_metric(metrics.total_memory, value_and_unit, metric_name, line_number);

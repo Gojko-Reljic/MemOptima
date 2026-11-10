@@ -16,6 +16,7 @@ struct ProcessInfoValidationError {
     ProcessInfoValidationErrorCode code;
 };
 
+// A validated process snapshot. VmRSS can include shared pages, so it is not exclusive ownership.
 class ProcessMemoryInfo {
   public:
     [[nodiscard]] static std::expected<ProcessMemoryInfo, ProcessInfoValidationError>

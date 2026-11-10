@@ -7,6 +7,7 @@
 
 namespace memoptima::cli {
 
+// Formats already-derived data; pressure evaluation remains in the analysis layer.
 [[nodiscard]] std::string format_memory_status(const analysis::MemoryStatus &status,
                                                const analysis::MemoryPressure &pressure);
 

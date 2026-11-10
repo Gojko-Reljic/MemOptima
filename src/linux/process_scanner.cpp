@@ -30,6 +30,7 @@ constexpr std::size_t kDefaultProcessLimit = 10;
 }
 
 [[nodiscard]] std::expected<std::uint32_t, std::monostate> parse_pid(std::string_view text) {
+    // /proc contains named kernel entries too; only positive decimal names can represent processes.
     if (text.empty()) {
         return std::unexpected(std::monostate{});
     }
@@ -46,6 +47,7 @@ constexpr std::size_t kDefaultProcessLimit = 10;
 
 [[nodiscard]] std::expected<ProcessMemoryInfo, std::monostate>
 read_process_memory_info(std::uint32_t pid) {
+    // A process can exit or become unreadable during a scan, so an individual failure is skippable.
     const std::filesystem::path status_path =
         std::filesystem::path{kProcDirectoryPath} / std::to_string(pid) / "status";
 
@@ -72,6 +74,8 @@ read_process_memory_info(std::uint32_t pid) {
 
 std::expected<ProcessScanResult, ProcessScanError> scan_process_memory() {
     std::error_code error;
+    // Continue past entries that are inaccessible while still reporting a failure to open /proc
+    // itself.
     std::filesystem::directory_iterator iterator{
         std::filesystem::path{kProcDirectoryPath},
         std::filesystem::directory_options::skip_permission_denied, error};

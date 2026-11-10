@@ -11,6 +11,7 @@
 namespace memoptima::linux::detail {
 namespace {
 
+// /proc/<pid>/status labels binary kilobytes as kB; MemOptima stores byte values internally.
 constexpr std::uint64_t kBytesPerKilobyte = 1024;
 
 struct FieldValue {
@@ -117,6 +118,7 @@ std::expected<ProcessMemoryInfo, ProcessReadError> parse_process_status(std::uin
                 .line_number = line_number,
             };
 
+            // Ignore unrelated status fields while requiring exactly one Name and one VmRSS field.
             if (field_name == "Name") {
                 if (name.has_value()) {
                     return std::unexpected(

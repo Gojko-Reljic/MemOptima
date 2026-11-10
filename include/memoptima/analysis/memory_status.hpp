@@ -7,6 +7,7 @@
 
 namespace memoptima::analysis {
 
+// A presentation-neutral analysis result that can later serve a CLI, GUI, or API.
 struct MemoryStatus {
     std::uint64_t total_memory_bytes;
     std::uint64_t available_memory_bytes;

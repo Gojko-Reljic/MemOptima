@@ -13,6 +13,7 @@ enum class MemoryPressureLevel {
 };
 
 enum class MemoryPressureReason : std::uint8_t {
+    // Bit flags allow a pressure result to report more than one active reason.
     None = 0,
     AvailableMemoryAtWarningThreshold = 1U << 0U,
     AvailableMemoryAtCriticalThreshold = 1U << 1U,

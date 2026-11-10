@@ -10,6 +10,7 @@ if(NOT DEFINED MEMOPTIMA_TIMEOUT_EXECUTABLE)
     message(FATAL_ERROR "MEMOPTIMA_TIMEOUT_EXECUTABLE must be provided.")
 endif()
 
+# Fail for memory errors and definite or indirect leaks, but do not fail only for still-reachable memory.
 set(MEMOPTIMA_VALGRIND_OPTIONS
     --leak-check=full
     --show-leak-kinds=definite,indirect

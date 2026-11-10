@@ -14,6 +14,7 @@ if(NOT DEFINED MEMOPTIMA_INSTALL_DOCDIR)
     message(FATAL_ERROR "MEMOPTIMA_INSTALL_DOCDIR must be provided.")
 endif()
 
+# This controlled path is always <build>/install-test, so each test run starts with a clean prefix.
 file(REMOVE_RECURSE "${MEMOPTIMA_INSTALL_DIRECTORY}")
 
 execute_process(
