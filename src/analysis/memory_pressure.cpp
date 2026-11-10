@@ -61,10 +61,10 @@ MemoryPressure evaluate_memory_pressure(const MemoryStatus& status) noexcept {
 
     if (is_at_or_below_critical_available_memory(status)) {
         level = MemoryPressureLevel::Critical;
-        reasons |= reason_value(MemoryPressureReason::LowAvailableMemory);
+        reasons |= reason_value(MemoryPressureReason::AvailableMemoryAtCriticalThreshold);
     } else if (is_at_or_below_warning_available_memory(status)) {
         level = MemoryPressureLevel::Warning;
-        reasons |= reason_value(MemoryPressureReason::LowAvailableMemory);
+        reasons |= reason_value(MemoryPressureReason::AvailableMemoryAtWarningThreshold);
     }
 
     if (has_high_swap_usage(status)) {

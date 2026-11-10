@@ -6,7 +6,7 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 
 - `memoptima --help` displays the available command-line options.
 - `memoptima --version` displays the application version.
-- `memoptima status` displays current RAM and swap usage with a memory-pressure level.
+- `memoptima status` displays current RAM and swap usage, memory-pressure reasons, and a safe recommendation.
 - `memoptima processes` displays the top ten processes by resident memory.
 
 ## Requirements

@@ -27,7 +27,8 @@ TEST(MemoryPressure, ReportsNormalWhenAvailableMemoryAndSwapUsageAreHealthy) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 201, 400, 199));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Normal);
-    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 
@@ -35,7 +36,8 @@ TEST(MemoryPressure, ReportsWarningAtTheTwentyPercentAvailableMemoryBoundary) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 200, 400, 0));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Warning);
-    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 
@@ -43,7 +45,8 @@ TEST(MemoryPressure, ReportsCriticalAtTheTenPercentAvailableMemoryBoundary) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 100, 400, 0));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Critical);
-    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 
@@ -51,7 +54,8 @@ TEST(MemoryPressure, RaisesNormalToWarningAtTheFiftyPercentSwapBoundary) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 201, 400, 200));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Warning);
-    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 
@@ -59,7 +63,8 @@ TEST(MemoryPressure, RaisesWarningToCriticalWhenSwapUsageIsHigh) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 200, 400, 200));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Critical);
-    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 
@@ -67,7 +72,8 @@ TEST(MemoryPressure, DoesNotRaiseCriticalBeyondCriticalWhenSwapUsageIsHigh) {
     const MemoryPressure pressure = evaluate_memory_pressure(make_status(1000, 100, 400, 200));
 
     EXPECT_EQ(pressure.level(), MemoryPressureLevel::Critical);
-    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::LowAvailableMemory));
+    EXPECT_FALSE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtWarningThreshold));
+    EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::AvailableMemoryAtCriticalThreshold));
     EXPECT_TRUE(pressure.has_reason(MemoryPressureReason::HighSwapUsage));
 }
 

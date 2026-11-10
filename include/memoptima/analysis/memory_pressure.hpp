@@ -14,8 +14,9 @@ enum class MemoryPressureLevel {
 
 enum class MemoryPressureReason : std::uint8_t {
     None = 0,
-    LowAvailableMemory = 1U << 0U,
-    HighSwapUsage = 1U << 1U,
+    AvailableMemoryAtWarningThreshold = 1U << 0U,
+    AvailableMemoryAtCriticalThreshold = 1U << 1U,
+    HighSwapUsage = 1U << 2U,
 };
 
 class MemoryPressure {

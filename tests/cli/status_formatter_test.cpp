@@ -35,6 +35,8 @@ Swap
 
 Memory pressure
   Level:              Warning
+  Reason:             Swap usage is at or above 50%.
+  Recommendation:     Review memory-intensive processes.
 )");
 }
 
@@ -55,6 +57,55 @@ TEST(StatusFormatter, FormatsNoSwapAsNotApplicable) {
 
     EXPECT_NE(output.find("In use:             0 B (N/A)"), std::string::npos);
     EXPECT_NE(output.find("Level:              Critical"), std::string::npos);
+    EXPECT_NE(output.find("Reason:             Available RAM is at or below the critical threshold."), std::string::npos);
+    EXPECT_NE(
+        output.find("Recommendation:     Close unnecessary applications and review memory-intensive processes."),
+        std::string::npos);
+}
+
+TEST(StatusFormatter, FormatsBothReasonsInStableOrder) {
+    const analysis::MemoryStatus status{
+        .total_memory_bytes = 1000,
+        .available_memory_bytes = 200,
+        .used_memory_bytes = 800,
+        .used_memory_percentage = 80.0,
+        .total_swap_bytes = 400,
+        .free_swap_bytes = 200,
+        .used_swap_bytes = 200,
+        .used_swap_percentage = 50.0,
+    };
+
+    const analysis::MemoryPressure pressure = analysis::evaluate_memory_pressure(status);
+    const std::string output = format_memory_status(status, pressure);
+
+    const std::size_t available_memory_reason =
+        output.find("Reason:             Available RAM is at or below the warning threshold.");
+    const std::size_t swap_usage_reason = output.find("Reason:             Swap usage is at or above 50%.");
+
+    ASSERT_NE(available_memory_reason, std::string::npos);
+    ASSERT_NE(swap_usage_reason, std::string::npos);
+    EXPECT_LT(available_memory_reason, swap_usage_reason);
+    EXPECT_NE(output.find("Level:              Critical"), std::string::npos);
+}
+
+TEST(StatusFormatter, FormatsNormalRecommendationWithoutReasons) {
+    const analysis::MemoryStatus status{
+        .total_memory_bytes = 1000,
+        .available_memory_bytes = 201,
+        .used_memory_bytes = 799,
+        .used_memory_percentage = 79.9,
+        .total_swap_bytes = 400,
+        .free_swap_bytes = 201,
+        .used_swap_bytes = 199,
+        .used_swap_percentage = 49.75,
+    };
+
+    const analysis::MemoryPressure pressure = analysis::evaluate_memory_pressure(status);
+    const std::string output = format_memory_status(status, pressure);
+
+    EXPECT_NE(output.find("Level:              Normal"), std::string::npos);
+    EXPECT_EQ(output.find("Reason:"), std::string::npos);
+    EXPECT_NE(output.find("Recommendation:     No action is required."), std::string::npos);
 }
 
 }  // namespace

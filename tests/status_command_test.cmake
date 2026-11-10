@@ -13,7 +13,7 @@ if(NOT command_result EQUAL 0)
     message(FATAL_ERROR "memoptima status failed with exit code ${command_result}: ${command_error}")
 endif()
 
-foreach(expected_text "Memory status" "RAM" "Swap" "In use (estimate):" "Memory pressure" "Level:")
+foreach(expected_text "Memory status" "RAM" "Swap" "In use (estimate):" "Memory pressure" "Level:" "Recommendation:")
     string(FIND "${command_output}" "${expected_text}" match_position)
     if(match_position EQUAL -1)
         message(FATAL_ERROR "memoptima status output is missing: ${expected_text}")
