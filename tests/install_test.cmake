@@ -37,7 +37,8 @@ foreach(required_file
     "${installed_document_directory}/README.md"
     "${installed_document_directory}/user-guide.md"
     "${installed_document_directory}/metrics-and-pressure.md"
-    "${installed_document_directory}/mvp-scope.md")
+    "${installed_document_directory}/mvp-scope.md"
+    "${installed_document_directory}/0.2.0-scope.md")
     if(NOT EXISTS "${required_file}")
         message(FATAL_ERROR "Expected installed file is missing: ${required_file}")
     endif()

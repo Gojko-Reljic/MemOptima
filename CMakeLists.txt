@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MemOptima VERSION 0.1.0 LANGUAGES CXX)
+project(MemOptima VERSION 0.2.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -97,6 +97,7 @@ install(
         "${PROJECT_SOURCE_DIR}/docs/user-guide.md"
         "${PROJECT_SOURCE_DIR}/docs/metrics-and-pressure.md"
         "${PROJECT_SOURCE_DIR}/docs/mvp-scope.md"
+        "${PROJECT_SOURCE_DIR}/docs/0.2.0-scope.md"
     DESTINATION "${CMAKE_INSTALL_DOCDIR}"
 )
 
