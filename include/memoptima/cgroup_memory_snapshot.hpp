@@ -9,6 +9,7 @@
 namespace memoptima {
 
 enum class CgroupMetricReadErrorCode {
+    invalid_cgroup_path,
     file_open_failed,
     file_read_failed,
     invalid_format,

@@ -8,6 +8,7 @@ add_executable(memoptima_core_tests
     cli/status_formatter_test.cpp
     linux/cgroup_v2/mountinfo_parser_test.cpp
     linux/cgroup_v2/cgroup_memory_parser_test.cpp
+    linux/cgroup_v2/cgroup_memory_reader_test.cpp
     linux/cgroup_v2/psi_parser_test.cpp
     linux/process_ranker_test.cpp
     linux/process_status_parser_test.cpp
