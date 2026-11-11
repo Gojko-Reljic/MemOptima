@@ -1,9 +1,12 @@
 #include <memoptima/analysis/memory_pressure.hpp>
 #include <memoptima/analysis/memory_status.hpp>
 #include <memoptima/application_info.hpp>
+#include <memoptima/linux/cgroup_v2_capability_checker.hpp>
+#include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
 #include <memoptima/linux/process_scanner.hpp>
 
+#include "cli/containers_formatter.hpp"
 #include "cli/monitor_runner.hpp"
 #include "cli/processes_formatter.hpp"
 #include "cli/status_formatter.hpp"
@@ -33,6 +36,7 @@ void print_help(std::ostream &output) {
            << "  memoptima [OPTION]\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
+           << "  containers       Display memory information for Docker containers.\n"
            << "  monitor          Continuously display memory status every five seconds.\n"
            << "  processes        Display the top memory-consuming processes.\n"
            << "  status           Display current RAM and swap status.\n"
@@ -125,6 +129,21 @@ int run_processes_command() {
     return kExitSuccess;
 }
 
+int run_containers_command() {
+    const auto environment = memoptima::linux::detect_cgroup_v2_environment();
+    if (!environment.has_value()) {
+        std::cerr << "Error: Docker container observation is unavailable: "
+                  << environment.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    const memoptima::DockerContainerScanResult scan_result =
+        memoptima::linux::scan_rootful_docker_containers(*environment);
+    std::cout << memoptima::cli::format_docker_container_scan_result(scan_result);
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(scan_result);
+    return kExitSuccess;
+}
+
 int run(int argument_count, char *arguments[]) {
     if (argument_count == 1) {
         print_help(std::cout);
@@ -149,6 +168,10 @@ int run(int argument_count, char *arguments[]) {
 
     if (option == "processes") {
         return run_processes_command();
+    }
+
+    if (option == "containers") {
+        return run_containers_command();
     }
 
     if (option == "-h" || option == "--help") {
