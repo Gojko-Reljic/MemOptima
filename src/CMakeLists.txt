@@ -3,6 +3,9 @@ add_library(memoptima_core STATIC
     application_info.cpp
     analysis/memory_pressure.cpp
     analysis/memory_status.cpp
+    linux/cgroup_v2/cgroup_v2_capability_checker.cpp
+    linux/cgroup_v2/mountinfo_parser.cpp
+    linux/cgroup_v2/psi_parser.cpp
     linux/meminfo_parser.cpp
     linux/memory_reader.cpp
     linux/process_ranker.cpp
