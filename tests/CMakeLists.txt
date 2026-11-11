@@ -2,10 +2,12 @@ add_executable(memoptima_core_tests
     application_info_test.cpp
     analysis/memory_pressure_test.cpp
     analysis/memory_status_test.cpp
+    cgroup_memory_snapshot_test.cpp
     cli/monitor_runner_test.cpp
     cli/processes_formatter_test.cpp
     cli/status_formatter_test.cpp
     linux/cgroup_v2/mountinfo_parser_test.cpp
+    linux/cgroup_v2/cgroup_memory_parser_test.cpp
     linux/cgroup_v2/psi_parser_test.cpp
     linux/process_ranker_test.cpp
     linux/process_status_parser_test.cpp
