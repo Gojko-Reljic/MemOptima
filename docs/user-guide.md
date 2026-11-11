@@ -50,7 +50,8 @@ Run the Release command-line checks under Valgrind:
 cmake --build --preset release --target memoptima_valgrind
 ```
 
-The Valgrind target checks `status`, `processes`, and a controlled `monitor` interruption. It fails on memory errors and definite or indirect leaks.
+The Valgrind target checks `status`, `processes`, `containers`, invalid container-ID handling, and a
+controlled `monitor` interruption. It fails on memory errors and definite or indirect leaks.
 
 ## Install
 
