@@ -80,5 +80,50 @@ TEST(ContainersFormatter, FormatsWarningsForStandardError) {
     EXPECT_NE(output.find("/sys/fs/cgroup"), std::string::npos);
 }
 
+TEST(ContainersFormatter, FormatsACompleteContainerDetailReport) {
+    const std::string id(64, 'b');
+    const DockerContainerMemorySnapshot container =
+        make_container(id, 1024ULL * 1024ULL, std::nullopt, 2ULL * 1024ULL * 1024ULL, 3, 2.375);
+
+    const std::string output = format_docker_container_detail(container);
+
+    EXPECT_NE(output.find("Container"), std::string::npos);
+    EXPECT_NE(output.find("Memory\n"), std::string::npos);
+    EXPECT_NE(output.find("Events"), std::string::npos);
+    EXPECT_NE(output.find("Composition"), std::string::npos);
+    EXPECT_NE(output.find("Swap"), std::string::npos);
+    EXPECT_NE(output.find("Memory pressure"), std::string::npos);
+    EXPECT_NE(output.find("total=0 µs"), std::string::npos);
+}
+
+TEST(ContainersFormatter, DeduplicatesUnavailableDataCauses) {
+    const std::string id(64, 'c');
+    const auto parsed_id = DockerContainerId::parse(id);
+    ASSERT_TRUE(parsed_id.has_value());
+    const CgroupMetricReadError error{.code = CgroupMetricReadErrorCode::file_open_failed,
+                                      .source_name = "memory.events",
+                                      .detail = "Unable to open memory.events."};
+    const DockerContainerMemorySnapshot container = DockerContainerMemorySnapshot::create(
+        *parsed_id, "/sys/fs/cgroup/docker/" + id,
+        CgroupMemorySnapshot::create(
+            CgroupByteMetric{0},
+            {.high = CgroupMemoryLimitMetric{std::nullopt},
+             .maximum = CgroupMemoryLimitMetric{std::nullopt}},
+            {.high = std::unexpected(error),
+             .maximum = std::unexpected(error),
+             .oom = std::unexpected(error),
+             .oom_kill = std::unexpected(error)},
+            {.anonymous = CgroupByteMetric{0}, .file_backed = CgroupByteMetric{0}},
+            CgroupByteMetric{0},
+            {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}},
+             .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}}}));
+
+    const std::string output = format_docker_container_detail(container);
+
+    EXPECT_NE(output.find("Unavailable data"), std::string::npos);
+    EXPECT_EQ(output.find("memory.events: Unable to open memory.events."),
+              output.rfind("memory.events: Unable to open memory.events."));
+}
+
 } // namespace
 } // namespace memoptima::cli

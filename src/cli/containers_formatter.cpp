@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <iomanip>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 namespace memoptima::cli {
 namespace {
@@ -62,6 +64,74 @@ constexpr int kOomKillsColumnWidth = 12;
     return output.str();
 }
 
+[[nodiscard]] std::string format_pressure_average(double average) {
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(2) << average << '%';
+    return output.str();
+}
+
+[[nodiscard]] std::string format_pressure_total(std::uint64_t microseconds) {
+    if (microseconds < 1000) {
+        return std::to_string(microseconds) + " µs";
+    }
+
+    const double milliseconds = static_cast<double>(microseconds) / 1000.0;
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(2);
+    if (milliseconds < 1000.0) {
+        output << milliseconds << " ms";
+    } else {
+        output << milliseconds / 1000.0 << " s";
+    }
+    return output.str();
+}
+
+[[nodiscard]] std::string format_pressure_line(const CgroupMetric<CgroupPressureLine> &line) {
+    if (!line.has_value()) {
+        return "N/A";
+    }
+
+    std::ostringstream output;
+    output << "avg10=" << format_pressure_average(line->average_10_seconds)
+           << ", avg60=" << format_pressure_average(line->average_60_seconds)
+           << ", avg300=" << format_pressure_average(line->average_300_seconds)
+           << ", total=" << format_pressure_total(line->total_microseconds);
+    return output.str();
+}
+
+using UnavailableDataKey = std::tuple<CgroupMetricReadErrorCode, std::string, std::string>;
+
+void add_unavailable_metric(std::set<UnavailableDataKey> &unavailable_data,
+                            const CgroupMetricReadError &error) {
+    unavailable_data.emplace(error.code, error.source_name, error.detail);
+}
+
+template <typename Value>
+void add_unavailable_metric(std::set<UnavailableDataKey> &unavailable_data,
+                            const CgroupMetric<Value> &metric) {
+    if (!metric.has_value()) {
+        add_unavailable_metric(unavailable_data, metric.error());
+    }
+}
+
+[[nodiscard]] std::set<UnavailableDataKey>
+collect_unavailable_data(const CgroupMemorySnapshot &memory) {
+    std::set<UnavailableDataKey> unavailable_data;
+    add_unavailable_metric(unavailable_data, memory.current_memory());
+    add_unavailable_metric(unavailable_data, memory.limits().high);
+    add_unavailable_metric(unavailable_data, memory.limits().maximum);
+    add_unavailable_metric(unavailable_data, memory.events().high);
+    add_unavailable_metric(unavailable_data, memory.events().maximum);
+    add_unavailable_metric(unavailable_data, memory.events().oom);
+    add_unavailable_metric(unavailable_data, memory.events().oom_kill);
+    add_unavailable_metric(unavailable_data, memory.composition().anonymous);
+    add_unavailable_metric(unavailable_data, memory.composition().file_backed);
+    add_unavailable_metric(unavailable_data, memory.current_swap());
+    add_unavailable_metric(unavailable_data, memory.pressure().some);
+    add_unavailable_metric(unavailable_data, memory.pressure().full);
+    return unavailable_data;
+}
+
 } // namespace
 
 std::string format_docker_container_scan_result(const DockerContainerScanResult &result) {
@@ -95,6 +165,42 @@ std::string format_docker_container_scan_warnings(const DockerContainerScanResul
     for (const DockerContainerScanWarning &warning : result.warnings()) {
         output << "Warning: " << warning.detail << " Path: " << warning.cgroup_path.string()
                << '\n';
+    }
+    return output.str();
+}
+
+std::string format_docker_container_detail(const DockerContainerMemorySnapshot &container) {
+    const CgroupMemorySnapshot &memory = container.memory();
+    std::ostringstream output;
+    output << "Container\n"
+           << "  ID:                  " << container.container_id().value() << '\n'
+           << "  Cgroup path:         " << container.cgroup_path().string() << "\n\n"
+           << "Memory\n"
+           << "  Current:             " << format_byte_metric(memory.current_memory()) << '\n'
+           << "  High:                " << format_memory_limit(memory.limits().high) << '\n'
+           << "  Max:                 " << format_memory_limit(memory.limits().maximum) << "\n\n"
+           << "Events\n"
+           << "  High:                " << format_event_metric(memory.events().high) << '\n'
+           << "  Max:                 " << format_event_metric(memory.events().maximum) << '\n'
+           << "  OOM:                 " << format_event_metric(memory.events().oom) << '\n'
+           << "  OOM kills:           " << format_event_metric(memory.events().oom_kill) << "\n\n"
+           << "Composition\n"
+           << "  Anonymous:           " << format_byte_metric(memory.composition().anonymous)
+           << '\n'
+           << "  File-backed:         " << format_byte_metric(memory.composition().file_backed)
+           << "\n\n"
+           << "Swap\n"
+           << "  Current:             " << format_byte_metric(memory.current_swap()) << "\n\n"
+           << "Memory pressure\n"
+           << "  Some:                " << format_pressure_line(memory.pressure().some) << '\n'
+           << "  Full:                " << format_pressure_line(memory.pressure().full) << '\n';
+
+    const std::set<UnavailableDataKey> unavailable_data = collect_unavailable_data(memory);
+    if (!unavailable_data.empty()) {
+        output << "\nUnavailable data\n";
+        for (const UnavailableDataKey &error : unavailable_data) {
+            output << "  " << std::get<1>(error) << ": " << std::get<2>(error) << '\n';
+        }
     }
     return output.str();
 }

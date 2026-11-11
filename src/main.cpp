@@ -15,6 +15,7 @@
 #include <csignal>
 #include <expected>
 #include <iostream>
+#include <ranges>
 #include <string_view>
 #include <thread>
 
@@ -33,7 +34,8 @@ void print_help(std::ostream &output) {
     output << memoptima::application_name() << " — " << memoptima::application_description()
            << "\n\n"
            << "Usage:\n"
-           << "  memoptima [OPTION]\n\n"
+           << "  memoptima [OPTION]\n"
+           << "  memoptima container <FULL_ID>\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
            << "  containers       Display memory information for Docker containers.\n"
@@ -144,10 +146,48 @@ int run_containers_command() {
     return kExitSuccess;
 }
 
+int run_container_command(std::string_view container_id_text) {
+    const auto container_id = memoptima::DockerContainerId::parse(container_id_text);
+    if (!container_id.has_value()) {
+        std::cerr << "Error: invalid Docker container ID: " << container_id.error().detail
+                  << "\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    const auto environment = memoptima::linux::detect_cgroup_v2_environment();
+    if (!environment.has_value()) {
+        std::cerr << "Error: Docker container observation is unavailable: "
+                  << environment.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    const memoptima::DockerContainerScanResult scan_result =
+        memoptima::linux::scan_rootful_docker_containers(*environment);
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(scan_result);
+    const auto container =
+        std::ranges::find_if(scan_result.containers(),
+                             [&container_id](const memoptima::DockerContainerMemorySnapshot &item) {
+                                 return item.container_id().value() == container_id->value();
+                             });
+    if (container == scan_result.containers().end()) {
+        std::cerr << "Error: Docker container '" << container_id->value()
+                  << "' was not found in supported rootful Docker cgroup locations.\n";
+        return kExitRuntimeError;
+    }
+
+    std::cout << memoptima::cli::format_docker_container_detail(*container);
+    return kExitSuccess;
+}
+
 int run(int argument_count, char *arguments[]) {
     if (argument_count == 1) {
         print_help(std::cout);
         return kExitSuccess;
+    }
+
+    if (argument_count == 3 && std::string_view{arguments[1]} == "container") {
+        return run_container_command(arguments[2]);
     }
 
     if (argument_count != 2) {
@@ -172,6 +212,12 @@ int run(int argument_count, char *arguments[]) {
 
     if (option == "containers") {
         return run_containers_command();
+    }
+
+    if (option == "container") {
+        std::cerr << "Error: 'container' requires a full Docker container ID.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
     }
 
     if (option == "-h" || option == "--help") {

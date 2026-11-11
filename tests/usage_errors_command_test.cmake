@@ -28,3 +28,5 @@ endfunction()
 
 assert_usage_error("Error: unknown option 'unknown'." unknown)
 assert_usage_error("Error: expected at most one option." status unexpected)
+assert_usage_error("Error: 'container' requires a full Docker container ID." container)
+assert_usage_error("Error: invalid Docker container ID:" container invalid)
