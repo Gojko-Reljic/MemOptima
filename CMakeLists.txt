@@ -5,6 +5,10 @@ project(MemOptima VERSION 0.1.0 LANGUAGES CXX)
 include(CTest)
 include(GNUInstallDirs)
 
+set(MEMOPTIMA_DOCKER_TEST_IMAGE "alpine:3.24.4" CACHE STRING
+    "Docker image used by the explicitly invoked MemOptima integration check.")
+find_program(MEMOPTIMA_DOCKER_EXECUTABLE NAMES docker)
+
 option(MEMOPTIMA_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer." OFF)
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -41,6 +45,19 @@ configure_file(
 )
 
 add_subdirectory(src)
+
+# Docker is used only by this explicitly invoked integration target, never by the MemOptima binary.
+add_custom_target(memoptima_docker_integration
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        "-DMEMOPTIMA_DOCKER_EXECUTABLE=${MEMOPTIMA_DOCKER_EXECUTABLE}"
+        "-DMEMOPTIMA_DOCKER_TEST_IMAGE=${MEMOPTIMA_DOCKER_TEST_IMAGE}"
+        -P "${PROJECT_SOURCE_DIR}/tests/docker_integration_check.cmake"
+    COMMENT "Running the opt-in Docker cgroup v2 integration check"
+    DEPENDS memoptima
+    USES_TERMINAL
+    VERBATIM
+)
 
 # Formatting is a development quality check, not a dependency of builds that explicitly disable tests.
 if(BUILD_TESTING)

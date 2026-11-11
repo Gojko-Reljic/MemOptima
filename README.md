@@ -132,6 +132,19 @@ successful scan returns exit code `0`, even when it has warnings. Missing cgroup
 a valid full ID that is not discovered return exit code `1`. A missing or invalid ID is a command
 usage error and returns exit code `2`.
 
+### Optional real Docker integration check
+
+On a host with rootful Docker, cgroup v2, and permission to use the Docker CLI, run:
+
+```bash
+cmake --build --preset release --target memoptima_docker_integration
+```
+
+The target is never part of the normal test suite. It may pull the default `alpine:3.24.4` image,
+starts one uniquely named and labeled temporary container, verifies both Docker commands against its
+real cgroup, and removes only that container by its exact ID. Use a local mirror or a different
+approved image with `-DMEMOPTIMA_DOCKER_TEST_IMAGE=<image>` while configuring CMake.
+
 ## License
 
 MemOptima is distributed under the [MIT License](LICENSE).
