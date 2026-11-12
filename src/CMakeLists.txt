@@ -34,6 +34,7 @@ target_include_directories(memoptima_core
 target_link_libraries(memoptima_core
     PRIVATE
         memoptima_build_options
+        nlohmann_json::nlohmann_json
 )
 
 set_target_properties(memoptima_core PROPERTIES

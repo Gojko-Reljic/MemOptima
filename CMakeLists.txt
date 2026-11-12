@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(MemOptima VERSION 0.3.0 LANGUAGES CXX)
 
 include(CTest)
+include(FetchContent)
 include(GNUInstallDirs)
 
 set(MEMOPTIMA_DOCKER_TEST_IMAGE "alpine:3.24.4" CACHE STRING
@@ -43,6 +44,16 @@ configure_file(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/include/memoptima/version.hpp"
     @ONLY
 )
+
+set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
+set(JSON_Install OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
 
 add_subdirectory(src)
 
@@ -103,8 +114,6 @@ install(
 )
 
 if(BUILD_TESTING)
-    include(FetchContent)
-
 # Pin GoogleTest to a commit so test builds remain reproducible over time.
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
