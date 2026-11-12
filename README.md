@@ -1,6 +1,8 @@
 # MemOptima
 
-MemOptima is an adaptive memory manager for Linux. Its first release will report system memory usage, identify memory-intensive processes, and classify memory pressure without modifying the system automatically.
+MemOptima is an adaptive memory manager for Linux. It reports system memory usage, identifies
+memory-intensive processes, observes supported Docker cgroup memory, and retains bounded local
+evidence without modifying the system automatically.
 
 ## Current capabilities
 
