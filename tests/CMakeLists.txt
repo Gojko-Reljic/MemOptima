@@ -4,6 +4,7 @@ add_executable(memoptima_core_tests
     analysis/memory_pressure_test.cpp
     analysis/memory_status_test.cpp
     cgroup_memory_snapshot_test.cpp
+    docker_container_assessment_test.cpp
     docker_container_memory_snapshot_test.cpp
     cli/containers_formatter_test.cpp
     cli/monitor_runner_test.cpp
