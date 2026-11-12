@@ -10,6 +10,7 @@ add_library(memoptima_core STATIC
     sampling/evidence_models.cpp
     sampling/jsonl_serializer.cpp
     sampling/jsonl_writer.cpp
+    sampling/session_runner.cpp
     linux/cgroup_v2/cgroup_v2_capability_checker.cpp
     linux/cgroup_v2/cgroup_memory_parser.cpp
     linux/cgroup_v2/cgroup_memory_reader.cpp

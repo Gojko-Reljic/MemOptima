@@ -25,6 +25,7 @@ add_executable(memoptima_core_tests
     sampling/jsonl_serializer_test.cpp
     sampling/jsonl_writer_test.cpp
     sampling/sampling_configuration_test.cpp
+    sampling/session_runner_test.cpp
     utc_timestamp_test.cpp
 )
 
