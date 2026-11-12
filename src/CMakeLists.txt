@@ -22,6 +22,7 @@ add_library(memoptima_core STATIC
     memory_snapshot.cpp
     process_memory_info.cpp
     sampling/sampling_configuration.cpp
+    utc_timestamp.cpp
 )
 
 target_include_directories(memoptima_core
@@ -59,6 +60,7 @@ target_include_directories(memoptima_cli_support
 target_link_libraries(memoptima_cli_support
     PRIVATE
         memoptima_build_options
+        memoptima_core
 )
 
 set_target_properties(memoptima_cli_support PROPERTIES

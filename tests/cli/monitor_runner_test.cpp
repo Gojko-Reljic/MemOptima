@@ -38,13 +38,6 @@ class MonitorSimulation {
     std::size_t read_count_{};
 };
 
-TEST(MonitorRunner, FormatsUtcTimestampsInIso8601) {
-    const auto time_point =
-        std::chrono::system_clock::time_point{std::chrono::seconds{1'700'000'000}};
-
-    EXPECT_EQ(format_utc_timestamp(time_point), "2023-11-14T22:13:20Z");
-}
-
 TEST(MonitorRunner, WritesEachSuccessfulMeasurementToStandardOutput) {
     MonitorSimulation simulation(
         {FormattedStatusResult{"First status\n"}, FormattedStatusResult{"Second status\n"}});

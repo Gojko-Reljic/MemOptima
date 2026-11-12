@@ -1,8 +1,8 @@
 #include "cli/monitor_runner.hpp"
 
+#include <memoptima/utc_timestamp.hpp>
+
 #include <algorithm>
-#include <array>
-#include <ctime>
 #include <ostream>
 
 namespace memoptima::cli {
@@ -34,27 +34,13 @@ void wait_until_next_measurement(const MonitorDependencies &dependencies) {
 
 } // namespace
 
-std::string format_utc_timestamp(std::chrono::system_clock::time_point time_point) {
-    const std::time_t calendar_time = std::chrono::system_clock::to_time_t(time_point);
-    std::tm utc_time{};
-
-    // gmtime_r avoids the shared static storage used by the older gmtime function.
-    if (gmtime_r(&calendar_time, &utc_time) == nullptr) {
-        return "unavailable-utc-time";
-    }
-
-    std::array<char, 21> buffer{};
-    if (std::strftime(buffer.data(), buffer.size(), "%Y-%m-%dT%H:%M:%SZ", &utc_time) == 0) {
-        return "unavailable-utc-time";
-    }
-
-    return buffer.data();
-}
-
 void run_monitor(const MonitorDependencies &dependencies, std::ostream &standard_output,
                  std::ostream &standard_error) {
     while (!dependencies.stop_requested()) {
-        const std::string timestamp = format_utc_timestamp(dependencies.current_utc_time());
+        const auto formatted_timestamp =
+            format_utc_timestamp(dependencies.current_utc_time(), UtcTimestampPrecision::seconds);
+        const std::string timestamp =
+            formatted_timestamp.has_value() ? *formatted_timestamp : "unavailable-utc-time";
         const FormattedStatusResult status = dependencies.read_formatted_status();
 
         if (status.has_value()) {

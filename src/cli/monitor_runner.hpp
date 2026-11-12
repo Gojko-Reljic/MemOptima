@@ -19,8 +19,6 @@ struct MonitorDependencies {
     std::function<bool()> stop_requested;
 };
 
-[[nodiscard]] std::string format_utc_timestamp(std::chrono::system_clock::time_point time_point);
-
 void run_monitor(const MonitorDependencies &dependencies, std::ostream &standard_output,
                  std::ostream &standard_error);
 
