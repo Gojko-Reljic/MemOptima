@@ -6,6 +6,8 @@
 #include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
 #include <memoptima/linux/process_scanner.hpp>
+#include <memoptima/sampling/sampling_configuration.hpp>
+#include <memoptima/sampling/session_runner.hpp>
 
 #include "cli/assessments_formatter.hpp"
 #include "cli/containers_formatter.hpp"
@@ -16,7 +18,9 @@
 #include <chrono>
 #include <csignal>
 #include <expected>
+#include <filesystem>
 #include <iostream>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <thread>
@@ -29,8 +33,10 @@ constexpr int kExitUsageError = 2;
 
 // A signal handler only sets this signal-safe flag; normal code performs all cleanup.
 volatile std::sig_atomic_t monitor_stop_requested = 0;
+volatile std::sig_atomic_t sampling_stop_requested = 0;
 
 void request_monitor_stop(int) noexcept { monitor_stop_requested = 1; }
+void request_sampling_stop(int) noexcept { sampling_stop_requested = 1; }
 
 void print_help(std::ostream &output) {
     output << memoptima::application_name() << " — " << memoptima::application_description()
@@ -39,13 +45,16 @@ void print_help(std::ostream &output) {
            << "  memoptima [OPTION]\n"
            << "  memoptima container <FULL_ID>\n\n"
            << "  memoptima assess containers\n"
-           << "  memoptima assess container <FULL_ID>\n\n"
+           << "  memoptima assess container <FULL_ID>\n"
+           << "  memoptima sample containers --count <COUNT> --interval <DURATION> --output "
+              "<NEW_FILE>\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
            << "  assess           Assess Docker container memory-boundary and OOM signals.\n"
            << "  containers       Display memory information for Docker containers.\n"
            << "  monitor          Continuously display memory status every five seconds.\n"
            << "  processes        Display the top memory-consuming processes.\n"
+           << "  sample           Collect bounded Docker cgroup memory evidence.\n"
            << "  status           Display current RAM and swap status.\n"
            << "  -v, --version    Display the application version.\n";
 }
@@ -122,6 +131,127 @@ int run_monitor_command() {
     // Restore the process-wide SIGINT behavior after the monitor exits.
     std::signal(SIGINT, previous_signal_handler);
     return kExitSuccess;
+}
+
+struct SampleContainersArguments {
+    memoptima::sampling::SamplingCount count;
+    memoptima::sampling::SamplingInterval interval;
+    std::filesystem::path output_path;
+};
+
+[[nodiscard]] std::expected<SampleContainersArguments, std::string>
+parse_sample_containers_arguments(int argument_count, char *arguments[]) {
+    if (argument_count != 8) {
+        return std::unexpected(
+            "'sample containers' requires --count, --interval, and --output exactly once.");
+    }
+
+    std::optional<std::string_view> count_text;
+    std::optional<std::string_view> interval_text;
+    std::optional<std::string_view> output_text;
+    for (int index = 3; index < argument_count; index += 2) {
+        const std::string_view option{arguments[index]};
+        const std::string_view value{arguments[index + 1]};
+        if (option == "--count") {
+            if (count_text.has_value()) {
+                return std::unexpected("'sample containers' received --count more than once.");
+            }
+            count_text = value;
+        } else if (option == "--interval") {
+            if (interval_text.has_value()) {
+                return std::unexpected("'sample containers' received --interval more than once.");
+            }
+            interval_text = value;
+        } else if (option == "--output") {
+            if (output_text.has_value()) {
+                return std::unexpected("'sample containers' received --output more than once.");
+            }
+            output_text = value;
+        } else {
+            return std::unexpected("'sample containers' received unknown option '" +
+                                   std::string{option} + "'.");
+        }
+    }
+
+    if (!count_text.has_value() || !interval_text.has_value() || !output_text.has_value()) {
+        return std::unexpected(
+            "'sample containers' requires --count, --interval, and --output exactly once.");
+    }
+    const auto count = memoptima::sampling::parse_sampling_count(*count_text);
+    if (!count.has_value()) {
+        return std::unexpected("invalid --count: " + count.error().detail);
+    }
+    const auto interval = memoptima::sampling::parse_sampling_interval(*interval_text);
+    if (!interval.has_value()) {
+        return std::unexpected("invalid --interval: " + interval.error().detail);
+    }
+    return SampleContainersArguments{
+        .count = *count,
+        .interval = *interval,
+        .output_path = std::filesystem::path{*output_text},
+    };
+}
+
+int run_sample_containers_command(int argument_count, char *arguments[]) {
+    const auto parsed_arguments = parse_sample_containers_arguments(argument_count, arguments);
+    if (!parsed_arguments.has_value()) {
+        std::cerr << "Error: " << parsed_arguments.error() << "\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    std::optional<memoptima::linux::CgroupV2Environment> environment;
+    sampling_stop_requested = 0;
+    const auto previous_signal_handler = std::signal(SIGINT, request_sampling_stop);
+    if (previous_signal_handler == SIG_ERR) {
+        std::cerr << "Error: unable to register the sampling interrupt handler.\n";
+        return kExitRuntimeError;
+    }
+
+    const memoptima::sampling::SamplingSessionDependencies dependencies{
+        .preflight = [&environment] -> std::expected<void, std::string> {
+            const auto detected_environment = memoptima::linux::detect_cgroup_v2_environment();
+            if (!detected_environment.has_value()) {
+                return std::unexpected(detected_environment.error().detail);
+            }
+            environment = *detected_environment;
+            return {};
+        },
+        .scan_containers =
+            [&environment] {
+                return memoptima::linux::scan_rootful_docker_containers(*environment);
+            },
+        .current_utc_time = [] { return std::chrono::system_clock::now(); },
+        .current_steady_time = [] { return std::chrono::steady_clock::now(); },
+        .sleep_for =
+            [](std::chrono::milliseconds duration) { std::this_thread::sleep_for(duration); },
+        .stop_requested = [] { return sampling_stop_requested != 0; },
+    };
+    const memoptima::sampling::SamplingSessionConfiguration configuration{
+        .count = parsed_arguments->count,
+        .interval = parsed_arguments->interval,
+        .output_path = parsed_arguments->output_path,
+    };
+
+    const auto result = memoptima::sampling::run_sampling_session(configuration, dependencies);
+    // Restore the process-wide SIGINT behavior after the bounded session exits.
+    std::signal(SIGINT, previous_signal_handler);
+    if (!result.has_value()) {
+        std::cerr << "Error: Docker container sampling failed: " << result.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    std::cerr << "Sampling session "
+              << (result->outcome == memoptima::sampling::SamplingSessionOutcome::completed
+                      ? "completed"
+                  : result->outcome == memoptima::sampling::SamplingSessionOutcome::interrupted
+                      ? "interrupted"
+                      : "failed")
+              << ": " << result->completed_sample_count
+              << " sample(s), artifact: " << configuration.output_path.string() << '\n';
+    return result->outcome == memoptima::sampling::SamplingSessionOutcome::failed
+               ? kExitRuntimeError
+               : kExitSuccess;
 }
 
 int run_processes_command() {
@@ -258,6 +388,15 @@ int run(int argument_count, char *arguments[]) {
         return run_assess_container_command(arguments[3]);
     }
 
+    if (argument_count >= 2 && std::string_view{arguments[1]} == "sample") {
+        if (argument_count < 3 || std::string_view{arguments[2]} != "containers") {
+            std::cerr << "Error: 'sample' requires 'containers' followed by sampling options.\n\n";
+            print_help(std::cerr);
+            return kExitUsageError;
+        }
+        return run_sample_containers_command(argument_count, arguments);
+    }
+
     if (argument_count != 2) {
         std::cerr << "Error: expected at most one option.\n\n";
         print_help(std::cerr);
@@ -290,6 +429,12 @@ int run(int argument_count, char *arguments[]) {
 
     if (option == "assess") {
         std::cerr << "Error: 'assess' requires 'containers' or 'container <FULL_ID>'.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    if (option == "sample") {
+        std::cerr << "Error: 'sample' requires 'containers' followed by sampling options.\n\n";
         print_help(std::cerr);
         return kExitUsageError;
     }
