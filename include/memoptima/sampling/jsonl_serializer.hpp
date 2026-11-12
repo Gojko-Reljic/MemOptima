@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memoptima/sampling/evidence_models.hpp>
+#include <memoptima/sampling/output_contract.hpp>
 #include <memoptima/sampling/sampling_configuration.hpp>
 
 #include <chrono>

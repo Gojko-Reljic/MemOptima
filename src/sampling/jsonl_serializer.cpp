@@ -16,8 +16,6 @@ namespace {
 using Json = nlohmann::ordered_json;
 
 constexpr std::uint32_t kSchemaVersion = 1;
-constexpr std::uint64_t kOutputMaximumBytes = 512ULL * 1024ULL * 1024ULL;
-
 [[nodiscard]] std::string decimal(std::uint64_t value) { return std::to_string(value); }
 
 [[nodiscard]] std::string error_code_name(CgroupMetricReadErrorCode code) {
@@ -281,7 +279,7 @@ serialize_session_start(SamplingCount requested_count, SamplingInterval requeste
                         {"started_at_utc", time},
                         {"requested_sample_count", requested_count.value()},
                         {"requested_interval_ms", decimal(requested_interval.value().count())},
-                        {"output_max_bytes", decimal(kOutputMaximumBytes)},
+                        {"output_max_bytes", decimal(kSamplingOutputMaximumBytes)},
                         {"output_permissions_octal", "0600"},
                         {"flush_after_each_record", true},
                         {"host_identifiers_included", false}};
