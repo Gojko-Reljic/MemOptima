@@ -57,8 +57,9 @@ Run the Release command-line checks under Valgrind:
 cmake --build --preset release --target memoptima_valgrind
 ```
 
-This target checks `status`, `processes`, `containers`, invalid container-ID handling, and a
-controlled `monitor` interruption for memory errors and definite or indirect leaks.
+This target checks `status`, `processes`, raw Docker container observation, both assessment command
+paths, invalid container-ID handling, and a controlled `monitor` interruption for memory errors and
+definite or indirect leaks.
 
 ## Run
 

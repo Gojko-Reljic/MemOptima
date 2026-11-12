@@ -35,6 +35,9 @@ run_valgrind_command(status 0 status)
 run_valgrind_command(processes 0 processes)
 run_valgrind_command(containers 0 containers)
 run_valgrind_command(container-invalid-id 2 container invalid)
+run_valgrind_command(assess-containers 0 assess containers)
+run_valgrind_command(assess-container-unknown-id 1 assess container
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
 
 execute_process(
     COMMAND "${MEMOPTIMA_TIMEOUT_EXECUTABLE}" --preserve-status -s INT 2
