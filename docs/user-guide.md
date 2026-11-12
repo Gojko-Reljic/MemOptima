@@ -2,7 +2,8 @@
 
 MemOptima is a Linux command-line tool for observing memory use. It reports RAM and swap usage,
 identifies memory-intensive processes, observes supported Docker cgroup memory data, and assesses
-currently observable cgroup memory-boundary and OOM signals.
+currently observable cgroup memory-boundary and OOM signals. It can also retain a bounded sequence
+of Docker cgroup snapshots as an explicit local evidence artifact.
 
 MemOptima does not automatically close processes, change swap settings, or modify other system settings.
 
@@ -15,7 +16,7 @@ To build MemOptima from source, install the following tools:
 - CMake 3.20 or newer
 - Ninja
 - `clang-format` when tests are enabled
-- Internet access during the first test-enabled CMake configuration, so CMake can download the pinned GoogleTest dependency
+- Internet access during the first CMake configuration, so CMake can download the pinned JSON dependency and, when tests are enabled, GoogleTest
 
 ## Build from source
 
@@ -190,6 +191,63 @@ The feature requires:
 Rootless Docker, cgroup v1, Kubernetes workload discovery, continuous assessment, trend analysis,
 forecasting, and automatic action are not supported by this release.
 
+## Sample Docker container memory evidence
+
+Use `sample containers` to retain a bounded local record of repeated Docker cgroup snapshots:
+
+```bash
+./build/debug/src/memoptima sample containers --count 12 --interval 5s --output evidence.jsonl
+```
+
+All three options are required. `--count` accepts `1` through `3600`. `--interval` accepts a
+canonical duration from `100ms` through `60m`, using `ms`, `s`, or `m`. `--output` must name a new
+path: MemOptima never overwrites or appends to an existing artifact.
+
+The first sample is immediate. Later samples follow a monotonic fixed-rate schedule, so wall-clock
+changes do not change cadence. A slow collection never starts concurrent work or silently skips an
+attempt; its delay is retained in the sample record.
+
+Before it creates the artifact, MemOptima validates the arguments and checks cgroup v2, the memory
+controller, and host memory PSI. It creates the exact requested path with owner-only `0600`
+permissions. The artifact is limited to 512 MiB and reserves terminal-record space before another
+sample is written.
+
+Sampling remains quiet on standard output. It writes a final standard-error summary such as:
+
+```text
+Sampling session completed: 12 sample(s), artifact: evidence.jsonl
+```
+
+Press `Ctrl+C` to stop normally. Earlier complete records remain valid, and MemOptima writes an
+`interrupted` terminal record whenever possible before returning exit code `0`.
+
+### Read the JSON Lines artifact
+
+Each line is one JSON object: the first line is `session_start`, every collection is `sample`, and a
+normal final line is `session_end`. For a quick inspection with `jq`:
+
+```bash
+jq -c '.record_type' evidence.jsonl
+jq -c 'select(.record_type == "sample") | {sample_sequence, captured_at_utc, containers: (.containers | length)}' evidence.jsonl
+```
+
+The artifact retains raw metrics and assessments together. 64-bit bytes, counters, PSI totals, and
+durations are decimal strings; PSI averages are numbers. `"max"` means an unlimited cgroup limit.
+`null` means a metric was unavailable, with its reason in `unavailable_metrics`. An empty
+`containers` list is a successful collection with no supported rootful Docker cgroup.
+
+See [Evidence Artifact Format](evidence-artifact-format.md) for the complete versioned schema.
+
+### Privacy, durability, and limits
+
+The artifact does not contain hostname, user name, IP address, machine ID, or a derived host
+identifier. It necessarily includes full Docker container IDs and cgroup paths to identify the
+observed workload. Each complete record is flushed before the next attempt, but this is not a
+guarantee against abrupt power loss. A missing `session_end` means the artifact is incomplete.
+
+Sampling preserves evidence. It does not yet infer a trend, predict an OOM event, diagnose a leak,
+certify workload health, make an automatic recommendation, or change the host or a workload.
+
 ### Assess all discovered containers
 
 Run:
@@ -303,3 +361,9 @@ This can be normal. Linux may prevent reading another process's status informati
 ### The monitor does not stop immediately
 
 Use `Ctrl+C`. MemOptima checks for this interruption at least every 100 milliseconds while waiting for the next measurement.
+
+### Sampling cannot create its output artifact
+
+Choose a new `--output` path. MemOptima intentionally refuses to overwrite or append to an existing
+evidence file. Also verify that the target directory exists and that your account can create an
+owner-only file there.
