@@ -1,6 +1,7 @@
 # Keep collection and analysis reusable; terminal-specific presentation belongs to cli_support.
 add_library(memoptima_core STATIC
     application_info.cpp
+    analysis/cgroup_memory_assessment.cpp
     analysis/memory_pressure.cpp
     analysis/memory_status.cpp
     cgroup_memory_snapshot.cpp

@@ -1,5 +1,6 @@
 add_executable(memoptima_core_tests
     application_info_test.cpp
+    analysis/cgroup_memory_assessment_test.cpp
     analysis/memory_pressure_test.cpp
     analysis/memory_status_test.cpp
     cgroup_memory_snapshot_test.cpp
