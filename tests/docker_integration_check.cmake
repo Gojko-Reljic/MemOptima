@@ -91,6 +91,25 @@ if(container_position EQUAL -1)
 endif()
 
 execute_process(
+    COMMAND "${MEMOPTIMA_EXECUTABLE}" assess containers
+    RESULT_VARIABLE assessments_result
+    OUTPUT_VARIABLE assessments_output
+    ERROR_VARIABLE assessments_error
+)
+
+if(NOT assessments_result EQUAL 0)
+    fail_after_cleanup("memoptima assess containers failed: ${assessments_error}")
+endif()
+
+foreach(expected_text "Docker container assessments" "${test_container_id}")
+    string(FIND "${assessments_output}" "${expected_text}" expected_position)
+    if(expected_position EQUAL -1)
+        fail_after_cleanup(
+            "memoptima assess containers output is missing '${expected_text}': ${assessments_output}")
+    endif()
+endforeach()
+
+execute_process(
     COMMAND "${MEMOPTIMA_EXECUTABLE}" container "${test_container_id}"
     RESULT_VARIABLE container_result
     OUTPUT_VARIABLE container_output
@@ -106,6 +125,25 @@ foreach(expected_text "Container" "${test_container_id}" "Cgroup path:" "Memory 
     if(expected_position EQUAL -1)
         fail_after_cleanup(
             "memoptima container output is missing '${expected_text}': ${container_output}")
+    endif()
+endforeach()
+
+execute_process(
+    COMMAND "${MEMOPTIMA_EXECUTABLE}" assess container "${test_container_id}"
+    RESULT_VARIABLE assessment_result
+    OUTPUT_VARIABLE assessment_output
+    ERROR_VARIABLE assessment_error
+)
+
+if(NOT assessment_result EQUAL 0)
+    fail_after_cleanup("memoptima assess container failed: ${assessment_error}")
+endif()
+
+foreach(expected_text "Container" "${test_container_id}" "Overall risk" "Coverage" "Findings")
+    string(FIND "${assessment_output}" "${expected_text}" expected_position)
+    if(expected_position EQUAL -1)
+        fail_after_cleanup(
+            "memoptima assess container output is missing '${expected_text}': ${assessment_output}")
     endif()
 endforeach()
 

@@ -193,9 +193,10 @@ cmake --build --preset release --target memoptima_docker_integration
 ```
 
 The target is never part of the normal test suite. It may pull the default `alpine:3.24.4` image,
-starts one uniquely named and labeled temporary container, verifies both Docker commands against its
-real cgroup, and removes only that container by its exact ID. Use a local mirror or a different
-approved image with `-DMEMOPTIMA_DOCKER_TEST_IMAGE=<image>` while configuring CMake.
+starts one uniquely named and labeled temporary container, verifies the raw and assessment Docker
+commands against its real cgroup, and removes only that container by its exact ID. Use a local
+mirror or a different approved image with `-DMEMOPTIMA_DOCKER_TEST_IMAGE=<image>` while configuring
+CMake.
 
 ## License
 

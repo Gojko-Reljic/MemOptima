@@ -98,6 +98,7 @@ install(
         "${PROJECT_SOURCE_DIR}/docs/metrics-and-pressure.md"
         "${PROJECT_SOURCE_DIR}/docs/mvp-scope.md"
         "${PROJECT_SOURCE_DIR}/docs/0.2.0-scope.md"
+        "${PROJECT_SOURCE_DIR}/docs/0.3.0-scope.md"
     DESTINATION "${CMAKE_INSTALL_DOCDIR}"
 )
 
