@@ -11,6 +11,8 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 - `memoptima processes` displays the top ten processes by resident memory.
 - `memoptima containers` displays memory summaries for supported rootful Docker containers.
 - `memoptima container <FULL_ID>` displays the complete available cgroup memory snapshot for one Docker container.
+- `memoptima assess containers` summarizes currently observable cgroup memory-boundary and OOM risk for supported rootful Docker containers.
+- `memoptima assess container <FULL_ID>` explains the findings, evidence, and safe recommendations for one supported rootful Docker container.
 
 ## Documentation
 
@@ -18,6 +20,7 @@ MemOptima is an adaptive memory manager for Linux. Its first release will report
 - [Metrics and Memory Pressure](docs/metrics-and-pressure.md) explains the Linux metrics, calculations, thresholds, and limitations.
 - [MVP Scope](docs/mvp-scope.md) defines the current product boundary, safety and privacy behavior, and post-MVP direction.
 - [0.2.0 Scope](docs/0.2.0-scope.md) defines the Docker-aware cgroup v2 and PSI observability release.
+- [0.3.0 Scope](docs/0.3.0-scope.md) defines the read-only Docker cgroup memory assessment release.
 
 ## Requirements
 
@@ -67,6 +70,8 @@ controlled `monitor` interruption for memory errors and definite or indirect lea
 ./build/debug/src/memoptima processes
 ./build/debug/src/memoptima containers
 ./build/debug/src/memoptima container <FULL_ID>
+./build/debug/src/memoptima assess containers
+./build/debug/src/memoptima assess container <FULL_ID>
 ```
 
 ## Docker container memory
@@ -86,7 +91,8 @@ The current Docker observability commands require:
   - `cgroupfs`: `/sys/fs/cgroup/docker/<full-id>/`.
 
 Rootless Docker, cgroup v1, Kubernetes discovery, Docker names/images/labels, continuous
-monitoring, recommendations, and every system-changing action are outside the current scope.
+monitoring, forecasts, automatic actions, and every system-changing action are outside the current
+scope.
 
 ### List container summaries
 
@@ -132,6 +138,51 @@ Discovery warnings are written to standard error so standard output remains usab
 successful scan returns exit code `0`, even when it has warnings. Missing cgroup v2 capabilities or
 a valid full ID that is not discovered return exit code `1`. A missing or invalid ID is a command
 usage error and returns exit code `2`.
+
+### Assess container memory risk
+
+The assessment commands use the same local, read-only Docker cgroup discovery as the raw
+observability commands. They do not contact Docker, change a cgroup limit, change a kernel setting,
+or apply a remediation.
+
+To assess all discovered containers, run:
+
+```bash
+./build/debug/src/memoptima assess containers
+```
+
+Example output (synthetic):
+
+```text
+Docker container assessments
+
+CONTAINER ID                                                      RISK      COVERAGE   TOP FINDING                            FINDINGS
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  Critical  Complete   oom_kill_recorded                      2
+```
+
+`RISK` is the highest risk demonstrated by the available point-in-time cgroup data. It is one of
+`Low`, `Moderate`, `High`, or `Critical`. `Low` means that no boundary or OOM signal covered by the
+current rules was found; it does not mean that the workload is healthy or that future risk is absent.
+
+`COVERAGE` is `Complete` when all evidence needed by the current rule set was available. It is
+`Partial` when at least one metric could not be read or validated. Partial coverage never suppresses
+a finding supported by other available data. `TOP FINDING` identifies the highest-priority finding;
+`FINDINGS` gives the number of findings.
+
+To inspect the assessment for one full container ID, run:
+
+```bash
+./build/debug/src/memoptima assess container aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+The detailed report lists each finding's stable code, risk level, raw evidence, and safe
+recommendation. If coverage is partial, it also lists the unavailable evidence and its reading or
+validation reason. The event counters used by the assessment are cumulative since the cgroup was
+created, so a nonzero counter is historical evidence rather than proof of a recent event.
+
+The assessment is intentionally not a forecast, leak diagnosis, workload-health certification, or
+automatic recommendation engine. For the exact rule catalog and release boundary, see the
+[0.3.0 Scope](docs/0.3.0-scope.md).
 
 ### Optional real Docker integration check
 

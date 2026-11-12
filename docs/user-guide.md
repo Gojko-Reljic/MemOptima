@@ -1,6 +1,8 @@
 # MemOptima User Guide
 
-MemOptima is a Linux command-line tool for observing memory use. It reports RAM and swap usage, identifies memory-intensive processes, and explains the current memory-pressure assessment.
+MemOptima is a Linux command-line tool for observing memory use. It reports RAM and swap usage,
+identifies memory-intensive processes, observes supported Docker cgroup memory data, and assesses
+currently observable cgroup memory-boundary and OOM signals.
 
 MemOptima does not automatically close processes, change swap settings, or modify other system settings.
 
@@ -170,6 +172,98 @@ You can save successful measurements while keeping errors separate:
 ```bash
 ./build/debug/src/memoptima monitor > monitor.log 2> monitor-errors.log
 ```
+
+## Assess Docker container memory risk
+
+MemOptima can assess supported rootful Docker containers that use cgroup v2. This is a local,
+read-only analysis feature: it does not contact the Docker socket or Docker API, invoke the Docker
+CLI, require `sudo`, modify a cgroup, or change a Linux memory-management setting.
+
+The feature requires:
+
+- Linux with a unified cgroup v2 hierarchy;
+- an available cgroup v2 `memory` controller;
+- a readable host memory PSI interface; and
+- rootful Docker Engine using either the `systemd` or `cgroupfs` cgroup v2 layout.
+
+Rootless Docker, cgroup v1, Kubernetes workload discovery, continuous assessment, trend analysis,
+forecasting, and automatic action are not supported by this release.
+
+### Assess all discovered containers
+
+Run:
+
+```bash
+./build/debug/src/memoptima assess containers
+```
+
+Example output (synthetic):
+
+```text
+Docker container assessments
+
+CONTAINER ID                                                      RISK      COVERAGE   TOP FINDING                            FINDINGS
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  High      Partial    memory_max_event_recorded              1
+```
+
+Each row represents one discovered supported Docker cgroup.
+
+- `RISK` is the highest risk level currently demonstrated by a finding: `Low`, `Moderate`, `High`,
+  or `Critical`.
+- `COVERAGE` is `Complete` when every metric required by the current rules was available. It is
+  `Partial` when at least one required metric could not be read or validated.
+- `TOP FINDING` is the highest-priority finding after the deterministic risk and code ordering.
+- `FINDINGS` is the total number of findings for that container.
+
+If no supported rootful Docker containers are discovered, the command succeeds and prints:
+
+```text
+No supported rootful Docker containers found.
+```
+
+An empty result does not indicate an error. Discovery warnings are written to standard error, so
+standard output remains usable in scripts.
+
+### Assess one container in detail
+
+Copy the full 64-character ID from `containers` or `assess containers`, then run:
+
+```bash
+./build/debug/src/memoptima assess container aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+The result has these sections:
+
+- `Container` identifies the full Docker ID and discovered cgroup path.
+- `Overall risk` reports the highest demonstrated risk among all findings.
+- `Coverage` shows whether all rule evidence was available.
+- `Findings` lists each finding with its stable code, risk, evidence, and a fixed safe
+  recommendation.
+- `Unavailable evidence` appears only for partial coverage. It gives the source metric and the
+  reason it could not be read or validated.
+
+For example, an `oom_kill_recorded` finding is `Critical` because the cgroup's
+`memory.events.oom_kill` counter is nonzero. The report states the observed counter value and asks
+the operator to inspect workload recovery and cgroup memory settings; it never makes that change
+automatically.
+
+### What the assessment means
+
+The assessment evaluates one cgroup snapshot. It currently uses finite `memory.max` and
+`memory.high` boundaries plus the `memory.events` `high`, `max`, `oom`, and `oom_kill` counters.
+The exact rules and threshold boundaries are documented in [the 0.3.0 scope](0.3.0-scope.md).
+
+`Low` is deliberately narrow: it means that the available snapshot produced no finding under these
+rules. It does not prove that a workload is healthy, that its memory use is stable, or that it cannot
+fail in the future.
+
+Event counters are cumulative since the cgroup was created. A nonzero event counter is useful
+historical evidence, but it does not establish when the event happened or whether its value is
+increasing. MemOptima therefore does not call it a trend or make a forecast.
+
+When coverage is `Partial`, MemOptima still reports every finding proven by available evidence. It
+does not treat missing information as safe. Read the `Unavailable evidence` section before making an
+operational decision.
 
 ## Exit codes
 
