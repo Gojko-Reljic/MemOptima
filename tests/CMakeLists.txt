@@ -21,6 +21,7 @@ add_executable(memoptima_core_tests
     memory_snapshot_test.cpp
     linux/meminfo_parser_test.cpp
     process_memory_info_test.cpp
+    sampling/sampling_configuration_test.cpp
 )
 
 target_include_directories(memoptima_core_tests

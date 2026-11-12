@@ -20,6 +20,7 @@ add_library(memoptima_core STATIC
     linux/process_status_parser.cpp
     memory_snapshot.cpp
     process_memory_info.cpp
+    sampling/sampling_configuration.cpp
 )
 
 target_include_directories(memoptima_core
