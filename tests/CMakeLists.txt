@@ -22,6 +22,7 @@ add_executable(memoptima_core_tests
     linux/meminfo_parser_test.cpp
     process_memory_info_test.cpp
     sampling/evidence_models_test.cpp
+    sampling/jsonl_serializer_test.cpp
     sampling/sampling_configuration_test.cpp
     utc_timestamp_test.cpp
 )
@@ -37,6 +38,7 @@ target_link_libraries(memoptima_core_tests
         memoptima_core
         memoptima_cli_support
         GTest::gtest_main
+        nlohmann_json::nlohmann_json
 )
 
 set_target_properties(memoptima_core_tests PROPERTIES
