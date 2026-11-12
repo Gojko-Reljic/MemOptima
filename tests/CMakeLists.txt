@@ -4,6 +4,7 @@ add_executable(memoptima_core_tests
     analysis/memory_pressure_test.cpp
     analysis/memory_status_test.cpp
     cgroup_memory_snapshot_test.cpp
+    cli/assessments_formatter_test.cpp
     docker_container_assessment_test.cpp
     docker_container_memory_snapshot_test.cpp
     cli/containers_formatter_test.cpp
@@ -84,6 +85,13 @@ add_test(
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
         -P "${PROJECT_SOURCE_DIR}/tests/containers_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.Assess
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/assess_command_test.cmake"
 )
 
 add_test(

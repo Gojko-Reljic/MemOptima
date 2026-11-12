@@ -161,8 +161,13 @@ std::string format_docker_container_scan_result(const DockerContainerScanResult 
 }
 
 std::string format_docker_container_scan_warnings(const DockerContainerScanResult &result) {
+    return format_docker_container_scan_warnings(result.warnings());
+}
+
+std::string
+format_docker_container_scan_warnings(const std::vector<DockerContainerScanWarning> &warnings) {
     std::ostringstream output;
-    for (const DockerContainerScanWarning &warning : result.warnings()) {
+    for (const DockerContainerScanWarning &warning : warnings) {
         output << "Warning: " << warning.detail << " Path: " << warning.cgroup_path.string()
                << '\n';
     }

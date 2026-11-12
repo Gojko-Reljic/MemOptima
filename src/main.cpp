@@ -1,11 +1,13 @@
 #include <memoptima/analysis/memory_pressure.hpp>
 #include <memoptima/analysis/memory_status.hpp>
 #include <memoptima/application_info.hpp>
+#include <memoptima/docker_container_assessment.hpp>
 #include <memoptima/linux/cgroup_v2_capability_checker.hpp>
 #include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
 #include <memoptima/linux/process_scanner.hpp>
 
+#include "cli/assessments_formatter.hpp"
 #include "cli/containers_formatter.hpp"
 #include "cli/monitor_runner.hpp"
 #include "cli/processes_formatter.hpp"
@@ -36,8 +38,11 @@ void print_help(std::ostream &output) {
            << "Usage:\n"
            << "  memoptima [OPTION]\n"
            << "  memoptima container <FULL_ID>\n\n"
+           << "  memoptima assess containers\n"
+           << "  memoptima assess container <FULL_ID>\n\n"
            << "Options:\n"
            << "  -h, --help       Display this help message.\n"
+           << "  assess           Assess Docker container memory-boundary and OOM signals.\n"
            << "  containers       Display memory information for Docker containers.\n"
            << "  monitor          Continuously display memory status every five seconds.\n"
            << "  processes        Display the top memory-consuming processes.\n"
@@ -180,6 +185,59 @@ int run_container_command(std::string_view container_id_text) {
     return kExitSuccess;
 }
 
+int run_assess_containers_command() {
+    const auto environment = memoptima::linux::detect_cgroup_v2_environment();
+    if (!environment.has_value()) {
+        std::cerr << "Error: Docker container assessment is unavailable: "
+                  << environment.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    const memoptima::DockerContainerAssessmentScanResult assessment_result =
+        memoptima::assess_docker_container_scan_result(
+            memoptima::linux::scan_rootful_docker_containers(*environment));
+    std::cout << memoptima::cli::format_docker_container_assessment_scan_result(assessment_result);
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(
+        assessment_result.warnings());
+    return kExitSuccess;
+}
+
+int run_assess_container_command(std::string_view container_id_text) {
+    const auto container_id = memoptima::DockerContainerId::parse(container_id_text);
+    if (!container_id.has_value()) {
+        std::cerr << "Error: invalid Docker container ID: " << container_id.error().detail
+                  << "\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    const auto environment = memoptima::linux::detect_cgroup_v2_environment();
+    if (!environment.has_value()) {
+        std::cerr << "Error: Docker container assessment is unavailable: "
+                  << environment.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    const memoptima::DockerContainerAssessmentScanResult assessment_result =
+        memoptima::assess_docker_container_scan_result(
+            memoptima::linux::scan_rootful_docker_containers(*environment));
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(
+        assessment_result.warnings());
+    const auto container =
+        std::ranges::find_if(assessment_result.containers(),
+                             [&container_id](const memoptima::DockerContainerAssessment &item) {
+                                 return item.container_id().value() == container_id->value();
+                             });
+    if (container == assessment_result.containers().end()) {
+        std::cerr << "Error: Docker container '" << container_id->value()
+                  << "' was not found in supported rootful Docker cgroup locations.\n";
+        return kExitRuntimeError;
+    }
+
+    std::cout << memoptima::cli::format_docker_container_assessment_detail(*container);
+    return kExitSuccess;
+}
+
 int run(int argument_count, char *arguments[]) {
     if (argument_count == 1) {
         print_help(std::cout);
@@ -188,6 +246,16 @@ int run(int argument_count, char *arguments[]) {
 
     if (argument_count == 3 && std::string_view{arguments[1]} == "container") {
         return run_container_command(arguments[2]);
+    }
+
+    if (argument_count == 3 && std::string_view{arguments[1]} == "assess" &&
+        std::string_view{arguments[2]} == "containers") {
+        return run_assess_containers_command();
+    }
+
+    if (argument_count == 4 && std::string_view{arguments[1]} == "assess" &&
+        std::string_view{arguments[2]} == "container") {
+        return run_assess_container_command(arguments[3]);
     }
 
     if (argument_count != 2) {
@@ -216,6 +284,12 @@ int run(int argument_count, char *arguments[]) {
 
     if (option == "container") {
         std::cerr << "Error: 'container' requires a full Docker container ID.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    if (option == "assess") {
+        std::cerr << "Error: 'assess' requires 'containers' or 'container <FULL_ID>'.\n\n";
         print_help(std::cerr);
         return kExitUsageError;
     }
