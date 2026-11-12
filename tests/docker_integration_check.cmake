@@ -31,6 +31,13 @@ endif()
 string(RANDOM LENGTH 12 ALPHABET "abcdefghijklmnopqrstuvwxyz0123456789" test_suffix)
 set(test_container_name "memoptima-integration-${test_suffix}")
 set(test_container_id "")
+set(test_artifact_path "${CMAKE_CURRENT_BINARY_DIR}/memoptima-integration-${test_suffix}.jsonl")
+
+function(clean_up_test_artifact)
+    if(EXISTS "${test_artifact_path}")
+        file(REMOVE "${test_artifact_path}")
+    endif()
+endfunction()
 
 function(clean_up_test_container)
     if(test_container_id STREQUAL "")
@@ -49,6 +56,7 @@ function(clean_up_test_container)
 endfunction()
 
 function(fail_after_cleanup message_text)
+    clean_up_test_artifact()
     clean_up_test_container()
     message(FATAL_ERROR "${message_text}")
 endfunction()
@@ -146,6 +154,49 @@ foreach(expected_text "Container" "${test_container_id}" "Overall risk" "Coverag
             "memoptima assess container output is missing '${expected_text}': ${assessment_output}")
     endif()
 endforeach()
+
+execute_process(
+    COMMAND "${MEMOPTIMA_EXECUTABLE}" sample containers "--count" 2 "--interval" 100ms
+        "--output" "${test_artifact_path}"
+    RESULT_VARIABLE sampling_result
+    OUTPUT_VARIABLE sampling_output
+    ERROR_VARIABLE sampling_error
+)
+
+if(NOT sampling_result EQUAL 0)
+    fail_after_cleanup("memoptima sample containers failed: ${sampling_error}")
+endif()
+
+if(NOT sampling_output STREQUAL "")
+    fail_after_cleanup("memoptima sample containers wrote to standard output: ${sampling_output}")
+endif()
+
+foreach(expected_text "Sampling session completed: 2 sample(s), artifact:"
+                      "${test_artifact_path}")
+    string(FIND "${sampling_error}" "${expected_text}" expected_position)
+    if(expected_position EQUAL -1)
+        fail_after_cleanup(
+            "memoptima sample containers summary is missing '${expected_text}': ${sampling_error}")
+    endif()
+endforeach()
+
+if(NOT EXISTS "${test_artifact_path}")
+    fail_after_cleanup("memoptima sample containers did not create its artifact.")
+endif()
+
+file(READ "${test_artifact_path}" artifact_contents)
+foreach(expected_text "\"record_type\":\"session_start\""
+                      "\"record_type\":\"sample\""
+                      "\"record_type\":\"session_end\""
+                      "\"container_id\":\"${test_container_id}\"")
+    string(FIND "${artifact_contents}" "${expected_text}" expected_position)
+    if(expected_position EQUAL -1)
+        fail_after_cleanup(
+            "Sampling artifact is missing '${expected_text}': ${artifact_contents}")
+    endif()
+endforeach()
+
+clean_up_test_artifact()
 
 clean_up_test_container()
 message(STATUS "MemOptima Docker integration check passed for ${test_container_id}.")

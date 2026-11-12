@@ -141,7 +141,7 @@ struct SampleContainersArguments {
 
 [[nodiscard]] std::expected<SampleContainersArguments, std::string>
 parse_sample_containers_arguments(int argument_count, char *arguments[]) {
-    if (argument_count != 8) {
+    if (argument_count != 9) {
         return std::unexpected(
             "'sample containers' requires --count, --interval, and --output exactly once.");
     }

@@ -39,6 +39,15 @@ run_valgrind_command(assess-containers 0 assess containers)
 run_valgrind_command(assess-container-unknown-id 1 assess container
     aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
 
+string(RANDOM LENGTH 16 ALPHABET 0123456789abcdef sample_artifact_suffix)
+set(sample_artifact_path "${CMAKE_CURRENT_BINARY_DIR}/memoptima-valgrind-${sample_artifact_suffix}.jsonl")
+run_valgrind_command(sample-containers 0 sample containers "--count" 1 "--interval" 100ms
+    "--output" "${sample_artifact_path}")
+if(NOT EXISTS "${sample_artifact_path}")
+    message(FATAL_ERROR "Valgrind sampling check did not create its artifact.")
+endif()
+file(REMOVE "${sample_artifact_path}")
+
 execute_process(
     COMMAND "${MEMOPTIMA_TIMEOUT_EXECUTABLE}" --preserve-status -s INT 2
         "${MEMOPTIMA_VALGRIND_EXECUTABLE}" ${MEMOPTIMA_VALGRIND_OPTIONS}
