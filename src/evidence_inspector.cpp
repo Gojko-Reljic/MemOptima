@@ -59,10 +59,16 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
             break;
         ++line_number;
         const auto record = parse_evidence_record(**line, line_number);
-        if (!record.has_value())
-            return std::unexpected(EvidenceInspectionError{
-                "Line " + std::to_string(line_number) + " at " + record.error().front().json_path +
-                ": " + record.error().front().detail});
+        if (!record.has_value()) {
+            std::string detail;
+            for (const auto &error : record.error()) {
+                if (!detail.empty())
+                    detail += '\n';
+                detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path +
+                          ": " + error.detail;
+            }
+            return std::unexpected(EvidenceInspectionError{std::move(detail)});
+        }
         if (saw_end || (!saw_start && record->type != EvidenceRecordType::session_start) ||
             (saw_start && record->type == EvidenceRecordType::session_start))
             return std::unexpected(EvidenceInspectionError{"Line " + std::to_string(line_number) +

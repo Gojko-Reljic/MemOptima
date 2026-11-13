@@ -244,6 +244,9 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
             }
     }
     if (!errors.empty())
+        if (errors.size() > 20)
+            errors.resize(20);
+    if (!errors.empty())
         return std::unexpected(std::move(errors));
     return ParsedEvidenceRecord{.type = parsed_type, .canonical_json = value.dump()};
 }
