@@ -264,6 +264,39 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                 metric_or_null(memory.at("stat").at(key),
                                                path + ".memory.stat." + key, line_number, errors);
                     }
+                    if (memory.contains("psi") && memory.at("psi").is_object()) {
+                        exact_keys(memory.at("psi"), {"some", "full"}, line_number, errors);
+                        for (const auto kind : {"some", "full"}) {
+                            if (!memory.at("psi").contains(kind) ||
+                                memory.at("psi").at(kind).is_null())
+                                continue;
+                            const auto &pressure = memory.at("psi").at(kind);
+                            const auto pressure_path = path + ".memory.psi." + kind;
+                            if (!pressure.is_object()) {
+                                add_error(errors, line_number, pressure_path,
+                                          EvidenceValidationErrorCode::wrong_type,
+                                          "Expected an object or null.");
+                                continue;
+                            }
+                            exact_keys(pressure,
+                                       {"average_10_seconds", "average_60_seconds",
+                                        "average_300_seconds", "total_microseconds"},
+                                       line_number, errors);
+                            for (const auto average : {"average_10_seconds", "average_60_seconds",
+                                                       "average_300_seconds"})
+                                if (pressure.contains(average) &&
+                                    (!pressure.at(average).is_number() ||
+                                     pressure.at(average).get<double>() < 0.0 ||
+                                     pressure.at(average).get<double>() > 100.0))
+                                    add_error(errors, line_number, pressure_path + "." + average,
+                                              EvidenceValidationErrorCode::invalid_value,
+                                              "Expected a PSI average from 0 through 100.");
+                            if (pressure.contains("total_microseconds"))
+                                metric_or_null(pressure.at("total_microseconds"),
+                                               pressure_path + ".total_microseconds", line_number,
+                                               errors);
+                        }
+                    }
                 }
                 if (container.contains("assessment") && !container.at("assessment").is_object())
                     add_error(errors, line_number, path + ".assessment",
