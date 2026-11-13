@@ -91,6 +91,12 @@ TEST(EvidenceRecordParser, RejectsInvalidTimestampsOverflowAndFailureObjects) {
     EXPECT_TRUE(std::ranges::any_of(invalid_end.error(), [](const EvidenceValidationError &error) {
         return error.json_path == "$.failure.code";
     }));
+
+    const auto invalid_calendar = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"application_version":"0.5.0","started_at_utc":"2026-02-30T12:00:00.000Z","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})",
+        18);
+    ASSERT_FALSE(invalid_calendar.has_value());
+    EXPECT_EQ(invalid_calendar.error().front().json_path, "$.started_at_utc");
 }
 
 TEST(EvidenceRecordParser, RejectsMalformedWarningsAndFindingEvidence) {

@@ -145,13 +145,21 @@ int run_inspect_evidence_command(std::string_view path_text) {
     }
     std::cout << "Evidence artifact\n\n"
               << "Path: " << summary->artifact_path.string() << '\n'
+              << "Schema version: " << summary->schema_version << '\n'
               << "Application version: " << summary->application_version << '\n'
               << "Requested samples: " << summary->requested_sample_count << '\n'
+              << "Requested interval: " << summary->requested_interval_ms << " ms\n"
               << "Completed samples: " << summary->completed_sample_count << '\n'
               << "Completion: " << (summary->incomplete ? "Incomplete" : summary->terminal_outcome)
               << '\n'
               << "Discovery warnings: " << summary->discovery_warning_count << '\n'
               << "Skipped containers: " << summary->skipped_container_count << "\n\n"
+              << "First capture: "
+              << (summary->first_capture_at_utc.empty() ? "None" : summary->first_capture_at_utc)
+              << '\n'
+              << "Last capture: "
+              << (summary->last_capture_at_utc.empty() ? "None" : summary->last_capture_at_utc)
+              << "\n\n"
               << "Containers\n";
     if (summary->containers.empty())
         std::cout << "  None\n";

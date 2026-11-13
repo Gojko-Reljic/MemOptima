@@ -29,7 +29,11 @@ TEST(EvidenceInspector, SummarizesCompletedAndIncompleteArtifacts) {
     const auto completed = inspect_evidence_artifact(path);
     ASSERT_TRUE(completed.has_value());
     EXPECT_FALSE(completed->incomplete);
+    EXPECT_EQ(completed->schema_version, 1U);
+    EXPECT_EQ(completed->requested_interval_ms, "100");
     EXPECT_EQ(completed->completed_sample_count, 1U);
+    EXPECT_EQ(completed->first_capture_at_utc, "2026-11-13T12:00:00.000Z");
+    EXPECT_EQ(completed->last_capture_at_utc, "2026-11-13T12:00:00.000Z");
     std::filesystem::remove(path);
 }
 

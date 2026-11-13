@@ -114,7 +114,32 @@ void timestamp(const Json &value, std::string_view key, std::uint64_t line,
     const bool digits = punctuation && std::ranges::all_of(digit_indexes, [&text](unsigned index) {
                             return text[index] >= '0' && text[index] <= '9';
                         });
-    if (!digits)
+    bool valid_calendar{};
+    if (digits) {
+        const auto component = [&text](std::size_t offset, std::size_t length) {
+            unsigned parsed{};
+            const auto [position, conversion_error] =
+                std::from_chars(text.data() + offset, text.data() + offset + length, parsed);
+            return conversion_error == std::errc{} && position == text.data() + offset + length
+                       ? parsed
+                       : 0U;
+        };
+        const unsigned year = component(0, 4);
+        const unsigned month = component(5, 2);
+        const unsigned day = component(8, 2);
+        const unsigned hour = component(11, 2);
+        const unsigned minute = component(14, 2);
+        const unsigned second = component(17, 2);
+        constexpr std::array<unsigned, 12> days_per_month{31U, 28U, 31U, 30U, 31U, 30U,
+                                                          31U, 31U, 30U, 31U, 30U, 31U};
+        const bool leap_year = year % 4U == 0U && (year % 100U != 0U || year % 400U == 0U);
+        const unsigned maximum_day = month >= 1U && month <= 12U
+                                         ? days_per_month[month - 1U] + (month == 2U && leap_year)
+                                         : 0U;
+        valid_calendar =
+            day >= 1U && day <= maximum_day && hour <= 23U && minute <= 59U && second <= 59U;
+    }
+    if (!valid_calendar)
         add_error(errors, line, "$." + std::string{key}, EvidenceValidationErrorCode::invalid_value,
                   "Expected an ISO 8601 UTC timestamp with milliseconds.");
 }

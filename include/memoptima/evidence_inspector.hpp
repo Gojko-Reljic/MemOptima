@@ -19,9 +19,13 @@ struct EvidenceInspectionContainerSummary {
 
 struct EvidenceInspectionSummary {
     std::filesystem::path artifact_path;
+    std::uint32_t schema_version;
     std::string application_version;
     std::uint32_t requested_sample_count;
+    std::string requested_interval_ms;
     std::uint32_t completed_sample_count;
+    std::string first_capture_at_utc;
+    std::string last_capture_at_utc;
     std::uint64_t discovery_warning_count;
     std::uint64_t skipped_container_count;
     bool incomplete;

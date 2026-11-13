@@ -50,9 +50,13 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
     if (!input.has_value())
         return std::unexpected(EvidenceInspectionError{input.error().detail});
     EvidenceInspectionSummary summary{.artifact_path = path,
+                                      .schema_version = 1,
                                       .application_version = {},
                                       .requested_sample_count = 0,
+                                      .requested_interval_ms = {},
                                       .completed_sample_count = 0,
+                                      .first_capture_at_utc = {},
+                                      .last_capture_at_utc = {},
                                       .discovery_warning_count = 0,
                                       .skipped_container_count = 0,
                                       .incomplete = false,
@@ -92,12 +96,17 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
             summary.application_version = value.at("application_version").get<std::string>();
             summary.requested_sample_count =
                 value.at("requested_sample_count").get<std::uint32_t>();
+            summary.requested_interval_ms = value.at("requested_interval_ms").get<std::string>();
         } else if (record->type == EvidenceRecordType::sample) {
             if (value.at("sample_sequence").get<std::uint32_t>() != expected_sequence++)
                 return std::unexpected(
                     EvidenceInspectionError{"Line " + std::to_string(line_number) +
                                             ": sample sequences must be contiguous."});
             ++summary.completed_sample_count;
+            const auto captured_at = value.at("captured_at_utc").get<std::string>();
+            if (summary.first_capture_at_utc.empty())
+                summary.first_capture_at_utc = captured_at;
+            summary.last_capture_at_utc = captured_at;
             summary.discovery_warning_count += value.at("discovery_warnings").size();
             summary.skipped_container_count +=
                 std::stoull(value.at("skipped_container_count").get<std::string>());
