@@ -1,4 +1,5 @@
 #include "linux/meminfo_parser.hpp"
+#include "linux/text_utils.hpp"
 
 #include <charconv>
 #include <cstdint>
@@ -26,10 +27,6 @@ struct ParsedMetrics {
     std::optional<MetricValue> total_swap;
     std::optional<MetricValue> free_swap;
 };
-
-[[nodiscard]] bool is_ascii_whitespace(char character) noexcept {
-    return character == ' ' || character == '\t' || character == '\r';
-}
 
 [[nodiscard]] std::string_view trim_ascii_whitespace(std::string_view text) noexcept {
     while (!text.empty() && is_ascii_whitespace(text.front())) {

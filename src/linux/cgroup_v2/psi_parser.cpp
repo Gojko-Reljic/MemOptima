@@ -1,4 +1,5 @@
 #include "linux/cgroup_v2/psi_parser.hpp"
+#include "linux/text_utils.hpp"
 
 #include <charconv>
 #include <cmath>
@@ -23,10 +24,6 @@ struct ParsedPressureLine {
         .code = code,
         .detail = std::string{detail},
     };
-}
-
-[[nodiscard]] bool is_ascii_whitespace(char character) noexcept {
-    return character == ' ' || character == '\t' || character == '\r';
 }
 
 [[nodiscard]] std::vector<std::string_view> split_ascii_whitespace(std::string_view text) {

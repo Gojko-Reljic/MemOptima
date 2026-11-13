@@ -1,4 +1,5 @@
 #include "linux/process_status_parser.hpp"
+#include "linux/text_utils.hpp"
 
 #include <charconv>
 #include <cstdint>
@@ -18,10 +19,6 @@ struct FieldValue {
     std::string_view text;
     std::size_t line_number;
 };
-
-[[nodiscard]] bool is_ascii_whitespace(char character) noexcept {
-    return character == ' ' || character == '\t' || character == '\r';
-}
 
 [[nodiscard]] std::string_view trim_ascii_whitespace(std::string_view text) noexcept {
     while (!text.empty() && is_ascii_whitespace(text.front())) {

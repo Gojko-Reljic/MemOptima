@@ -1,11 +1,9 @@
 #include "cli/processes_formatter.hpp"
+#include "cli/formatting.hpp"
 
-#include <array>
-#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
-#include <string_view>
 
 namespace memoptima::cli {
 namespace {
@@ -13,27 +11,6 @@ namespace {
 // Fixed minimum widths keep the terminal table readable; long process names remain intact.
 constexpr int kPidColumnWidth = 8;
 constexpr int kNameColumnWidth = 21;
-
-[[nodiscard]] std::string format_bytes(std::uint64_t bytes) {
-    if (bytes == 0) {
-        return "0 B";
-    }
-
-    constexpr std::uint64_t bytes_per_unit = 1024;
-    constexpr std::array<std::string_view, 5> unit_names{"B", "KiB", "MiB", "GiB", "TiB"};
-
-    double display_value = static_cast<double>(bytes);
-    std::size_t unit_index{};
-    while (display_value >= static_cast<double>(bytes_per_unit) &&
-           unit_index + 1 < unit_names.size()) {
-        display_value /= static_cast<double>(bytes_per_unit);
-        ++unit_index;
-    }
-
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2) << display_value << ' ' << unit_names[unit_index];
-    return output.str();
-}
 
 } // namespace
 

@@ -1,7 +1,6 @@
 #include "cli/assessments_formatter.hpp"
+#include "cli/formatting.hpp"
 
-#include <array>
-#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -10,30 +9,10 @@
 namespace memoptima::cli {
 namespace {
 
-constexpr std::uint64_t kBytesPerUnit = 1024;
-constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "TiB"};
 constexpr int kContainerIdColumnWidth = 66;
 constexpr int kRiskColumnWidth = 10;
 constexpr int kCoverageColumnWidth = 11;
 constexpr int kTopFindingColumnWidth = 39;
-
-[[nodiscard]] std::string format_bytes(std::uint64_t bytes) {
-    if (bytes == 0) {
-        return "0 B";
-    }
-
-    double display_value = static_cast<double>(bytes);
-    std::size_t unit_index{};
-    while (display_value >= static_cast<double>(kBytesPerUnit) &&
-           unit_index + 1 < kUnitNames.size()) {
-        display_value /= static_cast<double>(kBytesPerUnit);
-        ++unit_index;
-    }
-
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2) << display_value << ' ' << kUnitNames[unit_index];
-    return output.str();
-}
 
 [[nodiscard]] std::string_view risk_level_name(analysis::CgroupMemoryRiskLevel risk) noexcept {
     switch (risk) {

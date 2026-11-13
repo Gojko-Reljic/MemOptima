@@ -1,6 +1,6 @@
 #include "cli/containers_formatter.hpp"
+#include "cli/formatting.hpp"
 
-#include <array>
 #include <cstdint>
 #include <iomanip>
 #include <optional>
@@ -13,31 +13,11 @@
 namespace memoptima::cli {
 namespace {
 
-constexpr std::uint64_t kBytesPerUnit = 1024;
-constexpr std::array<std::string_view, 5> kUnitNames{"B", "KiB", "MiB", "GiB", "TiB"};
 constexpr int kContainerIdColumnWidth = 66;
 constexpr int kCurrentMemoryColumnWidth = 14;
 constexpr int kMemoryHighColumnWidth = 14;
 constexpr int kMemoryMaxColumnWidth = 14;
 constexpr int kOomKillsColumnWidth = 12;
-
-[[nodiscard]] std::string format_bytes(std::uint64_t bytes) {
-    if (bytes == 0) {
-        return "0 B";
-    }
-
-    double display_value = static_cast<double>(bytes);
-    std::size_t unit_index{};
-    while (display_value >= static_cast<double>(kBytesPerUnit) &&
-           unit_index + 1 < kUnitNames.size()) {
-        display_value /= static_cast<double>(kBytesPerUnit);
-        ++unit_index;
-    }
-
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2) << display_value << ' ' << kUnitNames[unit_index];
-    return output.str();
-}
 
 [[nodiscard]] std::string format_byte_metric(const CgroupByteMetric &metric) {
     return metric ? format_bytes(*metric) : "N/A";
@@ -59,31 +39,15 @@ constexpr int kOomKillsColumnWidth = 12;
         return "N/A";
     }
 
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2) << pressure.some->average_10_seconds << '%';
-    return output.str();
+    return format_percentage(pressure.some->average_10_seconds, 2);
 }
 
 [[nodiscard]] std::string format_pressure_average(double average) {
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2) << average << '%';
-    return output.str();
+    return format_percentage(average, 2);
 }
 
 [[nodiscard]] std::string format_pressure_total(std::uint64_t microseconds) {
-    if (microseconds < 1000) {
-        return std::to_string(microseconds) + " µs";
-    }
-
-    const double milliseconds = static_cast<double>(microseconds) / 1000.0;
-    std::ostringstream output;
-    output << std::fixed << std::setprecision(2);
-    if (milliseconds < 1000.0) {
-        output << milliseconds << " ms";
-    } else {
-        output << milliseconds / 1000.0 << " s";
-    }
-    return output.str();
+    return format_duration(microseconds);
 }
 
 [[nodiscard]] std::string format_pressure_line(const CgroupMetric<CgroupPressureLine> &line) {

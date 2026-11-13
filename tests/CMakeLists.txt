@@ -11,6 +11,7 @@ add_executable(memoptima_core_tests
     evidence_inspector_test.cpp
     evidence_record_parser_test.cpp
     cli/containers_formatter_test.cpp
+    cli/formatting_test.cpp
     cli/monitor_runner_test.cpp
     cli/processes_formatter_test.cpp
     cli/status_formatter_test.cpp
