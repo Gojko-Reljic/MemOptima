@@ -77,5 +77,15 @@ TEST(EvidenceRecordParser, ValidatesTheSampleRecordEnvelope) {
     EXPECT_GE(invalid.error().size(), 3U);
 }
 
+TEST(EvidenceRecordParser, RejectsInvalidContainerAssessmentBeforeAggregation) {
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{},"assessment":{"overall_risk":"unknown","coverage":"complete","findings":[],"unavailable_evidence":[],"extra":true}}]})",
+        12);
+
+    ASSERT_FALSE(invalid.has_value());
+    ASSERT_GE(invalid.error().size(), 2U);
+    EXPECT_EQ(invalid.error().back().json_path, "$.containers[0].assessment.overall_risk");
+}
+
 } // namespace
 } // namespace memoptima

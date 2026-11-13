@@ -193,6 +193,47 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
             if (value.contains(key) && !value.at(key).is_array())
                 add_error(errors, line_number, "$." + std::string{key},
                           EvidenceValidationErrorCode::wrong_type, "Expected an array.");
+        if (value.contains("containers") && value.at("containers").is_array())
+            for (std::size_t index{}; index < value.at("containers").size(); ++index) {
+                const auto &container = value.at("containers").at(index);
+                const auto path = "$.containers[" + std::to_string(index) + "]";
+                if (!container.is_object()) {
+                    add_error(errors, line_number, path, EvidenceValidationErrorCode::wrong_type,
+                              "Expected an object.");
+                    continue;
+                }
+                exact_keys(container, {"container_id", "cgroup_path", "memory", "assessment"},
+                           line_number, errors);
+                for (const auto key : {"container_id", "cgroup_path"})
+                    if (container.contains(key) && !container.at(key).is_string())
+                        add_error(errors, line_number, path + "." + std::string{key},
+                                  EvidenceValidationErrorCode::wrong_type, "Expected a string.");
+                if (container.contains("assessment") && !container.at("assessment").is_object())
+                    add_error(errors, line_number, path + ".assessment",
+                              EvidenceValidationErrorCode::wrong_type, "Expected an object.");
+                if (container.contains("assessment") && container.at("assessment").is_object()) {
+                    const auto &assessment = container.at("assessment");
+                    exact_keys(assessment,
+                               {"overall_risk", "coverage", "findings", "unavailable_evidence"},
+                               line_number, errors);
+                    if (assessment.contains("overall_risk") &&
+                        (!assessment.at("overall_risk").is_string() ||
+                         (assessment.at("overall_risk") != "low" &&
+                          assessment.at("overall_risk") != "moderate" &&
+                          assessment.at("overall_risk") != "high" &&
+                          assessment.at("overall_risk") != "critical")))
+                        add_error(errors, line_number, path + ".assessment.overall_risk",
+                                  EvidenceValidationErrorCode::invalid_value,
+                                  "Expected a known risk level.");
+                    if (assessment.contains("coverage") &&
+                        (!assessment.at("coverage").is_string() ||
+                         (assessment.at("coverage") != "complete" &&
+                          assessment.at("coverage") != "partial")))
+                        add_error(errors, line_number, path + ".assessment.coverage",
+                                  EvidenceValidationErrorCode::invalid_value,
+                                  "Expected complete or partial coverage.");
+                }
+            }
     }
     if (!errors.empty())
         return std::unexpected(std::move(errors));
