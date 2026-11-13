@@ -59,6 +59,22 @@ bool decimal_string(const Json &value, std::string_view key, std::uint64_t line,
     return valid;
 }
 
+void metric_or_null(const Json &value, std::string path, std::uint64_t line,
+                    std::vector<EvidenceValidationError> &errors) {
+    if (value.is_null())
+        return;
+    if (!value.is_string()) {
+        add_error(errors, line, std::move(path), EvidenceValidationErrorCode::wrong_type,
+                  "Expected a decimal string or null.");
+        return;
+    }
+    const auto text = value.get<std::string>();
+    if (text.empty() || (text.size() > 1 && text.front() == '0') ||
+        !std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; }))
+        add_error(errors, line, std::move(path), EvidenceValidationErrorCode::invalid_value,
+                  "Expected a canonical unsigned decimal string.");
+}
+
 [[nodiscard]] std::unexpected<std::vector<EvidenceValidationError>>
 error(std::uint64_t line_number, std::string path, EvidenceValidationErrorCode code,
       std::string detail) {
@@ -216,6 +232,39 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                {"current_bytes", "high_bytes", "max_bytes", "events", "stat",
                                 "swap_current_bytes", "psi", "unavailable_metrics"},
                                line_number, errors);
+                if (container.contains("memory") && container.at("memory").is_object()) {
+                    const auto &memory = container.at("memory");
+                    for (const auto key : {"current_bytes", "swap_current_bytes"})
+                        if (memory.contains(key))
+                            metric_or_null(memory.at(key), path + ".memory." + key, line_number,
+                                           errors);
+                    for (const auto key : {"high_bytes", "max_bytes"})
+                        if (memory.contains(key) && !memory.at(key).is_null() &&
+                            memory.at(key) != "max")
+                            metric_or_null(memory.at(key), path + ".memory." + key, line_number,
+                                           errors);
+                    for (const auto group : {"events", "stat", "psi"})
+                        if (memory.contains(group) && !memory.at(group).is_object())
+                            add_error(errors, line_number, path + ".memory." + group,
+                                      EvidenceValidationErrorCode::wrong_type,
+                                      "Expected an object.");
+                    if (memory.contains("events") && memory.at("events").is_object()) {
+                        exact_keys(memory.at("events"), {"high", "max", "oom", "oom_kill"},
+                                   line_number, errors);
+                        for (const auto key : {"high", "max", "oom", "oom_kill"})
+                            if (memory.at("events").contains(key))
+                                metric_or_null(memory.at("events").at(key),
+                                               path + ".memory.events." + key, line_number, errors);
+                    }
+                    if (memory.contains("stat") && memory.at("stat").is_object()) {
+                        exact_keys(memory.at("stat"), {"anonymous_bytes", "file_backed_bytes"},
+                                   line_number, errors);
+                        for (const auto key : {"anonymous_bytes", "file_backed_bytes"})
+                            if (memory.at("stat").contains(key))
+                                metric_or_null(memory.at("stat").at(key),
+                                               path + ".memory.stat." + key, line_number, errors);
+                    }
+                }
                 if (container.contains("assessment") && !container.at("assessment").is_object())
                     add_error(errors, line_number, path + ".assessment",
                               EvidenceValidationErrorCode::wrong_type, "Expected an object.");

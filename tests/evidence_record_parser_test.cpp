@@ -87,5 +87,14 @@ TEST(EvidenceRecordParser, RejectsInvalidContainerAssessmentBeforeAggregation) {
     EXPECT_EQ(invalid.error().back().json_path, "$.containers[0].assessment.overall_risk");
 }
 
+TEST(EvidenceRecordParser, RejectsInvalidRawMemoryMetricTypes) {
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{"current_bytes":"1","high_bytes":"max","max_bytes":"2","events":{"high":"0","max":"0","oom":"0","oom_kill":1},"stat":{"anonymous_bytes":"1","file_backed_bytes":"1"},"swap_current_bytes":"0","psi":{},"unavailable_metrics":[]},"assessment":{"overall_risk":"low","coverage":"complete","findings":[],"unavailable_evidence":[]}}]})",
+        13);
+
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_EQ(invalid.error().back().json_path, "$.containers[0].memory.events.oom_kill");
+}
+
 } // namespace
 } // namespace memoptima
