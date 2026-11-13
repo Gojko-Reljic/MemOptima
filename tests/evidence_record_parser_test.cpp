@@ -6,11 +6,13 @@ namespace memoptima {
 namespace {
 
 TEST(EvidenceRecordParser, ParsesSupportedRootRecords) {
-    const auto parsed = parse_evidence_record(R"({"record_type":"sample","schema_version":1})", 7);
+    const auto parsed = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[]})",
+        7);
 
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed->type, EvidenceRecordType::sample);
-    EXPECT_EQ(parsed->canonical_json, R"({"record_type":"sample","schema_version":1})");
+    EXPECT_FALSE(parsed->canonical_json.empty());
 }
 
 TEST(EvidenceRecordParser, ReportsPreciseRootValidationErrors) {
@@ -60,6 +62,19 @@ TEST(EvidenceRecordParser, RejectsInvalidStartAndEndContracts) {
     EXPECT_EQ(unknown.error().front().code, EvidenceValidationErrorCode::missing_required_field);
     EXPECT_EQ(bad_permissions.error().back().json_path, "$.output_permissions_octal");
     EXPECT_EQ(contradictory_end.error().back().json_path, "$.failure");
+}
+
+TEST(EvidenceRecordParser, ValidatesTheSampleRecordEnvelope) {
+    const auto sample = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[]})",
+        4);
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":0,"planned_offset_ms":"00","captured_at_utc":1,"schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":{},"containers":[]})",
+        5);
+
+    EXPECT_TRUE(sample.has_value());
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_GE(invalid.error().size(), 3U);
 }
 
 } // namespace

@@ -173,6 +173,27 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                           "Failure must match the terminal outcome.");
         }
     }
+    if (parsed_type == EvidenceRecordType::sample) {
+        exact_keys(value,
+                   {"record_type", "schema_version", "sample_sequence", "planned_offset_ms",
+                    "captured_at_utc", "schedule_delay_ms", "skipped_container_count",
+                    "discovery_warnings", "containers"},
+                   line_number, errors);
+        if (value.contains("sample_sequence") &&
+            (!value.at("sample_sequence").is_number_unsigned() || value.at("sample_sequence") == 0))
+            add_error(errors, line_number, "$.sample_sequence",
+                      EvidenceValidationErrorCode::invalid_value,
+                      "Expected a positive unsigned JSON number.");
+        for (const auto key : {"planned_offset_ms", "schedule_delay_ms", "skipped_container_count"})
+            if (value.contains(key))
+                decimal_string(value, key, line_number, errors);
+        if (value.contains("captured_at_utc"))
+            string_field(value, "captured_at_utc", line_number, errors);
+        for (const auto key : {"discovery_warnings", "containers"})
+            if (value.contains(key) && !value.at(key).is_array())
+                add_error(errors, line_number, "$." + std::string{key},
+                          EvidenceValidationErrorCode::wrong_type, "Expected an array.");
+    }
     if (!errors.empty())
         return std::unexpected(std::move(errors));
     return ParsedEvidenceRecord{.type = parsed_type, .canonical_json = value.dump()};
