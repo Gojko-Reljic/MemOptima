@@ -46,6 +46,7 @@ run_valgrind_command(sample-containers 0 sample containers "--count" 1 "--interv
 if(NOT EXISTS "${sample_artifact_path}")
     message(FATAL_ERROR "Valgrind sampling check did not create its artifact.")
 endif()
+run_valgrind_command(inspect-evidence 0 inspect evidence "${sample_artifact_path}")
 file(REMOVE "${sample_artifact_path}")
 
 execute_process(
