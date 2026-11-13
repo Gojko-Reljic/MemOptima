@@ -208,6 +208,14 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     if (container.contains(key) && !container.at(key).is_string())
                         add_error(errors, line_number, path + "." + std::string{key},
                                   EvidenceValidationErrorCode::wrong_type, "Expected a string.");
+                if (container.contains("memory") && !container.at("memory").is_object())
+                    add_error(errors, line_number, path + ".memory",
+                              EvidenceValidationErrorCode::wrong_type, "Expected an object.");
+                if (container.contains("memory") && container.at("memory").is_object())
+                    exact_keys(container.at("memory"),
+                               {"current_bytes", "high_bytes", "max_bytes", "events", "stat",
+                                "swap_current_bytes", "psi", "unavailable_metrics"},
+                               line_number, errors);
                 if (container.contains("assessment") && !container.at("assessment").is_object())
                     add_error(errors, line_number, path + ".assessment",
                               EvidenceValidationErrorCode::wrong_type, "Expected an object.");
