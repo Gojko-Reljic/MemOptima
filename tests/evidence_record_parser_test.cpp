@@ -67,6 +67,46 @@ TEST(EvidenceRecordParser, RejectsInvalidStartAndEndContracts) {
     EXPECT_EQ(contradictory_end.error().back().json_path, "$.failure");
 }
 
+TEST(EvidenceRecordParser, RejectsInvalidTimestampsOverflowAndFailureObjects) {
+    const auto invalid_start = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"application_version":"0.5.0","started_at_utc":"2026-11-13","requested_sample_count":1,"requested_interval_ms":"18446744073709551616","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})",
+        16);
+    const auto invalid_end = parse_evidence_record(
+        R"({"record_type":"session_end","schema_version":1,"outcome":"failed","completed_sample_count":0,"ended_at_utc":"2026-11-13T12:00:00.000Z","failure":{"code":"unknown","detail":1,"extra":true}})",
+        17);
+
+    ASSERT_FALSE(invalid_start.has_value());
+    ASSERT_FALSE(invalid_end.has_value());
+    EXPECT_TRUE(
+        std::ranges::any_of(invalid_start.error(), [](const EvidenceValidationError &error) {
+            return error.json_path == "$.started_at_utc";
+        }));
+    EXPECT_TRUE(
+        std::ranges::any_of(invalid_start.error(), [](const EvidenceValidationError &error) {
+            return error.json_path == "$.requested_interval_ms";
+        }));
+    EXPECT_TRUE(std::ranges::any_of(invalid_end.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.failure.extra";
+    }));
+    EXPECT_TRUE(std::ranges::any_of(invalid_end.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.failure.code";
+    }));
+}
+
+TEST(EvidenceRecordParser, RejectsMalformedWarningsAndFindingEvidence) {
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[{"code":"warning","cgroup_path":"/x","detail":1,"extra":true}],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{},"assessment":{"overall_risk":"low","coverage":"complete","findings":[{"code":"finding","risk":"high","evidence":[{"code":"metric","value":"18446744073709551616","extra":true}],"recommendation":"act"}],"unavailable_evidence":[]}}]})",
+        18);
+
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_TRUE(std::ranges::any_of(invalid.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.discovery_warnings[0].detail";
+    }));
+    EXPECT_TRUE(std::ranges::any_of(invalid.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.containers[0].assessment.findings[0].evidence[0].extra";
+    }));
+}
+
 TEST(EvidenceRecordParser, ValidatesTheSampleRecordEnvelope) {
     const auto sample = parse_evidence_record(
         R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[]})",

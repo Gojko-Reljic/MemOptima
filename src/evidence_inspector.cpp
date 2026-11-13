@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace memoptima {
 namespace {
@@ -30,6 +31,17 @@ struct Aggregate {
     std::string last_risk;
     std::string last_coverage;
 };
+
+std::string format_validation_errors(const std::vector<EvidenceValidationError> &errors) {
+    std::string detail;
+    for (const auto &error : errors) {
+        if (!detail.empty())
+            detail += '\n';
+        detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path + ": " +
+                  error.detail;
+    }
+    return detail;
+}
 } // namespace
 
 std::expected<EvidenceInspectionSummary, EvidenceInspectionError>
@@ -51,6 +63,7 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
     bool saw_end{};
     std::uint32_t expected_sequence = 1;
     std::uint64_t line_number{};
+    std::vector<EvidenceValidationError> validation_errors;
     while (true) {
         const auto line = input->next_line();
         if (!line.has_value())
@@ -60,14 +73,14 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
         ++line_number;
         const auto record = parse_evidence_record(**line, line_number);
         if (!record.has_value()) {
-            std::string detail;
             for (const auto &error : record.error()) {
-                if (!detail.empty())
-                    detail += '\n';
-                detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path +
-                          ": " + error.detail;
+                if (validation_errors.size() == 20)
+                    break;
+                validation_errors.push_back(error);
             }
-            return std::unexpected(EvidenceInspectionError{std::move(detail)});
+            if (validation_errors.size() == 20)
+                break;
+            continue;
         }
         if (saw_end || (!saw_start && record->type != EvidenceRecordType::session_start) ||
             (saw_start && record->type == EvidenceRecordType::session_start))
@@ -111,6 +124,9 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
                                             ": terminal sample count does not match the records."});
         }
     }
+    if (!validation_errors.empty())
+        return std::unexpected(
+            EvidenceInspectionError{format_validation_errors(validation_errors)});
     if (!saw_start)
         return std::unexpected(
             EvidenceInspectionError{"The artifact has no session_start record."});

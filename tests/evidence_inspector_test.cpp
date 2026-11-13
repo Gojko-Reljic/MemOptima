@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -48,6 +49,26 @@ TEST(EvidenceInspector, PreservesValidSamplesWhenTheTerminalRecordIsMissing) {
     ASSERT_TRUE(incomplete.has_value());
     EXPECT_TRUE(incomplete->incomplete);
     EXPECT_EQ(incomplete->completed_sample_count, 1U);
+    std::filesystem::remove(path);
+}
+
+TEST(EvidenceInspector, BoundsValidationDiagnosticsAcrossMultipleLines) {
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("memoptima-invalid-" + std::to_string(::getpid()) + ".jsonl");
+    {
+        std::ofstream output{path};
+        for (int line{}; line < 25; ++line)
+            output << "{\n";
+    }
+
+    const auto inspected = inspect_evidence_artifact(path);
+
+    ASSERT_FALSE(inspected.has_value());
+    EXPECT_EQ(std::count(inspected.error().detail.begin(), inspected.error().detail.end(), '\n'),
+              19);
+    EXPECT_TRUE(inspected.error().detail.starts_with("Line 1 at $"));
+    EXPECT_NE(inspected.error().detail.find("Line 20 at $"), std::string::npos);
+    EXPECT_EQ(inspected.error().detail.find("Line 21 at $"), std::string::npos);
     std::filesystem::remove(path);
 }
 

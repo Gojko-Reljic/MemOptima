@@ -3,6 +3,8 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
+#include <charconv>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -18,11 +20,12 @@ void add_error(std::vector<EvidenceValidationError> &errors, std::uint64_t line,
     errors.push_back({line, std::move(path), code, std::move(detail)});
 }
 
-bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys, std::uint64_t line,
+bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys,
+                std::string_view path, std::uint64_t line,
                 std::vector<EvidenceValidationError> &errors) {
     for (const auto key : keys)
         if (!value.contains(key))
-            add_error(errors, line, "$." + std::string{key},
+            add_error(errors, line, std::string{path} + "." + std::string{key},
                       EvidenceValidationErrorCode::missing_required_field,
                       "The required field is missing.");
     for (const auto &item : value.items()) {
@@ -30,7 +33,8 @@ bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys,
         for (const auto key : keys)
             known = known || item.key() == key;
         if (!known)
-            add_error(errors, line, "$." + item.key(), EvidenceValidationErrorCode::unknown_field,
+            add_error(errors, line, std::string{path} + "." + item.key(),
+                      EvidenceValidationErrorCode::unknown_field,
                       "The field is not defined by schema version 1.");
     }
     return errors.empty();
@@ -51,8 +55,12 @@ bool decimal_string(const Json &value, std::string_view key, std::uint64_t line,
     if (!string_field(value, key, line, errors))
         return false;
     const auto text = value.at(key).get<std::string>();
+    std::uint64_t parsed{};
+    const auto [position, conversion_error] =
+        std::from_chars(text.data(), text.data() + text.size(), parsed);
     const bool valid = !text.empty() && !(text.size() > 1 && text.front() == '0') &&
-                       std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; });
+                       std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; }) &&
+                       conversion_error == std::errc{} && position == text.data() + text.size();
     if (!valid)
         add_error(errors, line, "$." + std::string{key}, EvidenceValidationErrorCode::invalid_value,
                   "Expected a canonical unsigned decimal string.");
@@ -69,8 +77,12 @@ void metric_or_null(const Json &value, std::string path, std::uint64_t line,
         return;
     }
     const auto text = value.get<std::string>();
+    std::uint64_t parsed{};
+    const auto [position, conversion_error] =
+        std::from_chars(text.data(), text.data() + text.size(), parsed);
     if (text.empty() || (text.size() > 1 && text.front() == '0') ||
-        !std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; }))
+        !std::ranges::all_of(text, [](char c) { return c >= '0' && c <= '9'; }) ||
+        conversion_error != std::errc{} || position != text.data() + text.size())
         add_error(errors, line, std::move(path), EvidenceValidationErrorCode::invalid_value,
                   "Expected a canonical unsigned decimal string.");
 }
@@ -82,8 +94,40 @@ void diagnostic(const Json &value, std::string path, std::uint64_t line,
                   "Expected a diagnostic object.");
         return;
     }
-    exact_keys(value, {"code", "source", "detail"}, line, errors);
+    exact_keys(value, {"code", "source", "detail"}, path, line, errors);
     for (const auto key : {"code", "source", "detail"})
+        if (value.contains(key) && !value.at(key).is_string())
+            add_error(errors, line, path + "." + key, EvidenceValidationErrorCode::wrong_type,
+                      "Expected a string.");
+}
+
+void timestamp(const Json &value, std::string_view key, std::uint64_t line,
+               std::vector<EvidenceValidationError> &errors) {
+    if (!string_field(value, key, line, errors))
+        return;
+    const auto text = value.at(key).get<std::string>();
+    const bool punctuation = text.size() == 24 && text[4] == '-' && text[7] == '-' &&
+                             text[10] == 'T' && text[13] == ':' && text[16] == ':' &&
+                             text[19] == '.' && text[23] == 'Z';
+    constexpr std::array<unsigned, 17> digit_indexes{0U,  1U,  2U,  3U,  5U,  6U,  8U,  9U, 11U,
+                                                     12U, 14U, 15U, 17U, 18U, 20U, 21U, 22U};
+    const bool digits = punctuation && std::ranges::all_of(digit_indexes, [&text](unsigned index) {
+                            return text[index] >= '0' && text[index] <= '9';
+                        });
+    if (!digits)
+        add_error(errors, line, "$." + std::string{key}, EvidenceValidationErrorCode::invalid_value,
+                  "Expected an ISO 8601 UTC timestamp with milliseconds.");
+}
+
+void warning(const Json &value, std::string path, std::uint64_t line,
+             std::vector<EvidenceValidationError> &errors) {
+    if (!value.is_object()) {
+        add_error(errors, line, std::move(path), EvidenceValidationErrorCode::wrong_type,
+                  "Expected a discovery warning object.");
+        return;
+    }
+    exact_keys(value, {"code", "cgroup_path", "detail"}, path, line, errors);
+    for (const auto key : {"code", "cgroup_path", "detail"})
         if (value.contains(key) && !value.at(key).is_string())
             add_error(errors, line, path + "." + key, EvidenceValidationErrorCode::wrong_type,
                       "Expected a string.");
@@ -154,10 +198,12 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     "requested_sample_count", "requested_interval_ms", "output_max_bytes",
                     "output_permissions_octal", "flush_after_each_record",
                     "host_identifiers_included"},
-                   line_number, errors);
-        for (const auto key : {"application_version", "started_at_utc", "output_permissions_octal"})
+                   "$", line_number, errors);
+        for (const auto key : {"application_version", "output_permissions_octal"})
             if (value.contains(key))
                 string_field(value, key, line_number, errors);
+        if (value.contains("started_at_utc"))
+            timestamp(value, "started_at_utc", line_number, errors);
         for (const auto key : {"requested_interval_ms", "output_max_bytes"})
             if (value.contains(key))
                 decimal_string(value, key, line_number, errors);
@@ -181,10 +227,11 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
         exact_keys(value,
                    {"record_type", "schema_version", "outcome", "completed_sample_count",
                     "ended_at_utc", "failure"},
-                   line_number, errors);
-        for (const auto key : {"outcome", "ended_at_utc"})
-            if (value.contains(key))
-                string_field(value, key, line_number, errors);
+                   "$", line_number, errors);
+        if (value.contains("outcome"))
+            string_field(value, "outcome", line_number, errors);
+        if (value.contains("ended_at_utc"))
+            timestamp(value, "ended_at_utc", line_number, errors);
         if (value.contains("completed_sample_count") &&
             !value.at("completed_sample_count").is_number_unsigned())
             add_error(errors, line_number, "$.completed_sample_count",
@@ -201,6 +248,21 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                 add_error(errors, line_number, "$.failure",
                           EvidenceValidationErrorCode::invalid_value,
                           "Failure must match the terminal outcome.");
+            if (failed && value.contains("failure") && value.at("failure").is_object()) {
+                const auto &failure = value.at("failure");
+                exact_keys(failure, {"code", "detail"}, "$.failure", line_number, errors);
+                for (const auto key : {"code", "detail"})
+                    if (failure.contains(key) && !failure.at(key).is_string())
+                        add_error(errors, line_number, "$.failure." + std::string{key},
+                                  EvidenceValidationErrorCode::wrong_type, "Expected a string.");
+                if (failure.contains("code") && failure.at("code").is_string() &&
+                    failure.at("code") != "output_size_limit_reached" &&
+                    failure.at("code") != "output_write_failed" &&
+                    failure.at("code") != "output_flush_failed")
+                    add_error(errors, line_number, "$.failure.code",
+                              EvidenceValidationErrorCode::invalid_value,
+                              "Expected a known failure code.");
+            }
         }
     }
     if (parsed_type == EvidenceRecordType::sample) {
@@ -208,7 +270,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                    {"record_type", "schema_version", "sample_sequence", "planned_offset_ms",
                     "captured_at_utc", "schedule_delay_ms", "skipped_container_count",
                     "discovery_warnings", "containers"},
-                   line_number, errors);
+                   "$", line_number, errors);
         if (value.contains("sample_sequence") &&
             (!value.at("sample_sequence").is_number_unsigned() || value.at("sample_sequence") == 0))
             add_error(errors, line_number, "$.sample_sequence",
@@ -218,11 +280,15 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
             if (value.contains(key))
                 decimal_string(value, key, line_number, errors);
         if (value.contains("captured_at_utc"))
-            string_field(value, "captured_at_utc", line_number, errors);
+            timestamp(value, "captured_at_utc", line_number, errors);
         for (const auto key : {"discovery_warnings", "containers"})
             if (value.contains(key) && !value.at(key).is_array())
                 add_error(errors, line_number, "$." + std::string{key},
                           EvidenceValidationErrorCode::wrong_type, "Expected an array.");
+        if (value.contains("discovery_warnings") && value.at("discovery_warnings").is_array())
+            for (std::size_t index{}; index < value.at("discovery_warnings").size(); ++index)
+                warning(value.at("discovery_warnings").at(index),
+                        "$.discovery_warnings[" + std::to_string(index) + "]", line_number, errors);
         if (value.contains("containers") && value.at("containers").is_array())
             for (std::size_t index{}; index < value.at("containers").size(); ++index) {
                 const auto &container = value.at("containers").at(index);
@@ -232,7 +298,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                               "Expected an object.");
                     continue;
                 }
-                exact_keys(container, {"container_id", "cgroup_path", "memory", "assessment"},
+                exact_keys(container, {"container_id", "cgroup_path", "memory", "assessment"}, path,
                            line_number, errors);
                 for (const auto key : {"container_id", "cgroup_path"})
                     if (container.contains(key) && !container.at(key).is_string())
@@ -245,7 +311,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     exact_keys(container.at("memory"),
                                {"current_bytes", "high_bytes", "max_bytes", "events", "stat",
                                 "swap_current_bytes", "psi", "unavailable_metrics"},
-                               line_number, errors);
+                               path + ".memory", line_number, errors);
                 if (container.contains("memory") && container.at("memory").is_object()) {
                     const auto &memory = container.at("memory");
                     for (const auto key : {"current_bytes", "swap_current_bytes"})
@@ -264,7 +330,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                       "Expected an object.");
                     if (memory.contains("events") && memory.at("events").is_object()) {
                         exact_keys(memory.at("events"), {"high", "max", "oom", "oom_kill"},
-                                   line_number, errors);
+                                   path + ".memory.events", line_number, errors);
                         for (const auto key : {"high", "max", "oom", "oom_kill"})
                             if (memory.at("events").contains(key))
                                 metric_or_null(memory.at("events").at(key),
@@ -272,14 +338,15 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     }
                     if (memory.contains("stat") && memory.at("stat").is_object()) {
                         exact_keys(memory.at("stat"), {"anonymous_bytes", "file_backed_bytes"},
-                                   line_number, errors);
+                                   path + ".memory.stat", line_number, errors);
                         for (const auto key : {"anonymous_bytes", "file_backed_bytes"})
                             if (memory.at("stat").contains(key))
                                 metric_or_null(memory.at("stat").at(key),
                                                path + ".memory.stat." + key, line_number, errors);
                     }
                     if (memory.contains("psi") && memory.at("psi").is_object()) {
-                        exact_keys(memory.at("psi"), {"some", "full"}, line_number, errors);
+                        exact_keys(memory.at("psi"), {"some", "full"}, path + ".memory.psi",
+                                   line_number, errors);
                         for (const auto kind : {"some", "full"}) {
                             if (!memory.at("psi").contains(kind) ||
                                 memory.at("psi").at(kind).is_null())
@@ -295,7 +362,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                             exact_keys(pressure,
                                        {"average_10_seconds", "average_60_seconds",
                                         "average_300_seconds", "total_microseconds"},
-                                       line_number, errors);
+                                       pressure_path, line_number, errors);
                             for (const auto average : {"average_10_seconds", "average_60_seconds",
                                                        "average_300_seconds"})
                                 if (pressure.contains(average) &&
@@ -327,7 +394,7 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     const auto &assessment = container.at("assessment");
                     exact_keys(assessment,
                                {"overall_risk", "coverage", "findings", "unavailable_evidence"},
-                               line_number, errors);
+                               path + ".assessment", line_number, errors);
                     if (assessment.contains("overall_risk") &&
                         (!assessment.at("overall_risk").is_string() ||
                          (assessment.at("overall_risk") != "low" &&
@@ -353,6 +420,63 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                        path + ".assessment.unavailable_evidence[" +
                                            std::to_string(evidence_index) + "]",
                                        line_number, errors);
+                    if (assessment.contains("unavailable_evidence") &&
+                        !assessment.at("unavailable_evidence").is_array())
+                        add_error(errors, line_number, path + ".assessment.unavailable_evidence",
+                                  EvidenceValidationErrorCode::wrong_type, "Expected an array.");
+                    if (assessment.contains("findings") && !assessment.at("findings").is_array())
+                        add_error(errors, line_number, path + ".assessment.findings",
+                                  EvidenceValidationErrorCode::wrong_type, "Expected an array.");
+                    if (assessment.contains("findings") && assessment.at("findings").is_array())
+                        for (std::size_t finding_index{};
+                             finding_index < assessment.at("findings").size(); ++finding_index) {
+                            const auto &finding = assessment.at("findings").at(finding_index);
+                            const auto finding_path = path + ".assessment.findings[" +
+                                                      std::to_string(finding_index) + "]";
+                            if (!finding.is_object()) {
+                                add_error(errors, line_number, finding_path,
+                                          EvidenceValidationErrorCode::wrong_type,
+                                          "Expected a finding object.");
+                                continue;
+                            }
+                            exact_keys(finding, {"code", "risk", "evidence", "recommendation"},
+                                       finding_path, line_number, errors);
+                            for (const auto key : {"code", "risk", "recommendation"})
+                                if (finding.contains(key) && !finding.at(key).is_string())
+                                    add_error(errors, line_number, finding_path + "." + key,
+                                              EvidenceValidationErrorCode::wrong_type,
+                                              "Expected a string.");
+                            if (finding.contains("evidence") && !finding.at("evidence").is_array())
+                                add_error(errors, line_number, finding_path + ".evidence",
+                                          EvidenceValidationErrorCode::wrong_type,
+                                          "Expected an array.");
+                            if (finding.contains("evidence") && finding.at("evidence").is_array())
+                                for (std::size_t evidence_index{};
+                                     evidence_index < finding.at("evidence").size();
+                                     ++evidence_index) {
+                                    const auto &evidence =
+                                        finding.at("evidence").at(evidence_index);
+                                    const auto evidence_path = finding_path + ".evidence[" +
+                                                               std::to_string(evidence_index) + "]";
+                                    if (!evidence.is_object()) {
+                                        add_error(errors, line_number, evidence_path,
+                                                  EvidenceValidationErrorCode::wrong_type,
+                                                  "Expected an evidence object.");
+                                        continue;
+                                    }
+                                    exact_keys(evidence, {"code", "value"}, evidence_path,
+                                               line_number, errors);
+                                    if (evidence.contains("code") &&
+                                        !evidence.at("code").is_string())
+                                        add_error(errors, line_number, evidence_path + ".code",
+                                                  EvidenceValidationErrorCode::wrong_type,
+                                                  "Expected a string.");
+                                    if (evidence.contains("value"))
+                                        metric_or_null(evidence.at("value"),
+                                                       evidence_path + ".value", line_number,
+                                                       errors);
+                                }
+                        }
                 }
             }
     }
