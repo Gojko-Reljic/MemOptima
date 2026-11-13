@@ -1,5 +1,6 @@
 #include <memoptima/sampling/sampling_configuration.hpp>
 
+#include <charconv>
 #include <limits>
 
 namespace memoptima::sampling {
@@ -65,17 +66,19 @@ parse_canonical_decimal(std::string_view text) noexcept {
         return std::unexpected(DecimalParseError::invalid_format);
     }
 
-    std::uint64_t value{};
     for (const char character : text) {
         if (!is_ascii_decimal_digit(character)) {
             return std::unexpected(DecimalParseError::invalid_format);
         }
+    }
 
-        const std::uint64_t digit = static_cast<std::uint64_t>(character - '0');
-        if (value > (std::numeric_limits<std::uint64_t>::max() - digit) / 10) {
-            return std::unexpected(DecimalParseError::overflow);
-        }
-        value = (value * 10) + digit;
+    std::uint64_t value{};
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error == std::errc::result_out_of_range) {
+        return std::unexpected(DecimalParseError::overflow);
+    }
+    if (error != std::errc{} || end != text.data() + text.size()) {
+        return std::unexpected(DecimalParseError::invalid_format);
     }
     return value;
 }
