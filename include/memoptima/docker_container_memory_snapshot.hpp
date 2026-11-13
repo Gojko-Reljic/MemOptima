@@ -35,25 +35,10 @@ class DockerContainerId {
     std::string value_;
 };
 
-class DockerContainerMemorySnapshot {
-  public:
-    [[nodiscard]] static DockerContainerMemorySnapshot create(DockerContainerId container_id,
-                                                              std::filesystem::path cgroup_path,
-                                                              CgroupMemorySnapshot memory);
-
-    [[nodiscard]] const DockerContainerId &container_id() const noexcept;
-    [[nodiscard]] const std::filesystem::path &cgroup_path() const noexcept;
-    [[nodiscard]] const CgroupMemorySnapshot &memory() const noexcept;
-
-  private:
-    DockerContainerMemorySnapshot(DockerContainerId container_id, std::filesystem::path cgroup_path,
-                                  CgroupMemorySnapshot memory)
-        : container_id_{std::move(container_id)}, cgroup_path_{std::move(cgroup_path)},
-          memory_{std::move(memory)} {}
-
-    DockerContainerId container_id_;
-    std::filesystem::path cgroup_path_;
-    CgroupMemorySnapshot memory_;
+struct DockerContainerMemorySnapshot {
+    DockerContainerId container_id;
+    std::filesystem::path cgroup_path;
+    CgroupMemorySnapshot memory;
 };
 
 enum class DockerContainerScanWarningCode {
@@ -70,26 +55,10 @@ struct DockerContainerScanWarning {
     std::string detail;
 };
 
-class DockerContainerScanResult {
-  public:
-    [[nodiscard]] static DockerContainerScanResult
-    create(std::vector<DockerContainerMemorySnapshot> containers,
-           std::size_t skipped_container_count, std::vector<DockerContainerScanWarning> warnings);
-
-    [[nodiscard]] const std::vector<DockerContainerMemorySnapshot> &containers() const noexcept;
-    [[nodiscard]] std::size_t skipped_container_count() const noexcept;
-    [[nodiscard]] const std::vector<DockerContainerScanWarning> &warnings() const noexcept;
-
-  private:
-    DockerContainerScanResult(std::vector<DockerContainerMemorySnapshot> containers,
-                              std::size_t skipped_container_count,
-                              std::vector<DockerContainerScanWarning> warnings)
-        : containers_{std::move(containers)}, skipped_container_count_{skipped_container_count},
-          warnings_{std::move(warnings)} {}
-
-    std::vector<DockerContainerMemorySnapshot> containers_;
-    std::size_t skipped_container_count_;
-    std::vector<DockerContainerScanWarning> warnings_;
+struct DockerContainerScanResult {
+    std::vector<DockerContainerMemorySnapshot> containers;
+    std::size_t skipped_container_count;
+    std::vector<DockerContainerScanWarning> warnings;
 };
 
 } // namespace memoptima

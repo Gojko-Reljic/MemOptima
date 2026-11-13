@@ -44,29 +44,28 @@ class CgroupMemoryReaderTest : public testing::Test {
 TEST_F(CgroupMemoryReaderTest, ReadsACompleteSnapshot) {
     write_valid_files();
     const CgroupMemorySnapshot snapshot = read_cgroup_memory_snapshot_from_root(root_, "container");
-    ASSERT_TRUE(snapshot.current_memory().has_value());
-    EXPECT_EQ(*snapshot.current_memory(), 100U);
-    ASSERT_TRUE(snapshot.limits().high.has_value());
-    EXPECT_FALSE(snapshot.limits().high->has_value());
-    ASSERT_TRUE(snapshot.events().oom_kill.has_value());
-    EXPECT_EQ(*snapshot.events().oom_kill, 4U);
+    ASSERT_TRUE(snapshot.current_memory.has_value());
+    EXPECT_EQ(*snapshot.current_memory, 100U);
+    ASSERT_TRUE(snapshot.limits.high.has_value());
+    EXPECT_FALSE(snapshot.limits.high->has_value());
+    ASSERT_TRUE(snapshot.events.oom_kill.has_value());
+    EXPECT_EQ(*snapshot.events.oom_kill, 4U);
 }
 
 TEST_F(CgroupMemoryReaderTest, PreservesOtherMetricsWhenOneFileIsUnavailable) {
     write_valid_files();
     std::filesystem::remove(root_ / "container" / "memory.swap.current");
     const CgroupMemorySnapshot snapshot = read_cgroup_memory_snapshot_from_root(root_, "container");
-    EXPECT_TRUE(snapshot.current_memory().has_value());
-    ASSERT_FALSE(snapshot.current_swap().has_value());
-    EXPECT_EQ(snapshot.current_swap().error().code, CgroupMetricReadErrorCode::file_open_failed);
+    EXPECT_TRUE(snapshot.current_memory.has_value());
+    ASSERT_FALSE(snapshot.current_swap.has_value());
+    EXPECT_EQ(snapshot.current_swap.error().code, CgroupMetricReadErrorCode::file_open_failed);
 }
 
 TEST_F(CgroupMemoryReaderTest, RejectsUnsafeRelativePathsWithoutReadingFiles) {
     const CgroupMemorySnapshot snapshot =
         read_cgroup_memory_snapshot_from_root(root_, "../container");
-    ASSERT_FALSE(snapshot.current_memory().has_value());
-    EXPECT_EQ(snapshot.current_memory().error().code,
-              CgroupMetricReadErrorCode::invalid_cgroup_path);
+    ASSERT_FALSE(snapshot.current_memory.has_value());
+    EXPECT_EQ(snapshot.current_memory.error().code, CgroupMetricReadErrorCode::invalid_cgroup_path);
 }
 
 } // namespace

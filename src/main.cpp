@@ -341,11 +341,11 @@ int run_container_command(std::string_view container_id_text) {
         memoptima::linux::scan_rootful_docker_containers(*environment);
     std::cerr << memoptima::cli::format_docker_container_scan_warnings(scan_result);
     const auto container =
-        std::ranges::find_if(scan_result.containers(),
+        std::ranges::find_if(scan_result.containers,
                              [&container_id](const memoptima::DockerContainerMemorySnapshot &item) {
-                                 return item.container_id().value() == container_id->value();
+                                 return item.container_id.value() == container_id->value();
                              });
-    if (container == scan_result.containers().end()) {
+    if (container == scan_result.containers.end()) {
         std::cerr << "Error: Docker container '" << container_id->value()
                   << "' was not found in supported rootful Docker cgroup locations.\n";
         return kExitRuntimeError;
@@ -367,8 +367,7 @@ int run_assess_containers_command() {
         memoptima::assess_docker_container_scan_result(
             memoptima::linux::scan_rootful_docker_containers(*environment));
     std::cout << memoptima::cli::format_docker_container_assessment_scan_result(assessment_result);
-    std::cerr << memoptima::cli::format_docker_container_scan_warnings(
-        assessment_result.warnings());
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(assessment_result.warnings);
     return kExitSuccess;
 }
 
@@ -391,14 +390,13 @@ int run_assess_container_command(std::string_view container_id_text) {
     const memoptima::DockerContainerAssessmentScanResult assessment_result =
         memoptima::assess_docker_container_scan_result(
             memoptima::linux::scan_rootful_docker_containers(*environment));
-    std::cerr << memoptima::cli::format_docker_container_scan_warnings(
-        assessment_result.warnings());
+    std::cerr << memoptima::cli::format_docker_container_scan_warnings(assessment_result.warnings);
     const auto container =
-        std::ranges::find_if(assessment_result.containers(),
+        std::ranges::find_if(assessment_result.containers,
                              [&container_id](const memoptima::DockerContainerAssessment &item) {
-                                 return item.container_id().value() == container_id->value();
+                                 return item.container_id.value() == container_id->value();
                              });
-    if (container == assessment_result.containers().end()) {
+    if (container == assessment_result.containers.end()) {
         std::cerr << "Error: Docker container '" << container_id->value()
                   << "' was not found in supported rootful Docker cgroup locations.\n";
         return kExitRuntimeError;

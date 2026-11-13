@@ -99,7 +99,7 @@ evidence_code_name(analysis::CgroupMemoryEvidenceCode code) noexcept {
 
 std::string
 format_docker_container_assessment_scan_result(const DockerContainerAssessmentScanResult &result) {
-    if (result.containers().empty()) {
+    if (result.containers.empty()) {
         return "No supported rootful Docker containers found.\n";
     }
 
@@ -109,26 +109,26 @@ format_docker_container_assessment_scan_result(const DockerContainerAssessmentSc
            << std::setw(kRiskColumnWidth) << "RISK" << std::setw(kCoverageColumnWidth) << "COVERAGE"
            << std::setw(kTopFindingColumnWidth) << "TOP FINDING"
            << "FINDINGS\n";
-    for (const DockerContainerAssessment &container : result.containers()) {
-        const analysis::CgroupMemoryAssessment &assessment = container.assessment();
+    for (const DockerContainerAssessment &container : result.containers) {
+        const analysis::CgroupMemoryAssessment &assessment = container.assessment;
         const std::string_view top_finding =
             assessment.findings().empty() ? std::string_view{"None"}
                                           : finding_code_name(assessment.findings().front().code);
-        output << std::left << std::setw(kContainerIdColumnWidth)
-               << container.container_id().value() << std::setw(kRiskColumnWidth)
-               << risk_level_name(assessment.overall_risk()) << std::setw(kCoverageColumnWidth)
-               << coverage_name(assessment.coverage()) << std::setw(kTopFindingColumnWidth)
-               << top_finding << assessment.findings().size() << '\n';
+        output << std::left << std::setw(kContainerIdColumnWidth) << container.container_id.value()
+               << std::setw(kRiskColumnWidth) << risk_level_name(assessment.overall_risk())
+               << std::setw(kCoverageColumnWidth) << coverage_name(assessment.coverage())
+               << std::setw(kTopFindingColumnWidth) << top_finding << assessment.findings().size()
+               << '\n';
     }
     return output.str();
 }
 
 std::string format_docker_container_assessment_detail(const DockerContainerAssessment &container) {
-    const analysis::CgroupMemoryAssessment &assessment = container.assessment();
+    const analysis::CgroupMemoryAssessment &assessment = container.assessment;
     std::ostringstream output;
     output << "Container\n"
-           << "  ID:                  " << container.container_id().value() << '\n'
-           << "  Cgroup path:         " << container.cgroup_path().string() << "\n\n"
+           << "  ID:                  " << container.container_id.value() << '\n'
+           << "  Cgroup path:         " << container.cgroup_path.string() << "\n\n"
            << "Overall risk\n"
            << "  Level:               " << risk_level_name(assessment.overall_risk()) << "\n\n"
            << "Coverage\n"

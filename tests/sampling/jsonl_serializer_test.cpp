@@ -27,30 +27,38 @@ using Json = nlohmann::json;
 [[nodiscard]] DockerContainerMemorySnapshot make_snapshot(std::string id) {
     const auto parsed_id = DockerContainerId::parse(id);
     EXPECT_TRUE(parsed_id.has_value());
-    return DockerContainerMemorySnapshot::create(
-        *parsed_id, "/sys/fs/cgroup/docker/" + id,
-        CgroupMemorySnapshot::create(
-            CgroupByteMetric{std::unexpected(unavailable("memory.current"))},
-            CgroupMemoryLimits{
-                .high = CgroupMemoryLimitMetric{std::optional<std::uint64_t>{}},
-                .maximum = CgroupMemoryLimitMetric{std::unexpected(unavailable("memory.max"))}},
-            CgroupMemoryEvents{.high = CgroupEventMetric{1},
-                               .maximum = CgroupEventMetric{2},
-                               .oom = CgroupEventMetric{3},
-                               .oom_kill = CgroupEventMetric{4}},
-            CgroupMemoryComposition{.anonymous =
-                                        CgroupByteMetric{std::numeric_limits<std::uint64_t>::max()},
-                                    .file_backed = CgroupByteMetric{128}},
-            CgroupByteMetric{64},
-            CgroupMemoryPressure{
-                .some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
-                    .average_10_seconds = 1.25,
-                    .average_60_seconds = 2.5,
-                    .average_300_seconds = 3.75,
-                    .total_microseconds = std::numeric_limits<std::uint64_t>::max(),
-                }},
-                .full = CgroupMetric<CgroupPressureLine>{
-                    std::unexpected(unavailable("memory.pressure"))}}));
+    return {
+        .container_id = *parsed_id,
+        .cgroup_path = "/sys/fs/cgroup/docker/" + id,
+        .memory =
+            {
+                .current_memory = CgroupByteMetric{std::unexpected(unavailable("memory.current"))},
+                .limits =
+                    CgroupMemoryLimits{
+                        .high = CgroupMemoryLimitMetric{std::optional<std::uint64_t>{}},
+                        .maximum =
+                            CgroupMemoryLimitMetric{std::unexpected(unavailable("memory.max"))}},
+                .events = CgroupMemoryEvents{.high = CgroupEventMetric{1},
+                                             .maximum = CgroupEventMetric{2},
+                                             .oom = CgroupEventMetric{3},
+                                             .oom_kill = CgroupEventMetric{4}},
+                .composition =
+                    CgroupMemoryComposition{
+                        .anonymous = CgroupByteMetric{std::numeric_limits<std::uint64_t>::max()},
+                        .file_backed = CgroupByteMetric{128}},
+                .current_swap = CgroupByteMetric{64},
+                .pressure =
+                    CgroupMemoryPressure{
+                        .some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
+                            .average_10_seconds = 1.25,
+                            .average_60_seconds = 2.5,
+                            .average_300_seconds = 3.75,
+                            .total_microseconds = std::numeric_limits<std::uint64_t>::max(),
+                        }},
+                        .full = CgroupMetric<CgroupPressureLine>{std::unexpected(
+                            unavailable("memory.pressure"))}},
+            },
+    };
 }
 
 TEST(SamplingJsonlSerializer, SerializesSessionStartWithPrivacyAndDurabilityContract) {

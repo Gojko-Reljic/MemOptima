@@ -16,18 +16,22 @@ make_assessment(std::string id, analysis::CgroupMemoryRiskLevel risk,
                 std::vector<CgroupMetricReadError> unavailable_evidence = {}) {
     const auto parsed_id = DockerContainerId::parse(id);
     EXPECT_TRUE(parsed_id.has_value());
-    return DockerContainerAssessment::create(
-        *parsed_id, "/sys/fs/cgroup/docker/" + id,
-        analysis::CgroupMemoryAssessment::create(risk, coverage, std::move(findings),
-                                                 std::move(unavailable_evidence)));
+    return {
+        .container_id = *parsed_id,
+        .cgroup_path = "/sys/fs/cgroup/docker/" + id,
+        .assessment = analysis::CgroupMemoryAssessment::create(risk, coverage, std::move(findings),
+                                                               std::move(unavailable_evidence)),
+    };
 }
 
 TEST(AssessmentsFormatter, FormatsSummaryTableAndLowRiskWithoutFindings) {
     const std::string id(64, 'a');
-    const DockerContainerAssessmentScanResult result = DockerContainerAssessmentScanResult::create(
-        {make_assessment(id, analysis::CgroupMemoryRiskLevel::Low,
-                         analysis::CgroupMemoryAssessmentCoverage::Complete)},
-        0, {});
+    const DockerContainerAssessmentScanResult result{
+        .containers = {make_assessment(id, analysis::CgroupMemoryRiskLevel::Low,
+                                       analysis::CgroupMemoryAssessmentCoverage::Complete)},
+        .skipped_container_count = 0,
+        .warnings = {},
+    };
 
     const std::string output = format_docker_container_assessment_scan_result(result);
 

@@ -192,12 +192,12 @@ template <typename Value>
 
 [[nodiscard]] Json raw_memory(const CgroupMemorySnapshot &snapshot) {
     Json unavailable_metrics = Json::array();
-    const CgroupMemoryLimits &limits = snapshot.limits();
-    const CgroupMemoryEvents &events = snapshot.events();
-    const CgroupMemoryComposition &composition = snapshot.composition();
-    const CgroupMemoryPressure &memory_pressure = snapshot.pressure();
+    const CgroupMemoryLimits &limits = snapshot.limits;
+    const CgroupMemoryEvents &events = snapshot.events;
+    const CgroupMemoryComposition &composition = snapshot.composition;
+    const CgroupMemoryPressure &memory_pressure = snapshot.pressure;
     return Json{
-        {"current_bytes", metric(snapshot.current_memory(), unavailable_metrics)},
+        {"current_bytes", metric(snapshot.current_memory, unavailable_metrics)},
         {"high_bytes", limit(limits.high, unavailable_metrics)},
         {"max_bytes", limit(limits.maximum, unavailable_metrics)},
         {"events", Json{{"high", metric(events.high, unavailable_metrics)},
@@ -206,7 +206,7 @@ template <typename Value>
                         {"oom_kill", metric(events.oom_kill, unavailable_metrics)}}},
         {"stat", Json{{"anonymous_bytes", metric(composition.anonymous, unavailable_metrics)},
                       {"file_backed_bytes", metric(composition.file_backed, unavailable_metrics)}}},
-        {"swap_current_bytes", metric(snapshot.current_swap(), unavailable_metrics)},
+        {"swap_current_bytes", metric(snapshot.current_swap, unavailable_metrics)},
         {"psi", Json{{"some", pressure(memory_pressure.some, unavailable_metrics)},
                      {"full", pressure(memory_pressure.full, unavailable_metrics)}}},
         {"unavailable_metrics", std::move(unavailable_metrics)}};
@@ -214,9 +214,9 @@ template <typename Value>
 
 [[nodiscard]] Json container(const DockerContainerEvidence &evidence) {
     const DockerContainerMemorySnapshot &snapshot = evidence.snapshot();
-    return Json{{"container_id", snapshot.container_id().value()},
-                {"cgroup_path", snapshot.cgroup_path().string()},
-                {"memory", raw_memory(snapshot.memory())},
+    return Json{{"container_id", snapshot.container_id.value()},
+                {"cgroup_path", snapshot.cgroup_path.string()},
+                {"memory", raw_memory(snapshot.memory)},
                 {"assessment", assessment(evidence.assessment())}};
 }
 

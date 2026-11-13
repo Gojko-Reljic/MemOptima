@@ -15,15 +15,18 @@ make_snapshot(CgroupByteMetric current, CgroupMemoryLimitMetric high,
               CgroupEventMetric maximum_events = CgroupEventMetric{0},
               CgroupEventMetric oom_events = CgroupEventMetric{0},
               CgroupEventMetric oom_kill_events = CgroupEventMetric{0}) {
-    return CgroupMemorySnapshot::create(
-        std::move(current), {.high = std::move(high), .maximum = std::move(maximum)},
-        {.high = std::move(high_events),
-         .maximum = std::move(maximum_events),
-         .oom = std::move(oom_events),
-         .oom_kill = std::move(oom_kill_events)},
-        {.anonymous = CgroupByteMetric{0}, .file_backed = CgroupByteMetric{0}}, CgroupByteMetric{0},
-        {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}},
-         .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}}});
+    return {
+        .current_memory = std::move(current),
+        .limits = {.high = std::move(high), .maximum = std::move(maximum)},
+        .events = {.high = std::move(high_events),
+                   .maximum = std::move(maximum_events),
+                   .oom = std::move(oom_events),
+                   .oom_kill = std::move(oom_kill_events)},
+        .composition = {.anonymous = CgroupByteMetric{0}, .file_backed = CgroupByteMetric{0}},
+        .current_swap = CgroupByteMetric{0},
+        .pressure = {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}},
+                     .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}}},
+    };
 }
 
 TEST(CgroupMemoryAssessment, ReportsLowRiskWithoutBoundaryOrOomSignals) {

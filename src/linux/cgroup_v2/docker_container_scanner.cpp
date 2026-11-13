@@ -74,9 +74,11 @@ void add_candidate(const std::filesystem::path &cgroup_root,
         return;
     }
 
-    DockerContainerMemorySnapshot snapshot = DockerContainerMemorySnapshot::create(
-        *container_id, absolute_cgroup_path,
-        read_cgroup_memory_snapshot_from_root(cgroup_root, relative_cgroup_path));
+    DockerContainerMemorySnapshot snapshot{
+        .container_id = *container_id,
+        .cgroup_path = absolute_cgroup_path,
+        .memory = read_cgroup_memory_snapshot_from_root(cgroup_root, relative_cgroup_path),
+    };
     const auto existing = containers.find(container_id->value());
     if (existing == containers.end()) {
         containers.emplace(container_id->value(), DiscoveredContainer{std::move(snapshot), layout});
@@ -176,8 +178,11 @@ scan_rootful_docker_containers_from_root(const std::filesystem::path &cgroup_roo
     for (auto &[container_id, container] : discovered) {
         containers.push_back(std::move(container.snapshot));
     }
-    return DockerContainerScanResult::create(std::move(containers), skipped_container_count,
-                                             std::move(warnings));
+    return {
+        .containers = std::move(containers),
+        .skipped_container_count = skipped_container_count,
+        .warnings = std::move(warnings),
+    };
 }
 
 } // namespace memoptima::linux::detail

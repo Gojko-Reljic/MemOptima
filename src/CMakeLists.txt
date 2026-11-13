@@ -4,7 +4,6 @@ add_library(memoptima_core STATIC
     analysis/cgroup_memory_assessment.cpp
     analysis/memory_pressure.cpp
     analysis/memory_status.cpp
-    cgroup_memory_snapshot.cpp
     docker_container_assessment.cpp
     docker_container_memory_snapshot.cpp
     evidence_input_reader.cpp

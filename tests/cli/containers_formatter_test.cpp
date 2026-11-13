@@ -17,34 +17,43 @@ namespace {
                                                            double psi_some_average_10) {
     const auto parsed_id = DockerContainerId::parse(id);
     EXPECT_TRUE(parsed_id.has_value());
-    return DockerContainerMemorySnapshot::create(
-        *parsed_id, "/sys/fs/cgroup/docker/" + id,
-        CgroupMemorySnapshot::create(
-            CgroupByteMetric{current},
-            {.high = CgroupMemoryLimitMetric{high}, .maximum = CgroupMemoryLimitMetric{maximum}},
-            {.high = CgroupEventMetric{0},
-             .maximum = CgroupEventMetric{0},
-             .oom = CgroupEventMetric{0},
-             .oom_kill = CgroupEventMetric{oom_kills}},
-            {.anonymous = CgroupByteMetric{0}, .file_backed = CgroupByteMetric{0}},
-            CgroupByteMetric{0},
-            {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{.average_10_seconds =
-                                                                             psi_some_average_10,
-                                                                         .average_60_seconds = 0,
-                                                                         .average_300_seconds = 0,
-                                                                         .total_microseconds = 0}},
-             .full =
-                 CgroupMetric<CgroupPressureLine>{CgroupPressureLine{.average_10_seconds = 0,
-                                                                     .average_60_seconds = 0,
-                                                                     .average_300_seconds = 0,
-                                                                     .total_microseconds = 0}}}));
+    return {
+        .container_id = *parsed_id,
+        .cgroup_path = "/sys/fs/cgroup/docker/" + id,
+        .memory =
+            {
+                .current_memory = CgroupByteMetric{current},
+                .limits = {.high = CgroupMemoryLimitMetric{high},
+                           .maximum = CgroupMemoryLimitMetric{maximum}},
+                .events = {.high = CgroupEventMetric{0},
+                           .maximum = CgroupEventMetric{0},
+                           .oom = CgroupEventMetric{0},
+                           .oom_kill = CgroupEventMetric{oom_kills}},
+                .composition = {.anonymous = CgroupByteMetric{0},
+                                .file_backed = CgroupByteMetric{0}},
+                .current_swap = CgroupByteMetric{0},
+                .pressure = {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
+                                 .average_10_seconds = psi_some_average_10,
+                                 .average_60_seconds = 0,
+                                 .average_300_seconds = 0,
+                                 .total_microseconds = 0}},
+                             .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
+                                 .average_10_seconds = 0,
+                                 .average_60_seconds = 0,
+                                 .average_300_seconds = 0,
+                                 .total_microseconds = 0}}},
+            },
+    };
 }
 
 TEST(ContainersFormatter, FormatsTheContainerMemoryTable) {
     const std::string id(64, 'a');
-    const DockerContainerScanResult result = DockerContainerScanResult::create(
-        {make_container(id, 1024ULL * 1024ULL, std::nullopt, 2ULL * 1024ULL * 1024ULL, 3, 2.375)},
-        0, {});
+    const DockerContainerScanResult result{
+        .containers = {make_container(id, 1024ULL * 1024ULL, std::nullopt, 2ULL * 1024ULL * 1024ULL,
+                                      3, 2.375)},
+        .skipped_container_count = 0,
+        .warnings = {},
+    };
 
     const std::string output = format_docker_container_scan_result(result);
 
@@ -59,18 +68,21 @@ TEST(ContainersFormatter, FormatsTheContainerMemoryTable) {
 }
 
 TEST(ContainersFormatter, FormatsNoContainerMessage) {
-    const DockerContainerScanResult result = DockerContainerScanResult::create({}, 0, {});
+    const DockerContainerScanResult result{
+        .containers = {}, .skipped_container_count = 0, .warnings = {}};
 
     EXPECT_EQ(format_docker_container_scan_result(result),
               "No supported rootful Docker containers found.\n");
 }
 
 TEST(ContainersFormatter, FormatsWarningsForStandardError) {
-    const DockerContainerScanResult result = DockerContainerScanResult::create(
-        {}, 0,
-        {{.code = DockerContainerScanWarningCode::docker_cgroup_layout_not_found,
-          .cgroup_path = "/sys/fs/cgroup",
-          .detail = "No standard rootful Docker cgroup v2 layout was found."}});
+    const DockerContainerScanResult result{
+        .containers = {},
+        .skipped_container_count = 0,
+        .warnings = {{.code = DockerContainerScanWarningCode::docker_cgroup_layout_not_found,
+                      .cgroup_path = "/sys/fs/cgroup",
+                      .detail = "No standard rootful Docker cgroup v2 layout was found."}},
+    };
 
     const std::string output = format_docker_container_scan_warnings(result);
 
@@ -103,20 +115,25 @@ TEST(ContainersFormatter, DeduplicatesUnavailableDataCauses) {
     const CgroupMetricReadError error{.code = CgroupMetricReadErrorCode::file_open_failed,
                                       .source_name = "memory.events",
                                       .detail = "Unable to open memory.events."};
-    const DockerContainerMemorySnapshot container = DockerContainerMemorySnapshot::create(
-        *parsed_id, "/sys/fs/cgroup/docker/" + id,
-        CgroupMemorySnapshot::create(
-            CgroupByteMetric{0},
-            {.high = CgroupMemoryLimitMetric{std::nullopt},
-             .maximum = CgroupMemoryLimitMetric{std::nullopt}},
-            {.high = std::unexpected(error),
-             .maximum = std::unexpected(error),
-             .oom = std::unexpected(error),
-             .oom_kill = std::unexpected(error)},
-            {.anonymous = CgroupByteMetric{0}, .file_backed = CgroupByteMetric{0}},
-            CgroupByteMetric{0},
-            {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}},
-             .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}}}));
+    const DockerContainerMemorySnapshot container{
+        .container_id = *parsed_id,
+        .cgroup_path = "/sys/fs/cgroup/docker/" + id,
+        .memory =
+            {
+                .current_memory = CgroupByteMetric{0},
+                .limits = {.high = CgroupMemoryLimitMetric{std::nullopt},
+                           .maximum = CgroupMemoryLimitMetric{std::nullopt}},
+                .events = {.high = std::unexpected(error),
+                           .maximum = std::unexpected(error),
+                           .oom = std::unexpected(error),
+                           .oom_kill = std::unexpected(error)},
+                .composition = {.anonymous = CgroupByteMetric{0},
+                                .file_backed = CgroupByteMetric{0}},
+                .current_swap = CgroupByteMetric{0},
+                .pressure = {.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}},
+                             .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{}}},
+            },
+    };
 
     const std::string output = format_docker_container_detail(container);
 

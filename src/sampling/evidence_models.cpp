@@ -4,7 +4,7 @@ namespace memoptima::sampling {
 
 DockerContainerEvidence DockerContainerEvidence::create(DockerContainerMemorySnapshot snapshot) {
     const analysis::CgroupMemoryAssessment assessment =
-        analysis::assess_cgroup_memory_snapshot(snapshot.memory());
+        analysis::assess_cgroup_memory_snapshot(snapshot.memory);
     return DockerContainerEvidence{std::move(snapshot), assessment};
 }
 

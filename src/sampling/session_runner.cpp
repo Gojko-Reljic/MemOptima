@@ -154,8 +154,8 @@ run_sampling_session(const SamplingSessionConfiguration &configuration,
 
         DockerContainerScanResult scan_result = dependencies.scan_containers();
         std::vector<DockerContainerEvidence> containers;
-        containers.reserve(scan_result.containers().size());
-        for (const DockerContainerMemorySnapshot &snapshot : scan_result.containers()) {
+        containers.reserve(scan_result.containers.size());
+        for (const DockerContainerMemorySnapshot &snapshot : scan_result.containers) {
             containers.push_back(DockerContainerEvidence::create(snapshot));
         }
 
@@ -168,7 +168,7 @@ run_sampling_session(const SamplingSessionConfiguration &configuration,
         const SamplingEvidenceSample sample = SamplingEvidenceSample::create(
             *sequence, std::chrono::duration_cast<std::chrono::milliseconds>(planned_offset),
             dependencies.current_utc_time(), schedule_delay, std::move(containers),
-            scan_result.skipped_container_count(), scan_result.warnings());
+            scan_result.skipped_container_count, scan_result.warnings);
         const auto sample_record = serialize_sample(sample);
         if (!sample_record.has_value()) {
             return std::unexpected(map_serialization_error(sample_record.error()));

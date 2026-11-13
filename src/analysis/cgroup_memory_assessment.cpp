@@ -97,13 +97,13 @@ CgroupMemoryAssessment::unavailable_evidence() const noexcept {
 }
 
 CgroupMemoryAssessment assess_cgroup_memory_snapshot(const CgroupMemorySnapshot &snapshot) {
-    const CgroupByteMetric &current = snapshot.current_memory();
-    const CgroupMemoryLimitMetric &high = snapshot.limits().high;
-    const CgroupMemoryLimitMetric &maximum = snapshot.limits().maximum;
-    const CgroupEventMetric &high_events = snapshot.events().high;
-    const CgroupEventMetric &maximum_events = snapshot.events().maximum;
-    const CgroupEventMetric &oom_events = snapshot.events().oom;
-    const CgroupEventMetric &oom_kill_events = snapshot.events().oom_kill;
+    const CgroupByteMetric &current = snapshot.current_memory;
+    const CgroupMemoryLimitMetric &high = snapshot.limits.high;
+    const CgroupMemoryLimitMetric &maximum = snapshot.limits.maximum;
+    const CgroupEventMetric &high_events = snapshot.events.high;
+    const CgroupEventMetric &maximum_events = snapshot.events.maximum;
+    const CgroupEventMetric &oom_events = snapshot.events.oom;
+    const CgroupEventMetric &oom_kill_events = snapshot.events.oom_kill;
 
     std::vector<CgroupMetricReadError> unavailable_evidence;
     collect_unavailable_error(current, unavailable_evidence);

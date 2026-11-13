@@ -41,46 +41,4 @@ DockerContainerId::parse(std::string_view value) {
 
 const std::string &DockerContainerId::value() const noexcept { return value_; }
 
-DockerContainerMemorySnapshot
-DockerContainerMemorySnapshot::create(DockerContainerId container_id,
-                                      std::filesystem::path cgroup_path,
-                                      CgroupMemorySnapshot memory) {
-    return DockerContainerMemorySnapshot{std::move(container_id), std::move(cgroup_path),
-                                         std::move(memory)};
-}
-
-const DockerContainerId &DockerContainerMemorySnapshot::container_id() const noexcept {
-    return container_id_;
-}
-
-const std::filesystem::path &DockerContainerMemorySnapshot::cgroup_path() const noexcept {
-    return cgroup_path_;
-}
-
-const CgroupMemorySnapshot &DockerContainerMemorySnapshot::memory() const noexcept {
-    return memory_;
-}
-
-DockerContainerScanResult
-DockerContainerScanResult::create(std::vector<DockerContainerMemorySnapshot> containers,
-                                  std::size_t skipped_container_count,
-                                  std::vector<DockerContainerScanWarning> warnings) {
-    return DockerContainerScanResult{std::move(containers), skipped_container_count,
-                                     std::move(warnings)};
-}
-
-const std::vector<DockerContainerMemorySnapshot> &
-DockerContainerScanResult::containers() const noexcept {
-    return containers_;
-}
-
-std::size_t DockerContainerScanResult::skipped_container_count() const noexcept {
-    return skipped_container_count_;
-}
-
-const std::vector<DockerContainerScanWarning> &
-DockerContainerScanResult::warnings() const noexcept {
-    return warnings_;
-}
-
 } // namespace memoptima

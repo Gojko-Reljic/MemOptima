@@ -81,25 +81,25 @@ void add_unavailable_metric(std::set<UnavailableDataKey> &unavailable_data,
 [[nodiscard]] std::set<UnavailableDataKey>
 collect_unavailable_data(const CgroupMemorySnapshot &memory) {
     std::set<UnavailableDataKey> unavailable_data;
-    add_unavailable_metric(unavailable_data, memory.current_memory());
-    add_unavailable_metric(unavailable_data, memory.limits().high);
-    add_unavailable_metric(unavailable_data, memory.limits().maximum);
-    add_unavailable_metric(unavailable_data, memory.events().high);
-    add_unavailable_metric(unavailable_data, memory.events().maximum);
-    add_unavailable_metric(unavailable_data, memory.events().oom);
-    add_unavailable_metric(unavailable_data, memory.events().oom_kill);
-    add_unavailable_metric(unavailable_data, memory.composition().anonymous);
-    add_unavailable_metric(unavailable_data, memory.composition().file_backed);
-    add_unavailable_metric(unavailable_data, memory.current_swap());
-    add_unavailable_metric(unavailable_data, memory.pressure().some);
-    add_unavailable_metric(unavailable_data, memory.pressure().full);
+    add_unavailable_metric(unavailable_data, memory.current_memory);
+    add_unavailable_metric(unavailable_data, memory.limits.high);
+    add_unavailable_metric(unavailable_data, memory.limits.maximum);
+    add_unavailable_metric(unavailable_data, memory.events.high);
+    add_unavailable_metric(unavailable_data, memory.events.maximum);
+    add_unavailable_metric(unavailable_data, memory.events.oom);
+    add_unavailable_metric(unavailable_data, memory.events.oom_kill);
+    add_unavailable_metric(unavailable_data, memory.composition.anonymous);
+    add_unavailable_metric(unavailable_data, memory.composition.file_backed);
+    add_unavailable_metric(unavailable_data, memory.current_swap);
+    add_unavailable_metric(unavailable_data, memory.pressure.some);
+    add_unavailable_metric(unavailable_data, memory.pressure.full);
     return unavailable_data;
 }
 
 } // namespace
 
 std::string format_docker_container_scan_result(const DockerContainerScanResult &result) {
-    if (result.containers().empty()) {
+    if (result.containers.empty()) {
         return "No supported rootful Docker containers found.\n";
     }
 
@@ -111,21 +111,20 @@ std::string format_docker_container_scan_result(const DockerContainerScanResult 
            << std::setw(kOomKillsColumnWidth) << "OOM KILLS"
            << "PSI SOME AVG10\n";
 
-    for (const DockerContainerMemorySnapshot &container : result.containers()) {
-        const CgroupMemorySnapshot &memory = container.memory();
-        output << std::left << std::setw(kContainerIdColumnWidth)
-               << container.container_id().value() << std::setw(kCurrentMemoryColumnWidth)
-               << format_byte_metric(memory.current_memory()) << std::setw(kMemoryHighColumnWidth)
-               << format_memory_limit(memory.limits().high) << std::setw(kMemoryMaxColumnWidth)
-               << format_memory_limit(memory.limits().maximum) << std::setw(kOomKillsColumnWidth)
-               << format_event_metric(memory.events().oom_kill)
-               << format_psi_some_average_10(memory.pressure()) << '\n';
+    for (const DockerContainerMemorySnapshot &container : result.containers) {
+        const CgroupMemorySnapshot &memory = container.memory;
+        output << std::left << std::setw(kContainerIdColumnWidth) << container.container_id.value()
+               << std::setw(kCurrentMemoryColumnWidth) << format_byte_metric(memory.current_memory)
+               << std::setw(kMemoryHighColumnWidth) << format_memory_limit(memory.limits.high)
+               << std::setw(kMemoryMaxColumnWidth) << format_memory_limit(memory.limits.maximum)
+               << std::setw(kOomKillsColumnWidth) << format_event_metric(memory.events.oom_kill)
+               << format_psi_some_average_10(memory.pressure) << '\n';
     }
     return output.str();
 }
 
 std::string format_docker_container_scan_warnings(const DockerContainerScanResult &result) {
-    return format_docker_container_scan_warnings(result.warnings());
+    return format_docker_container_scan_warnings(result.warnings);
 }
 
 std::string
@@ -139,30 +138,29 @@ format_docker_container_scan_warnings(const std::vector<DockerContainerScanWarni
 }
 
 std::string format_docker_container_detail(const DockerContainerMemorySnapshot &container) {
-    const CgroupMemorySnapshot &memory = container.memory();
+    const CgroupMemorySnapshot &memory = container.memory;
     std::ostringstream output;
     output << "Container\n"
-           << "  ID:                  " << container.container_id().value() << '\n'
-           << "  Cgroup path:         " << container.cgroup_path().string() << "\n\n"
+           << "  ID:                  " << container.container_id.value() << '\n'
+           << "  Cgroup path:         " << container.cgroup_path.string() << "\n\n"
            << "Memory\n"
-           << "  Current:             " << format_byte_metric(memory.current_memory()) << '\n'
-           << "  High:                " << format_memory_limit(memory.limits().high) << '\n'
-           << "  Max:                 " << format_memory_limit(memory.limits().maximum) << "\n\n"
+           << "  Current:             " << format_byte_metric(memory.current_memory) << '\n'
+           << "  High:                " << format_memory_limit(memory.limits.high) << '\n'
+           << "  Max:                 " << format_memory_limit(memory.limits.maximum) << "\n\n"
            << "Events\n"
-           << "  High:                " << format_event_metric(memory.events().high) << '\n'
-           << "  Max:                 " << format_event_metric(memory.events().maximum) << '\n'
-           << "  OOM:                 " << format_event_metric(memory.events().oom) << '\n'
-           << "  OOM kills:           " << format_event_metric(memory.events().oom_kill) << "\n\n"
+           << "  High:                " << format_event_metric(memory.events.high) << '\n'
+           << "  Max:                 " << format_event_metric(memory.events.maximum) << '\n'
+           << "  OOM:                 " << format_event_metric(memory.events.oom) << '\n'
+           << "  OOM kills:           " << format_event_metric(memory.events.oom_kill) << "\n\n"
            << "Composition\n"
-           << "  Anonymous:           " << format_byte_metric(memory.composition().anonymous)
-           << '\n'
-           << "  File-backed:         " << format_byte_metric(memory.composition().file_backed)
+           << "  Anonymous:           " << format_byte_metric(memory.composition.anonymous) << '\n'
+           << "  File-backed:         " << format_byte_metric(memory.composition.file_backed)
            << "\n\n"
            << "Swap\n"
-           << "  Current:             " << format_byte_metric(memory.current_swap()) << "\n\n"
+           << "  Current:             " << format_byte_metric(memory.current_swap) << "\n\n"
            << "Memory pressure\n"
-           << "  Some:                " << format_pressure_line(memory.pressure().some) << '\n'
-           << "  Full:                " << format_pressure_line(memory.pressure().full) << '\n';
+           << "  Some:                " << format_pressure_line(memory.pressure.some) << '\n'
+           << "  Full:                " << format_pressure_line(memory.pressure.full) << '\n';
 
     const std::set<UnavailableDataKey> unavailable_data = collect_unavailable_data(memory);
     if (!unavailable_data.empty()) {

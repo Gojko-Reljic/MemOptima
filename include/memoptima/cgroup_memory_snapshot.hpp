@@ -4,7 +4,6 @@
 #include <expected>
 #include <optional>
 #include <string>
-#include <utility>
 
 namespace memoptima {
 
@@ -62,34 +61,13 @@ struct CgroupMemoryPressure {
     CgroupMetric<CgroupPressureLine> full;
 };
 
-class CgroupMemorySnapshot {
-  public:
-    [[nodiscard]] static CgroupMemorySnapshot
-    create(CgroupByteMetric current_memory, CgroupMemoryLimits limits, CgroupMemoryEvents events,
-           CgroupMemoryComposition composition, CgroupByteMetric current_swap,
-           CgroupMemoryPressure pressure);
-
-    [[nodiscard]] const CgroupByteMetric &current_memory() const noexcept;
-    [[nodiscard]] const CgroupMemoryLimits &limits() const noexcept;
-    [[nodiscard]] const CgroupMemoryEvents &events() const noexcept;
-    [[nodiscard]] const CgroupMemoryComposition &composition() const noexcept;
-    [[nodiscard]] const CgroupByteMetric &current_swap() const noexcept;
-    [[nodiscard]] const CgroupMemoryPressure &pressure() const noexcept;
-
-  private:
-    CgroupMemorySnapshot(CgroupByteMetric current_memory, CgroupMemoryLimits limits,
-                         CgroupMemoryEvents events, CgroupMemoryComposition composition,
-                         CgroupByteMetric current_swap, CgroupMemoryPressure pressure)
-        : current_memory_{std::move(current_memory)}, limits_{std::move(limits)},
-          events_{std::move(events)}, composition_{std::move(composition)},
-          current_swap_{std::move(current_swap)}, pressure_{std::move(pressure)} {}
-
-    CgroupByteMetric current_memory_;
-    CgroupMemoryLimits limits_;
-    CgroupMemoryEvents events_;
-    CgroupMemoryComposition composition_;
-    CgroupByteMetric current_swap_;
-    CgroupMemoryPressure pressure_;
+struct CgroupMemorySnapshot {
+    CgroupByteMetric current_memory;
+    CgroupMemoryLimits limits;
+    CgroupMemoryEvents events;
+    CgroupMemoryComposition composition;
+    CgroupByteMetric current_swap;
+    CgroupMemoryPressure pressure;
 };
 
 } // namespace memoptima

@@ -46,7 +46,7 @@ class SamplingSessionRunnerTest : public testing::Test {
 };
 
 [[nodiscard]] DockerContainerScanResult empty_scan_result() {
-    return DockerContainerScanResult::create({}, 0, {});
+    return {.containers = {}, .skipped_container_count = 0, .warnings = {}};
 }
 
 [[nodiscard]] SamplingSessionConfiguration configuration(const std::filesystem::path &output,

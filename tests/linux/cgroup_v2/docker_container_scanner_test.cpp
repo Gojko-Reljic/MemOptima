@@ -52,10 +52,10 @@ class DockerContainerScannerTest : public testing::Test {
 TEST_F(DockerContainerScannerTest, ReportsMissingStandardLayoutsWithoutFailingTheScan) {
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    EXPECT_TRUE(result.containers().empty());
-    EXPECT_EQ(result.skipped_container_count(), 0U);
-    ASSERT_EQ(result.warnings().size(), 1U);
-    EXPECT_EQ(result.warnings().front().code,
+    EXPECT_TRUE(result.containers.empty());
+    EXPECT_EQ(result.skipped_container_count, 0U);
+    ASSERT_EQ(result.warnings.size(), 1U);
+    EXPECT_EQ(result.warnings.front().code,
               DockerContainerScanWarningCode::docker_cgroup_layout_not_found);
 }
 
@@ -67,12 +67,12 @@ TEST_F(DockerContainerScannerTest, DiscoversAndSortsCgroupfsContainersByIdentifi
 
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    ASSERT_EQ(result.containers().size(), 2U);
-    EXPECT_EQ(result.containers()[0].container_id().value(), earlier_id);
-    EXPECT_EQ(result.containers()[1].container_id().value(), later_id);
-    ASSERT_TRUE(result.containers()[0].memory().current_memory().has_value());
-    EXPECT_EQ(*result.containers()[0].memory().current_memory(), 100U);
-    EXPECT_TRUE(result.warnings().empty());
+    ASSERT_EQ(result.containers.size(), 2U);
+    EXPECT_EQ(result.containers[0].container_id.value(), earlier_id);
+    EXPECT_EQ(result.containers[1].container_id.value(), later_id);
+    ASSERT_TRUE(result.containers[0].memory.current_memory.has_value());
+    EXPECT_EQ(*result.containers[0].memory.current_memory, 100U);
+    EXPECT_TRUE(result.warnings.empty());
 }
 
 TEST_F(DockerContainerScannerTest, DiscoversSystemdContainers) {
@@ -83,9 +83,9 @@ TEST_F(DockerContainerScannerTest, DiscoversSystemdContainers) {
 
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    ASSERT_EQ(result.containers().size(), 1U);
-    EXPECT_EQ(result.containers().front().container_id().value(), id);
-    EXPECT_EQ(result.containers().front().cgroup_path(), root_ / cgroup_path);
+    ASSERT_EQ(result.containers.size(), 1U);
+    EXPECT_EQ(result.containers.front().container_id.value(), id);
+    EXPECT_EQ(result.containers.front().cgroup_path, root_ / cgroup_path);
 }
 
 TEST_F(DockerContainerScannerTest, KeepsSystemdSnapshotWhenAnIdentifierIsDuplicated) {
@@ -97,12 +97,12 @@ TEST_F(DockerContainerScannerTest, KeepsSystemdSnapshotWhenAnIdentifierIsDuplica
 
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    ASSERT_EQ(result.containers().size(), 1U);
-    EXPECT_EQ(result.containers().front().cgroup_path(), root_ / systemd_path);
-    ASSERT_TRUE(result.containers().front().memory().current_memory().has_value());
-    EXPECT_EQ(*result.containers().front().memory().current_memory(), 200U);
-    ASSERT_EQ(result.warnings().size(), 1U);
-    EXPECT_EQ(result.warnings().front().code,
+    ASSERT_EQ(result.containers.size(), 1U);
+    EXPECT_EQ(result.containers.front().cgroup_path, root_ / systemd_path);
+    ASSERT_TRUE(result.containers.front().memory.current_memory.has_value());
+    EXPECT_EQ(*result.containers.front().memory.current_memory, 200U);
+    ASSERT_EQ(result.warnings.size(), 1U);
+    EXPECT_EQ(result.warnings.front().code,
               DockerContainerScanWarningCode::duplicate_container_identifier);
 }
 
@@ -113,11 +113,11 @@ TEST_F(DockerContainerScannerTest, ReportsInvalidContainerIdentifiersAndContinue
 
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    ASSERT_EQ(result.containers().size(), 1U);
-    EXPECT_EQ(result.containers().front().container_id().value(), valid_id);
-    EXPECT_EQ(result.skipped_container_count(), 1U);
-    ASSERT_EQ(result.warnings().size(), 1U);
-    EXPECT_EQ(result.warnings().front().code,
+    ASSERT_EQ(result.containers.size(), 1U);
+    EXPECT_EQ(result.containers.front().container_id.value(), valid_id);
+    EXPECT_EQ(result.skipped_container_count, 1U);
+    ASSERT_EQ(result.warnings.size(), 1U);
+    EXPECT_EQ(result.warnings.front().code,
               DockerContainerScanWarningCode::invalid_container_identifier);
 }
 
@@ -129,10 +129,10 @@ TEST_F(DockerContainerScannerTest, PreservesAContainerWithPartiallyUnavailableMe
 
     const DockerContainerScanResult result = scan_rootful_docker_containers_from_root(root_);
 
-    ASSERT_EQ(result.containers().size(), 1U);
-    EXPECT_TRUE(result.containers().front().memory().current_memory().has_value());
-    EXPECT_FALSE(result.containers().front().memory().pressure().some.has_value());
-    EXPECT_TRUE(result.warnings().empty());
+    ASSERT_EQ(result.containers.size(), 1U);
+    EXPECT_TRUE(result.containers.front().memory.current_memory.has_value());
+    EXPECT_FALSE(result.containers.front().memory.pressure.some.has_value());
+    EXPECT_TRUE(result.warnings.empty());
 }
 
 } // namespace

@@ -75,19 +75,20 @@ read_cgroup_memory_snapshot_from_root(const std::filesystem::path &cgroup_root,
         const CgroupMetricReadError error =
             make_error(CgroupMetricReadErrorCode::invalid_cgroup_path, "cgroup path",
                        "The cgroup path must be relative and cannot contain '..'.");
-        return CgroupMemorySnapshot::create(
-            unavailable_metric<std::uint64_t>(error),
-            {.high = unavailable_metric<std::optional<std::uint64_t>>(error),
-             .maximum = unavailable_metric<std::optional<std::uint64_t>>(error)},
-            {.high = unavailable_metric<std::uint64_t>(error),
-             .maximum = unavailable_metric<std::uint64_t>(error),
-             .oom = unavailable_metric<std::uint64_t>(error),
-             .oom_kill = unavailable_metric<std::uint64_t>(error)},
-            {.anonymous = unavailable_metric<std::uint64_t>(error),
-             .file_backed = unavailable_metric<std::uint64_t>(error)},
-            unavailable_metric<std::uint64_t>(error),
-            {.some = unavailable_metric<CgroupPressureLine>(error),
-             .full = unavailable_metric<CgroupPressureLine>(error)});
+        return {
+            .current_memory = unavailable_metric<std::uint64_t>(error),
+            .limits = {.high = unavailable_metric<std::optional<std::uint64_t>>(error),
+                       .maximum = unavailable_metric<std::optional<std::uint64_t>>(error)},
+            .events = {.high = unavailable_metric<std::uint64_t>(error),
+                       .maximum = unavailable_metric<std::uint64_t>(error),
+                       .oom = unavailable_metric<std::uint64_t>(error),
+                       .oom_kill = unavailable_metric<std::uint64_t>(error)},
+            .composition = {.anonymous = unavailable_metric<std::uint64_t>(error),
+                            .file_backed = unavailable_metric<std::uint64_t>(error)},
+            .current_swap = unavailable_metric<std::uint64_t>(error),
+            .pressure = {.some = unavailable_metric<CgroupPressureLine>(error),
+                         .full = unavailable_metric<CgroupPressureLine>(error)},
+        };
     }
 
     const std::filesystem::path directory = cgroup_root / relative_cgroup_path;
@@ -166,8 +167,14 @@ read_cgroup_memory_snapshot_from_root(const std::filesystem::path &cgroup_root,
             };
         }
     }
-    return CgroupMemorySnapshot::create(current, {.high = high, .maximum = maximum}, event_metrics,
-                                        composition_metrics, swap, pressure_metrics);
+    return {
+        .current_memory = current,
+        .limits = {.high = high, .maximum = maximum},
+        .events = event_metrics,
+        .composition = composition_metrics,
+        .current_swap = swap,
+        .pressure = pressure_metrics,
+    };
 }
 
 } // namespace memoptima::linux::detail

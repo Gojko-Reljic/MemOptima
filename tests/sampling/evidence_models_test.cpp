@@ -14,39 +14,45 @@ namespace {
 [[nodiscard]] DockerContainerMemorySnapshot make_snapshot(std::string id) {
     const auto parsed_id = DockerContainerId::parse(id);
     EXPECT_TRUE(parsed_id.has_value());
-    return DockerContainerMemorySnapshot::create(
-        *parsed_id, "/sys/fs/cgroup/docker/" + id,
-        CgroupMemorySnapshot::create(
-            CgroupByteMetric{512},
-            CgroupMemoryLimits{.high = CgroupMemoryLimitMetric{1024},
-                               .maximum = CgroupMemoryLimitMetric{2048}},
-            CgroupMemoryEvents{.high = CgroupEventMetric{0},
-                               .maximum = CgroupEventMetric{0},
-                               .oom = CgroupEventMetric{0},
-                               .oom_kill = CgroupEventMetric{0}},
-            CgroupMemoryComposition{.anonymous = CgroupByteMetric{256},
-                                    .file_backed = CgroupByteMetric{128}},
-            CgroupByteMetric{0},
-            CgroupMemoryPressure{.some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
-                                     .average_10_seconds = 0.0,
-                                     .average_60_seconds = 0.0,
-                                     .average_300_seconds = 0.0,
-                                     .total_microseconds = 0,
-                                 }},
-                                 .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
-                                     .average_10_seconds = 0.0,
-                                     .average_60_seconds = 0.0,
-                                     .average_300_seconds = 0.0,
-                                     .total_microseconds = 0,
-                                 }}}));
+    return {
+        .container_id = *parsed_id,
+        .cgroup_path = "/sys/fs/cgroup/docker/" + id,
+        .memory =
+            {
+                .current_memory = CgroupByteMetric{512},
+                .limits = CgroupMemoryLimits{.high = CgroupMemoryLimitMetric{1024},
+                                             .maximum = CgroupMemoryLimitMetric{2048}},
+                .events = CgroupMemoryEvents{.high = CgroupEventMetric{0},
+                                             .maximum = CgroupEventMetric{0},
+                                             .oom = CgroupEventMetric{0},
+                                             .oom_kill = CgroupEventMetric{0}},
+                .composition = CgroupMemoryComposition{.anonymous = CgroupByteMetric{256},
+                                                       .file_backed = CgroupByteMetric{128}},
+                .current_swap = CgroupByteMetric{0},
+                .pressure =
+                    CgroupMemoryPressure{
+                        .some = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
+                            .average_10_seconds = 0.0,
+                            .average_60_seconds = 0.0,
+                            .average_300_seconds = 0.0,
+                            .total_microseconds = 0,
+                        }},
+                        .full = CgroupMetric<CgroupPressureLine>{CgroupPressureLine{
+                            .average_10_seconds = 0.0,
+                            .average_60_seconds = 0.0,
+                            .average_300_seconds = 0.0,
+                            .total_microseconds = 0,
+                        }}},
+            },
+    };
 }
 
 TEST(DockerContainerEvidence, PreservesRawSnapshotAndDerivesAssessment) {
     const std::string id(64, 'a');
     const DockerContainerEvidence evidence = DockerContainerEvidence::create(make_snapshot(id));
 
-    EXPECT_EQ(evidence.snapshot().container_id().value(), id);
-    EXPECT_EQ(*evidence.snapshot().memory().current_memory(), 512U);
+    EXPECT_EQ(evidence.snapshot().container_id.value(), id);
+    EXPECT_EQ(*evidence.snapshot().memory.current_memory, 512U);
     EXPECT_EQ(evidence.assessment().overall_risk(), analysis::CgroupMemoryRiskLevel::Low);
     EXPECT_TRUE(evidence.assessment().findings().empty());
 }
@@ -72,7 +78,7 @@ TEST(SamplingEvidenceSample, PreservesTimingContainersAndDiscoveryDiagnostics) {
     EXPECT_EQ(sample.captured_at(), captured_at);
     EXPECT_EQ(sample.schedule_delay(), std::chrono::milliseconds{12});
     ASSERT_EQ(sample.containers().size(), 1U);
-    EXPECT_EQ(sample.containers().front().snapshot().container_id().value(), id);
+    EXPECT_EQ(sample.containers().front().snapshot().container_id.value(), id);
     EXPECT_EQ(sample.skipped_container_count(), 1U);
     ASSERT_EQ(sample.discovery_warnings().size(), 1U);
     EXPECT_EQ(sample.discovery_warnings().front().code,
