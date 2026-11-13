@@ -111,5 +111,16 @@ TEST(EvidenceRecordParser, RejectsPsiAveragesOutsideTheSupportedRange) {
               "$.containers[0].memory.psi.some.average_10_seconds");
 }
 
+TEST(EvidenceRecordParser, RejectsMalformedUnavailableMetricDiagnostics) {
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{"current_bytes":null,"high_bytes":"max","max_bytes":"2","events":{"high":"0","max":"0","oom":"0","oom_kill":"0"},"stat":{"anonymous_bytes":"1","file_backed_bytes":"1"},"swap_current_bytes":"0","psi":{"some":null,"full":null},"unavailable_metrics":[{"code":"file_read_failed","source":"memory.current","detail":1}]},"assessment":{"overall_risk":"low","coverage":"partial","findings":[],"unavailable_evidence":[]}}]})",
+        15);
+
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_TRUE(std::ranges::any_of(invalid.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.containers[0].memory.unavailable_metrics[0].detail";
+    }));
+}
+
 } // namespace
 } // namespace memoptima

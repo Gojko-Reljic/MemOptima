@@ -75,6 +75,20 @@ void metric_or_null(const Json &value, std::string path, std::uint64_t line,
                   "Expected a canonical unsigned decimal string.");
 }
 
+void diagnostic(const Json &value, std::string path, std::uint64_t line,
+                std::vector<EvidenceValidationError> &errors) {
+    if (!value.is_object()) {
+        add_error(errors, line, std::move(path), EvidenceValidationErrorCode::wrong_type,
+                  "Expected a diagnostic object.");
+        return;
+    }
+    exact_keys(value, {"code", "source", "detail"}, line, errors);
+    for (const auto key : {"code", "source", "detail"})
+        if (value.contains(key) && !value.at(key).is_string())
+            add_error(errors, line, path + "." + key, EvidenceValidationErrorCode::wrong_type,
+                      "Expected a string.");
+}
+
 [[nodiscard]] std::unexpected<std::vector<EvidenceValidationError>>
 error(std::uint64_t line_number, std::string path, EvidenceValidationErrorCode code,
       std::string detail) {
@@ -297,6 +311,14 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                                errors);
                         }
                     }
+                    if (memory.contains("unavailable_metrics") &&
+                        memory.at("unavailable_metrics").is_array())
+                        for (std::size_t metric_index{};
+                             metric_index < memory.at("unavailable_metrics").size(); ++metric_index)
+                            diagnostic(memory.at("unavailable_metrics").at(metric_index),
+                                       path + ".memory.unavailable_metrics[" +
+                                           std::to_string(metric_index) + "]",
+                                       line_number, errors);
                 }
                 if (container.contains("assessment") && !container.at("assessment").is_object())
                     add_error(errors, line_number, path + ".assessment",
@@ -322,6 +344,15 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                         add_error(errors, line_number, path + ".assessment.coverage",
                                   EvidenceValidationErrorCode::invalid_value,
                                   "Expected complete or partial coverage.");
+                    if (assessment.contains("unavailable_evidence") &&
+                        assessment.at("unavailable_evidence").is_array())
+                        for (std::size_t evidence_index{};
+                             evidence_index < assessment.at("unavailable_evidence").size();
+                             ++evidence_index)
+                            diagnostic(assessment.at("unavailable_evidence").at(evidence_index),
+                                       path + ".assessment.unavailable_evidence[" +
+                                           std::to_string(evidence_index) + "]",
+                                       line_number, errors);
                 }
             }
     }
