@@ -8,6 +8,7 @@ add_library(memoptima_core STATIC
     docker_container_assessment.cpp
     docker_container_memory_snapshot.cpp
     evidence_input_reader.cpp
+    evidence_record_parser.cpp
     sampling/evidence_models.cpp
     sampling/jsonl_serializer.cpp
     sampling/jsonl_writer.cpp
