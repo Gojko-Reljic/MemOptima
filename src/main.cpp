@@ -2,6 +2,7 @@
 #include <memoptima/analysis/memory_status.hpp>
 #include <memoptima/application_info.hpp>
 #include <memoptima/docker_container_assessment.hpp>
+#include <memoptima/evidence_inspector.hpp>
 #include <memoptima/linux/cgroup_v2_capability_checker.hpp>
 #include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
@@ -46,6 +47,7 @@ void print_help(std::ostream &output) {
            << "  memoptima container <FULL_ID>\n\n"
            << "  memoptima assess containers\n"
            << "  memoptima assess container <FULL_ID>\n"
+           << "  memoptima inspect evidence <FILE>\n"
            << "  memoptima sample containers --count <COUNT> --interval <DURATION> --output "
               "<NEW_FILE>\n\n"
            << "Options:\n"
@@ -53,6 +55,7 @@ void print_help(std::ostream &output) {
            << "  assess           Assess Docker container memory-boundary and OOM signals.\n"
            << "  containers       Display memory information for Docker containers.\n"
            << "  monitor          Continuously display memory status every five seconds.\n"
+           << "  inspect          Validate and summarize a local evidence artifact.\n"
            << "  processes        Display the top memory-consuming processes.\n"
            << "  sample           Collect bounded Docker cgroup memory evidence.\n"
            << "  status           Display current RAM and swap status.\n"
@@ -130,6 +133,35 @@ int run_monitor_command() {
     memoptima::cli::run_monitor(dependencies, std::cout, std::cerr);
     // Restore the process-wide SIGINT behavior after the monitor exits.
     std::signal(SIGINT, previous_signal_handler);
+    return kExitSuccess;
+}
+
+int run_inspect_evidence_command(std::string_view path_text) {
+    const auto summary = memoptima::inspect_evidence_artifact(std::filesystem::path{path_text});
+    if (!summary.has_value()) {
+        std::cerr << "Error: unable to inspect evidence artifact: " << summary.error().detail
+                  << '\n';
+        return kExitRuntimeError;
+    }
+    std::cout << "Evidence artifact\n\n"
+              << "Path: " << summary->artifact_path.string() << '\n'
+              << "Application version: " << summary->application_version << '\n'
+              << "Requested samples: " << summary->requested_sample_count << '\n'
+              << "Completed samples: " << summary->completed_sample_count << '\n'
+              << "Completion: " << (summary->incomplete ? "Incomplete" : summary->terminal_outcome)
+              << '\n'
+              << "Discovery warnings: " << summary->discovery_warning_count << '\n'
+              << "Skipped containers: " << summary->skipped_container_count << "\n\n"
+              << "Containers\n";
+    if (summary->containers.empty())
+        std::cout << "  None\n";
+    for (const auto &container : summary->containers)
+        std::cout << "  " << container.container_id << "  samples=" << container.samples_seen
+                  << " highest_risk=" << container.highest_risk
+                  << " partial_samples=" << container.partial_coverage_samples
+                  << " last=" << container.last_risk << '/' << container.last_coverage << '\n';
+    if (summary->incomplete)
+        std::cout << "\nWarning: Incomplete: terminal session_end record is missing.\n";
     return kExitSuccess;
 }
 
@@ -388,6 +420,10 @@ int run(int argument_count, char *arguments[]) {
         return run_assess_container_command(arguments[3]);
     }
 
+    if (argument_count == 4 && std::string_view{arguments[1]} == "inspect" &&
+        std::string_view{arguments[2]} == "evidence")
+        return run_inspect_evidence_command(arguments[3]);
+
     if (argument_count >= 2 && std::string_view{arguments[1]} == "sample") {
         if (argument_count < 3 || std::string_view{arguments[2]} != "containers") {
             std::cerr << "Error: 'sample' requires 'containers' followed by sampling options.\n\n";
@@ -429,6 +465,12 @@ int run(int argument_count, char *arguments[]) {
 
     if (option == "assess") {
         std::cerr << "Error: 'assess' requires 'containers' or 'container <FULL_ID>'.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    if (option == "inspect") {
+        std::cerr << "Error: 'inspect' requires 'evidence <FILE>'.\n\n";
         print_help(std::cerr);
         return kExitUsageError;
     }
