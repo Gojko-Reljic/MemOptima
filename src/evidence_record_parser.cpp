@@ -411,6 +411,10 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                        path + ".memory.unavailable_metrics[" +
                                            std::to_string(metric_index) + "]",
                                        line_number, errors);
+                    if (memory.contains("unavailable_metrics") &&
+                        !memory.at("unavailable_metrics").is_array())
+                        add_error(errors, line_number, path + ".memory.unavailable_metrics",
+                                  EvidenceValidationErrorCode::wrong_type, "Expected an array.");
                 }
                 if (container.contains("assessment") && !container.at("assessment").is_object())
                     add_error(errors, line_number, path + ".assessment",
@@ -471,6 +475,12 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                     add_error(errors, line_number, finding_path + "." + key,
                                               EvidenceValidationErrorCode::wrong_type,
                                               "Expected a string.");
+                            if (finding.contains("risk") && finding.at("risk").is_string() &&
+                                finding.at("risk") != "low" && finding.at("risk") != "moderate" &&
+                                finding.at("risk") != "high" && finding.at("risk") != "critical")
+                                add_error(errors, line_number, finding_path + ".risk",
+                                          EvidenceValidationErrorCode::invalid_value,
+                                          "Expected a known risk level.");
                             if (finding.contains("evidence") && !finding.at("evidence").is_array())
                                 add_error(errors, line_number, finding_path + ".evidence",
                                           EvidenceValidationErrorCode::wrong_type,
@@ -496,7 +506,12 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                                         add_error(errors, line_number, evidence_path + ".code",
                                                   EvidenceValidationErrorCode::wrong_type,
                                                   "Expected a string.");
-                                    if (evidence.contains("value"))
+                                    if (evidence.contains("value") &&
+                                        evidence.at("value").is_null())
+                                        add_error(errors, line_number, evidence_path + ".value",
+                                                  EvidenceValidationErrorCode::wrong_type,
+                                                  "Expected a decimal string.");
+                                    else if (evidence.contains("value"))
                                         metric_or_null(evidence.at("value"),
                                                        evidence_path + ".value", line_number,
                                                        errors);

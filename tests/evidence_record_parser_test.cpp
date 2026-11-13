@@ -113,6 +113,20 @@ TEST(EvidenceRecordParser, RejectsMalformedWarningsAndFindingEvidence) {
     }));
 }
 
+TEST(EvidenceRecordParser, RejectsWrongNestedCollectionTypes) {
+    const auto invalid = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{"unavailable_metrics":{}},"assessment":{"overall_risk":"low","coverage":"complete","findings":{},"unavailable_evidence":[]}}]})",
+        19);
+
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_TRUE(std::ranges::any_of(invalid.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.containers[0].memory.unavailable_metrics";
+    }));
+    EXPECT_TRUE(std::ranges::any_of(invalid.error(), [](const EvidenceValidationError &error) {
+        return error.json_path == "$.containers[0].assessment.findings";
+    }));
+}
+
 TEST(EvidenceRecordParser, ValidatesTheSampleRecordEnvelope) {
     const auto sample = parse_evidence_record(
         R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[]})",

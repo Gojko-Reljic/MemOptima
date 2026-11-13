@@ -6,8 +6,12 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <charconv>
+#include <limits>
 #include <map>
+#include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace memoptima {
@@ -41,6 +45,12 @@ std::string format_validation_errors(const std::vector<EvidenceValidationError> 
                   error.detail;
     }
     return detail;
+}
+
+bool parse_decimal(std::string_view text, std::uint64_t &value) {
+    const auto [position, conversion_error] =
+        std::from_chars(text.data(), text.data() + text.size(), value);
+    return conversion_error == std::errc{} && position == text.data() + text.size();
 }
 } // namespace
 
@@ -102,16 +112,31 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
                 return std::unexpected(
                     EvidenceInspectionError{"Line " + std::to_string(line_number) +
                                             ": sample sequences must be contiguous."});
+            if (summary.completed_sample_count == summary.requested_sample_count)
+                return std::unexpected(EvidenceInspectionError{
+                    "Line " + std::to_string(line_number) +
+                    ": sample count exceeds the requested sampling contract."});
             ++summary.completed_sample_count;
             const auto captured_at = value.at("captured_at_utc").get<std::string>();
             if (summary.first_capture_at_utc.empty())
                 summary.first_capture_at_utc = captured_at;
             summary.last_capture_at_utc = captured_at;
             summary.discovery_warning_count += value.at("discovery_warnings").size();
-            summary.skipped_container_count +=
-                std::stoull(value.at("skipped_container_count").get<std::string>());
+            std::uint64_t skipped{};
+            if (!parse_decimal(value.at("skipped_container_count").get<std::string>(), skipped) ||
+                skipped >
+                    std::numeric_limits<std::uint64_t>::max() - summary.skipped_container_count)
+                return std::unexpected(EvidenceInspectionError{
+                    "Line " + std::to_string(line_number) +
+                    ": skipped container count cannot be aggregated safely."});
+            summary.skipped_container_count += skipped;
+            std::set<std::string> sample_container_ids;
             for (const auto &container : value.at("containers")) {
                 const auto id = container.at("container_id").get<std::string>();
+                if (!sample_container_ids.insert(id).second)
+                    return std::unexpected(EvidenceInspectionError{
+                        "Line " + std::to_string(line_number) +
+                        ": a container ID occurs more than once in one sample."});
                 const auto risk = container.at("assessment").at("overall_risk").get<std::string>();
                 const auto coverage = container.at("assessment").at("coverage").get<std::string>();
                 auto &aggregate = aggregates[id];
@@ -131,6 +156,11 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
                 return std::unexpected(
                     EvidenceInspectionError{"Line " + std::to_string(line_number) +
                                             ": terminal sample count does not match the records."});
+            if (summary.terminal_outcome == "completed" &&
+                summary.completed_sample_count != summary.requested_sample_count)
+                return std::unexpected(EvidenceInspectionError{
+                    "Line " + std::to_string(line_number) +
+                    ": a completed session must contain every requested sample."});
         }
     }
     if (!validation_errors.empty())

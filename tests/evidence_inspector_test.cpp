@@ -76,5 +76,26 @@ TEST(EvidenceInspector, BoundsValidationDiagnosticsAcrossMultipleLines) {
     std::filesystem::remove(path);
 }
 
+TEST(EvidenceInspector, RejectsCompletedSessionMissingRequestedSamples) {
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("memoptima-incomplete-completed-" + std::to_string(::getpid()) + ".jsonl");
+    {
+        std::ofstream output{path};
+        output
+            << R"({"record_type":"session_start","schema_version":1,"application_version":"0.5.0","started_at_utc":"2026-11-13T12:00:00.000Z","requested_sample_count":2,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})"
+            << '\n';
+        output
+            << R"({"record_type":"session_end","schema_version":1,"outcome":"completed","completed_sample_count":0,"ended_at_utc":"2026-11-13T12:00:00.100Z","failure":null})"
+            << '\n';
+    }
+
+    const auto inspected = inspect_evidence_artifact(path);
+
+    ASSERT_FALSE(inspected.has_value());
+    EXPECT_NE(inspected.error().detail.find("must contain every requested sample"),
+              std::string::npos);
+    std::filesystem::remove(path);
+}
+
 } // namespace
 } // namespace memoptima
