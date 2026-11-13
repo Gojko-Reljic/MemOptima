@@ -6,12 +6,11 @@ namespace memoptima {
 namespace {
 
 TEST(EvidenceRecordParser, ParsesSupportedRootRecords) {
-    const auto parsed =
-        parse_evidence_record(R"({"record_type":"session_start","schema_version":1})", 7);
+    const auto parsed = parse_evidence_record(R"({"record_type":"sample","schema_version":1})", 7);
 
     ASSERT_TRUE(parsed.has_value());
-    EXPECT_EQ(parsed->type, EvidenceRecordType::session_start);
-    EXPECT_EQ(parsed->canonical_json, R"({"record_type":"session_start","schema_version":1})");
+    EXPECT_EQ(parsed->type, EvidenceRecordType::sample);
+    EXPECT_EQ(parsed->canonical_json, R"({"record_type":"sample","schema_version":1})");
 }
 
 TEST(EvidenceRecordParser, ReportsPreciseRootValidationErrors) {
@@ -31,6 +30,36 @@ TEST(EvidenceRecordParser, ReportsPreciseRootValidationErrors) {
               EvidenceValidationErrorCode::unsupported_schema_version);
     EXPECT_EQ(unknown_type.error().front().json_path, "$.record_type");
     EXPECT_EQ(unknown_type.error().front().code, EvidenceValidationErrorCode::invalid_record_type);
+}
+
+TEST(EvidenceRecordParser, ValidatesClosedSessionStartAndSessionEndRecords) {
+    const auto start = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"application_version":"0.4.0","started_at_utc":"2026-11-13T12:00:00.000Z","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})",
+        1);
+    const auto end = parse_evidence_record(
+        R"({"record_type":"session_end","schema_version":1,"outcome":"completed","completed_sample_count":1,"ended_at_utc":"2026-11-13T12:00:00.100Z","failure":null})",
+        2);
+
+    EXPECT_TRUE(start.has_value());
+    EXPECT_TRUE(end.has_value());
+}
+
+TEST(EvidenceRecordParser, RejectsInvalidStartAndEndContracts) {
+    const auto unknown = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"extra":true})", 9);
+    const auto bad_permissions = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"application_version":"0.4.0","started_at_utc":"x","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"1","output_permissions_octal":"0644","flush_after_each_record":true,"host_identifiers_included":false})",
+        10);
+    const auto contradictory_end = parse_evidence_record(
+        R"({"record_type":"session_end","schema_version":1,"outcome":"completed","completed_sample_count":0,"ended_at_utc":"x","failure":{"code":"output_write_failed"}})",
+        11);
+
+    ASSERT_FALSE(unknown.has_value());
+    ASSERT_FALSE(bad_permissions.has_value());
+    ASSERT_FALSE(contradictory_end.has_value());
+    EXPECT_EQ(unknown.error().front().code, EvidenceValidationErrorCode::missing_required_field);
+    EXPECT_EQ(bad_permissions.error().back().json_path, "$.output_permissions_octal");
+    EXPECT_EQ(contradictory_end.error().back().json_path, "$.failure");
 }
 
 } // namespace

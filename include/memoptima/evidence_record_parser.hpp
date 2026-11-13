@@ -19,8 +19,10 @@ enum class EvidenceValidationErrorCode {
     root_not_object,
     missing_required_field,
     wrong_type,
+    unknown_field,
     unsupported_schema_version,
     invalid_record_type,
+    invalid_value,
 };
 
 struct EvidenceValidationError {
