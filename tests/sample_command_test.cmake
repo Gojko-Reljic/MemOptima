@@ -63,4 +63,18 @@ if(start_position EQUAL -1 OR sample_position EQUAL -1 OR end_position EQUAL -1)
     message(FATAL_ERROR "Sampling artifact is missing required JSON Lines records.")
 endif()
 
+execute_process(
+    COMMAND "${MEMOPTIMA_EXECUTABLE}" inspect evidence "${artifact_path}"
+    RESULT_VARIABLE inspect_result
+    OUTPUT_VARIABLE inspect_output
+    ERROR_VARIABLE inspect_error
+)
+if(NOT inspect_result EQUAL 0 OR NOT inspect_error STREQUAL "")
+    message(FATAL_ERROR "Evidence inspection failed: ${inspect_error}")
+endif()
+string(FIND "${inspect_output}" "Completed samples: 1" inspect_position)
+if(inspect_position EQUAL -1)
+    message(FATAL_ERROR "Evidence inspection output is missing its sample summary: ${inspect_output}")
+endif()
+
 file(REMOVE "${artifact_path}")

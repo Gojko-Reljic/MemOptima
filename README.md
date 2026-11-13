@@ -16,6 +16,7 @@ evidence without modifying the system automatically.
 - `memoptima assess containers` summarizes currently observable cgroup memory-boundary and OOM risk for supported rootful Docker containers.
 - `memoptima assess container <FULL_ID>` explains the findings, evidence, and safe recommendations for one supported rootful Docker container.
 - `memoptima sample containers --count <COUNT> --interval <DURATION> --output <NEW_FILE>` creates a bounded local JSONL evidence artifact from repeated Docker cgroup snapshots.
+- `memoptima inspect evidence <FILE>` validates and summarizes a local evidence artifact.
 
 ## Documentation
 
@@ -25,6 +26,7 @@ evidence without modifying the system automatically.
 - [0.2.0 Scope](docs/0.2.0-scope.md) defines the Docker-aware cgroup v2 and PSI observability release.
 - [0.3.0 Scope](docs/0.3.0-scope.md) defines the read-only Docker cgroup memory assessment release.
 - [0.4.0 Scope](docs/0.4.0-scope.md) defines the bounded sampling and retained-evidence release.
+- [0.5.0 Scope](docs/0.5.0-scope.md) defines local evidence inspection and validation.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
 
 ## Requirements

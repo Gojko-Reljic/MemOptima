@@ -41,6 +41,7 @@ foreach(required_file
     "${installed_document_directory}/0.2.0-scope.md"
     "${installed_document_directory}/0.3.0-scope.md"
     "${installed_document_directory}/0.4.0-scope.md"
+    "${installed_document_directory}/0.5.0-scope.md"
     "${installed_document_directory}/evidence-artifact-format.md")
     if(NOT EXISTS "${required_file}")
         message(FATAL_ERROR "Expected installed file is missing: ${required_file}")

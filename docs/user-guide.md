@@ -238,6 +238,17 @@ durations are decimal strings; PSI averages are numbers. `"max"` means an unlimi
 
 See [Evidence Artifact Format](evidence-artifact-format.md) for the complete versioned schema.
 
+### Inspect a retained artifact
+
+```bash
+./build/debug/src/memoptima inspect evidence evidence.jsonl
+```
+
+The reader accepts only an existing regular file that is not a symbolic link. It validates the
+schema version and record lifecycle, then prints a human-readable session and container summary.
+An artifact without `session_end` remains readable but is clearly marked `Incomplete`; it does not
+claim a trend, forecast, diagnosis, health result, recommendation, or action.
+
 ### Privacy, durability, and limits
 
 The artifact does not contain hostname, user name, IP address, machine ID, or a derived host
