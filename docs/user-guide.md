@@ -188,8 +188,8 @@ The feature requires:
 - a readable host memory PSI interface; and
 - rootful Docker Engine using either the `systemd` or `cgroupfs` cgroup v2 layout.
 
-Rootless Docker, cgroup v1, Kubernetes workload discovery, continuous assessment, trend analysis,
-forecasting, and automatic action are not supported by this release.
+Rootless Docker, cgroup v1, Kubernetes workload discovery, continuous assessment, automatic
+recommendations, and automatic action are not supported by this release.
 
 ## Sample Docker container memory evidence
 
@@ -249,6 +249,19 @@ schema version and record lifecycle, then prints a human-readable session and co
 An artifact without `session_end` remains readable but is clearly marked `Incomplete`; it does not
 claim a trend, forecast, diagnosis, health result, recommendation, or action.
 
+### Forecast a retained artifact
+
+```bash
+./build/debug/src/memoptima forecast evidence evidence.jsonl
+```
+
+Forecasting reads the same explicit local artifact and validates it before analysis. A container
+needs at least three observations across ten seconds, continuous presence in every sample, strictly
+increasing capture times, and a stable finite `memory.max`. The estimate is time to that cgroup
+limit based on the latest observed memory and a linear growth trend. It is not an OOM prediction,
+memory-leak diagnosis, health result, recommendation, or action. An unlimited `memory.max` is
+reported as not applicable; incomplete or insufficient evidence receives an explicit reason.
+
 ### Privacy, durability, and limits
 
 The artifact does not contain hostname, user name, IP address, machine ID, or a derived host
@@ -256,8 +269,9 @@ identifier. It necessarily includes full Docker container IDs and cgroup paths t
 observed workload. Each complete record is flushed before the next attempt, but this is not a
 guarantee against abrupt power loss. A missing `session_end` means the artifact is incomplete.
 
-Sampling preserves evidence. It does not yet infer a trend, predict an OOM event, diagnose a leak,
-certify workload health, make an automatic recommendation, or change the host or a workload.
+Sampling preserves evidence for inspection and conservative limit forecasting. It does not predict
+an OOM event, diagnose a leak, certify workload health, make an automatic recommendation, or change
+the host or a workload.
 
 ### Assess all discovered containers
 

@@ -10,8 +10,10 @@ add_executable(memoptima_core_tests
     evidence_input_reader_test.cpp
     evidence_inspector_test.cpp
     evidence_record_parser_test.cpp
+    forecast/evidence_forecast_test.cpp
     forecast/memory_limit_forecast_test.cpp
     cli/containers_formatter_test.cpp
+    cli/forecast_formatter_test.cpp
     cli/formatting_test.cpp
     cli/monitor_runner_test.cpp
     cli/processes_formatter_test.cpp
@@ -120,6 +122,13 @@ add_test(
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
         -P "${PROJECT_SOURCE_DIR}/tests/sample_command_test.cmake"
+)
+
+add_test(
+    NAME MemOptimaCli.Forecast
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/forecast_command_test.cmake"
 )
 
 add_test(

@@ -72,4 +72,15 @@ It necessarily retains Docker container IDs and cgroup paths to identify observe
 
 Every complete record is flushed before the next attempt. This does not promise physical disk
 persistence after abrupt power loss. The artifact retains observations and point-in-time
-assessments; it does not assert a trend, forecast, leak diagnosis, workload health, or action.
+assessments. MemOptima 0.6.0 can derive a conservative estimate of a finite `memory.max` crossing
+only when the artifact provides sufficient continuous evidence; it does not predict an OOM event,
+diagnose a leak, certify workload health, recommend a change, or apply an action.
+
+## Forecast consumers
+
+`memoptima forecast evidence <FILE>` uses the existing schema-1 fields and does not modify the
+artifact. A forecast consumer requires at least three observations over ten seconds of actual UTC
+capture time, one continuously observed container, strictly increasing timestamps, available
+`memory.current`, and a stable finite `memory.max`. A literal `"max"` is a normal unlimited limit
+and makes the memory-limit forecast not applicable. Missing or inconsistent metrics produce an
+explicit unavailable reason rather than a best-effort estimate.

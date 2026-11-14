@@ -5,6 +5,7 @@
 #include <memoptima/application_info.hpp>
 #include <memoptima/docker_container_assessment.hpp>
 #include <memoptima/evidence_inspector.hpp>
+#include <memoptima/forecast/evidence_forecast.hpp>
 #include <memoptima/linux/cgroup_v2_capability_checker.hpp>
 #include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
@@ -14,6 +15,7 @@
 
 #include "assessments_formatter.hpp"
 #include "containers_formatter.hpp"
+#include "forecast_formatter.hpp"
 #include "monitor_runner.hpp"
 #include "processes_formatter.hpp"
 #include "status_formatter.hpp"
@@ -62,6 +64,7 @@ void print_help(std::ostream &output) {
            << "  memoptima assess containers\n"
            << "  memoptima assess container <FULL_ID>\n"
            << "  memoptima inspect evidence <FILE>\n"
+           << "  memoptima forecast evidence <FILE>\n"
            << "  memoptima sample containers --count <COUNT> --interval <DURATION> --output "
               "<NEW_FILE>\n\n"
            << "Options:\n"
@@ -70,6 +73,7 @@ void print_help(std::ostream &output) {
            << "  containers       Display memory information for Docker containers.\n"
            << "  monitor          Continuously display memory status every five seconds.\n"
            << "  inspect          Validate and summarize a local evidence artifact.\n"
+           << "  forecast         Estimate memory.max crossings from a local evidence artifact.\n"
            << "  processes        Display the top memory-consuming processes.\n"
            << "  sample           Collect bounded Docker cgroup memory evidence.\n"
            << "  status           Display current RAM and swap status.\n"
@@ -332,6 +336,22 @@ int run_inspect_command(CommandArguments arguments) {
     return report_expected_at_most_one_option();
 }
 
+int run_forecast_command(CommandArguments arguments) {
+    if (arguments.size() != 2 || arguments.front() != "evidence") {
+        std::cerr << "Error: 'forecast' requires 'evidence <FILE>'.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+    const auto summary = forecast::forecast_evidence_artifact(std::filesystem::path{arguments[1]});
+    if (!summary.has_value()) {
+        std::cerr << "Error: unable to forecast evidence artifact: " << summary.error().detail
+                  << '\n';
+        return kExitRuntimeError;
+    }
+    std::cout << format_evidence_forecast(*summary);
+    return kExitSuccess;
+}
+
 struct SampleContainersArguments {
     sampling::SamplingCount count;
     sampling::SamplingInterval interval;
@@ -468,17 +488,12 @@ int run_version_command(CommandArguments arguments) {
 }
 
 constexpr std::array kCommands{
-    Command{"status", run_status_command},
-    Command{"monitor", run_monitor_command},
-    Command{"processes", run_processes_command},
-    Command{"containers", run_containers_command},
-    Command{"container", run_container_command},
-    Command{"assess", run_assess_command},
-    Command{"inspect", run_inspect_command},
-    Command{"sample", run_sample_command},
-    Command{"-h", run_help_command},
-    Command{"--help", run_help_command},
-    Command{"-v", run_version_command},
+    Command{"status", run_status_command},       Command{"monitor", run_monitor_command},
+    Command{"processes", run_processes_command}, Command{"containers", run_containers_command},
+    Command{"container", run_container_command}, Command{"assess", run_assess_command},
+    Command{"inspect", run_inspect_command},     Command{"forecast", run_forecast_command},
+    Command{"sample", run_sample_command},       Command{"-h", run_help_command},
+    Command{"--help", run_help_command},         Command{"-v", run_version_command},
     Command{"--version", run_version_command},
 };
 

@@ -10,6 +10,7 @@ add_library(memoptima_core STATIC
     evidence_input_reader.cpp
     evidence_inspector.cpp
     evidence_record_parser.cpp
+    forecast/evidence_forecast.cpp
     forecast/memory_limit_forecast.cpp
     sampling/evidence_models.cpp
     sampling/jsonl_serializer.cpp
@@ -54,6 +55,7 @@ set_target_properties(memoptima_core PROPERTIES
 add_library(memoptima_cli_support STATIC
     cli/assessments_formatter.cpp
     cli/containers_formatter.cpp
+    cli/forecast_formatter.cpp
     cli/formatting.cpp
     cli/monitor_runner.cpp
     cli/processes_formatter.cpp

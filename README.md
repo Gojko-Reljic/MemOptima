@@ -17,6 +17,7 @@ evidence without modifying the system automatically.
 - `memoptima assess container <FULL_ID>` explains the findings, evidence, and safe recommendations for one supported rootful Docker container.
 - `memoptima sample containers --count <COUNT> --interval <DURATION> --output <NEW_FILE>` creates a bounded local JSONL evidence artifact from repeated Docker cgroup snapshots.
 - `memoptima inspect evidence <FILE>` validates and summarizes a local evidence artifact.
+- `memoptima forecast evidence <FILE>` estimates a cgroup `memory.max` crossing only from sufficient validated evidence.
 
 ## Documentation
 
@@ -27,6 +28,7 @@ evidence without modifying the system automatically.
 - [0.3.0 Scope](docs/0.3.0-scope.md) defines the read-only Docker cgroup memory assessment release.
 - [0.4.0 Scope](docs/0.4.0-scope.md) defines the bounded sampling and retained-evidence release.
 - [0.5.0 Scope](docs/0.5.0-scope.md) defines local evidence inspection and validation.
+- [0.6.0 Scope](docs/0.6.0-scope.md) defines conservative evidence-based forecasting.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
 
 ## Requirements
@@ -82,6 +84,7 @@ definite or indirect leaks.
 ./build/debug/src/memoptima assess container <FULL_ID>
 ./build/debug/src/memoptima sample containers --count 3 --interval 5s --output evidence.jsonl
 ./build/debug/src/memoptima inspect evidence evidence.jsonl
+./build/debug/src/memoptima forecast evidence evidence.jsonl
 ```
 
 ## Docker container memory
