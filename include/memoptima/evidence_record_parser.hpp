@@ -37,6 +37,7 @@ struct ParsedEvidenceRecord {
     std::string canonical_json;
 };
 
+// Validates one closed-schema JSONL record before inspection aggregates any of its values.
 [[nodiscard]] std::expected<ParsedEvidenceRecord, std::vector<EvidenceValidationError>>
 parse_evidence_record(std::string_view line, std::uint64_t line_number);
 

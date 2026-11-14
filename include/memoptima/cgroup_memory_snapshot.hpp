@@ -25,6 +25,7 @@ struct CgroupMetricReadError {
     std::string detail;
 };
 
+// Every metric is independent: one unreadable cgroup file must not discard the useful metrics.
 template <typename Value> using CgroupMetric = std::expected<Value, CgroupMetricReadError>;
 
 using CgroupUnsignedMetric = CgroupMetric<std::uint64_t>;
@@ -61,6 +62,7 @@ struct CgroupMemoryPressure {
     CgroupMetric<CgroupPressureLine> full;
 };
 
+// Raw cgroup v2 evidence. Analysis deliberately consumes partial snapshots when possible.
 struct CgroupMemorySnapshot {
     CgroupByteMetric current_memory;
     CgroupMemoryLimits limits;

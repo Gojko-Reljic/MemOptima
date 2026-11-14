@@ -16,6 +16,7 @@ struct DockerContainerAssessment {
     analysis::CgroupMemoryAssessment assessment;
 };
 
+// Keeps discovery diagnostics beside assessments so presentation never hides incomplete evidence.
 struct DockerContainerAssessmentScanResult {
     std::vector<DockerContainerAssessment> containers;
     std::size_t skipped_container_count;

@@ -24,6 +24,7 @@ struct DockerContainerIdParseError {
 
 class DockerContainerId {
   public:
+    // Accepts only a full Docker ID and normalizes hexadecimal letters to lowercase.
     [[nodiscard]] static std::expected<DockerContainerId, DockerContainerIdParseError>
     parse(std::string_view value);
 
@@ -55,6 +56,7 @@ struct DockerContainerScanWarning {
     std::string detail;
 };
 
+// A scan can succeed with skipped entries and warnings because cgroups may change concurrently.
 struct DockerContainerScanResult {
     std::vector<DockerContainerMemorySnapshot> containers;
     std::size_t skipped_container_count;

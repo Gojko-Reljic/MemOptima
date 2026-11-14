@@ -13,6 +13,7 @@
 namespace memoptima::sampling {
 namespace {
 
+// Bound interruption latency without replacing the configured sampling cadence.
 constexpr auto kStopCheckInterval = std::chrono::milliseconds{100};
 
 [[nodiscard]] SamplingSessionRunError make_error(SamplingSessionRunErrorCode code,
@@ -123,6 +124,8 @@ run_sampling_session(const SamplingSessionConfiguration &configuration,
         return std::unexpected(map_serialization_error(session_start_record.error()));
     }
 
+    // Reserve terminal-record space from the start so every created artifact can explain its
+    // outcome.
     const auto initial_terminal_record = make_size_limit_terminal_record(0, session_started_at);
     if (!initial_terminal_record.has_value()) {
         return std::unexpected(initial_terminal_record.error());
@@ -136,6 +139,8 @@ run_sampling_session(const SamplingSessionConfiguration &configuration,
 
     std::uint32_t completed_sample_count{};
     while (completed_sample_count < configuration.count.value()) {
+        // Anchor each deadline to session start to avoid accumulating one collection delay per
+        // sample.
         const auto planned_offset = configuration.interval.value() * completed_sample_count;
         const auto deadline = session_started_steady + planned_offset;
         wait_until(dependencies, deadline);
@@ -174,6 +179,7 @@ run_sampling_session(const SamplingSessionConfiguration &configuration,
             return std::unexpected(map_serialization_error(sample_record.error()));
         }
 
+        // Keep enough capacity for a failed terminal record even when this sample fills the budget.
         const auto size_limit_terminal = make_size_limit_terminal_record(
             completed_sample_count, dependencies.current_utc_time());
         if (!size_limit_terminal.has_value()) {

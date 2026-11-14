@@ -160,6 +160,8 @@ constexpr std::uint32_t kSchemaVersion = 1;
 
 template <typename Value>
 [[nodiscard]] Json metric(const CgroupMetric<Value> &value, Json &unavailable_metrics) {
+    // Keep partial observations inspectable: null marks absence while diagnostics preserve its
+    // cause.
     if (value.has_value()) {
         return decimal(*value);
     }

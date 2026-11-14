@@ -43,6 +43,8 @@ namespace {
 
 std::expected<SamplingJsonlWriter, SamplingJsonlWriterError>
 SamplingJsonlWriter::create(const std::filesystem::path &output_path) {
+    // O_EXCL prevents overwriting an existing artifact; the mode deliberately excludes group and
+    // others.
     const int descriptor =
         ::open(output_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
     if (descriptor == -1) {
@@ -125,6 +127,7 @@ SamplingJsonlWriter::write_record(std::string_view record, std::uint64_t reserve
                                      "Unable to flush the JSON Lines output stream."));
     }
 
+    // A record is committed only after its newline and flush both succeed.
     committed_size_bytes_ += record_size;
     return {};
 }

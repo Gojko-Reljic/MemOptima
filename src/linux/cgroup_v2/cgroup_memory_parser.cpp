@@ -84,6 +84,7 @@ parse_cgroup_memory_limit(std::string_view text, std::string_view source_name) {
 std::expected<ParsedCgroupMemoryEvents, CgroupMetricReadError>
 parse_cgroup_memory_events(std::string_view text) {
     constexpr std::string_view source_name{"memory.events"};
+    // Require each signal once; accepting duplicates would make the selected counter ambiguous.
     std::optional<std::uint64_t> high;
     std::optional<std::uint64_t> maximum;
     std::optional<std::uint64_t> oom;

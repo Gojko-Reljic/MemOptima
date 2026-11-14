@@ -23,6 +23,7 @@ void add_error(std::vector<EvidenceValidationError> &errors, std::uint64_t line,
 bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys,
                 std::string_view path, std::uint64_t line,
                 std::vector<EvidenceValidationError> &errors) {
+    // Evidence schemas are closed so a newer or misspelled field cannot be silently ignored.
     for (const auto key : keys)
         if (!value.contains(key))
             add_error(errors, line, std::string{path} + "." + std::string{key},
@@ -69,6 +70,7 @@ bool decimal_string(const Json &value, std::string_view key, std::uint64_t line,
 
 void metric_or_null(const Json &value, std::string path, std::uint64_t line,
                     std::vector<EvidenceValidationError> &errors) {
+    // null is the serialized form of unavailable collection evidence, not a numeric zero.
     if (value.is_null())
         return;
     if (!value.is_string()) {

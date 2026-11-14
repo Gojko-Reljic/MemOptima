@@ -101,6 +101,7 @@ store_once(std::optional<Value> &destination, Value value, std::string_view fiel
 
 [[nodiscard]] std::expected<PsiPressureLine, PsiParseError>
 parse_pressure_line(const std::vector<std::string_view> &fields) {
+    // PSI requires all rolling windows and the cumulative stall time for a complete observation.
     if (fields.size() != 5) {
         return std::unexpected(make_error(PsiParseErrorCode::invalid_format,
                                           "Pressure line must contain a type and four fields."));

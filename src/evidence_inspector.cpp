@@ -87,6 +87,7 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
         ++line_number;
         const auto record = parse_evidence_record(**line, line_number);
         if (!record.has_value()) {
+            // Bound diagnostics so one malformed artifact cannot create unbounded error output.
             for (const auto &error : record.error()) {
                 if (validation_errors.size() == 20)
                     break;
@@ -169,6 +170,8 @@ inspect_evidence_artifact(const std::filesystem::path &path) {
     if (!saw_start)
         return std::unexpected(
             EvidenceInspectionError{"The artifact has no session_start record."});
+    // An interrupted producer may legitimately omit session_end; preserve usable samples as partial
+    // evidence.
     summary.incomplete = !saw_end;
     for (const auto &[id, aggregate] : aggregates)
         summary.containers.push_back({id, aggregate.samples_seen, aggregate.highest_risk,

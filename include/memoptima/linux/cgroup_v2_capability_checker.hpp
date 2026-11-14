@@ -40,6 +40,7 @@ class CgroupV2Environment {
     detect_cgroup_v2_environment();
 };
 
+// Verifies every kernel capability needed by collection before a session creates an artifact.
 [[nodiscard]] std::expected<CgroupV2Environment, CgroupV2CapabilityError>
 detect_cgroup_v2_environment();
 

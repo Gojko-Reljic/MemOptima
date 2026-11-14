@@ -18,6 +18,7 @@ make_error(CgroupMetricReadErrorCode code, std::string_view source_name, std::st
 }
 
 [[nodiscard]] bool is_safe_relative_path(const std::filesystem::path &path) noexcept {
+    // The reader joins this path to the detected cgroup root, so traversal would escape that root.
     if (path.empty() || path.is_absolute()) {
         return false;
     }

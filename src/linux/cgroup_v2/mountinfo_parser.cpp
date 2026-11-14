@@ -44,6 +44,7 @@ namespace {
 
 [[nodiscard]] std::expected<std::string, MountInfoParseError>
 decode_mountinfo_path(std::string_view encoded_path) {
+    // Kernel mountinfo escapes spaces and other bytes as three octal digits, not C-style escapes.
     std::string decoded_path;
     decoded_path.reserve(encoded_path.size());
 
@@ -97,6 +98,7 @@ parse_cgroup_v2_mount_point(std::string_view text) {
                                               "Mount information line has too few fields."));
         }
 
+        // Only the unified hierarchy root is usable; cgroup2 bind mounts are deliberately ignored.
         if (right_fields[0] == "cgroup2" && left_fields[3] == "/") {
             const auto mount_point = decode_mountinfo_path(left_fields[4]);
             if (!mount_point.has_value()) {

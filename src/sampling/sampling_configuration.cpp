@@ -62,6 +62,8 @@ enum class DecimalParseError {
 
 [[nodiscard]] std::expected<std::uint64_t, DecimalParseError>
 parse_canonical_decimal(std::string_view text) noexcept {
+    // from_chars parses efficiently, while this explicit check preserves the CLI's canonical
+    // grammar.
     if (text.empty() || (text.size() > 1 && text.front() == '0')) {
         return std::unexpected(DecimalParseError::invalid_format);
     }
@@ -85,6 +87,8 @@ parse_canonical_decimal(std::string_view text) noexcept {
 
 [[nodiscard]] std::expected<std::chrono::milliseconds, DecimalParseError>
 make_interval(std::uint64_t magnitude, std::uint64_t milliseconds_per_unit) noexcept {
+    // chrono::milliseconds uses a signed representation, so validate before multiplication and
+    // cast.
     if (magnitude > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) /
                         milliseconds_per_unit) {
         return std::unexpected(DecimalParseError::overflow);

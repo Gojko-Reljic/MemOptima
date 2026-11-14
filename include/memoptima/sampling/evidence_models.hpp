@@ -31,6 +31,7 @@ struct SamplingSessionFailure {
 
 class DockerContainerEvidence {
   public:
+    // Stores the raw measurement with the assessment derived from that exact measurement.
     [[nodiscard]] static DockerContainerEvidence create(DockerContainerMemorySnapshot snapshot);
 
     [[nodiscard]] const DockerContainerMemorySnapshot &snapshot() const noexcept;

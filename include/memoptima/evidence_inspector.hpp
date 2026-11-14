@@ -37,6 +37,8 @@ struct EvidenceInspectionError {
     std::string detail;
 };
 
+// Treats the artifact as untrusted local input and returns a summary only after contract
+// validation.
 [[nodiscard]] std::expected<EvidenceInspectionSummary, EvidenceInspectionError>
 inspect_evidence_artifact(const std::filesystem::path &path);
 

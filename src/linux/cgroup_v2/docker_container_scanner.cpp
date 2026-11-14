@@ -48,6 +48,7 @@ const DockerCgroupLocation kDockerCgroupLocations[]{
 
 [[nodiscard]] bool is_higher_priority(DockerCgroupLayout layout,
                                       DockerCgroupLayout other_layout) noexcept {
+    // systemd is Docker's current standard layout; prefer it deterministically when both exist.
     return layout == DockerCgroupLayout::systemd && other_layout == DockerCgroupLayout::cgroupfs;
 }
 

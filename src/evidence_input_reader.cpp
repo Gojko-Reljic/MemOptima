@@ -30,6 +30,7 @@ EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maxim
                                      "The configured line limit cannot be represented."));
     }
 
+    // Do not follow links or block on special files before fstat confirms a regular artifact.
     const int descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
     if (descriptor == -1) {
         const EvidenceInputErrorCode code = errno == ELOOP
@@ -82,6 +83,7 @@ EvidenceInputReader::~EvidenceInputReader() {
 
 std::expected<void, EvidenceInputError>
 EvidenceInputReader::append_segment(std::string &line, const char *begin, std::size_t length) {
+    // Subtract before appending so an oversized untrusted record cannot wrap the size calculation.
     if (length > maximum_line_bytes_ - line.size()) {
         return std::unexpected(error(EvidenceInputErrorCode::line_too_long,
                                      "A JSON Lines record exceeds the configured size limit."));

@@ -47,6 +47,7 @@ class SamplingInterval {
     std::chrono::milliseconds value_;
 };
 
+// Parsers define the stable CLI grammar rather than accepting implementation-specific numerals.
 [[nodiscard]] std::expected<SamplingCount, SamplingConfigurationError>
 parse_sampling_count(std::string_view text);
 [[nodiscard]] std::expected<SamplingInterval, SamplingConfigurationError>
