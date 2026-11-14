@@ -74,6 +74,7 @@ set_target_properties(memoptima_cli_support PROPERTIES
 )
 
 add_executable(memoptima
+    cli/application_runner.cpp
     main.cpp
 )
 
