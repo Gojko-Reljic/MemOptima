@@ -1,6 +1,5 @@
 #include <memoptima/forecast/memory_limit_forecast.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -21,63 +20,59 @@ constexpr auto kMinimumObservationWindow = std::chrono::seconds{10};
 
 } // namespace
 
-MemoryLimitForecast forecast_memory_limit(std::span<const MemoryLimitObservation> observations) {
-    if (observations.size() < kMinimumObservationCount) {
+void MemoryLimitForecastAccumulator::add(const MemoryLimitObservation &observation) {
+    if (!first_captured_at_.has_value()) {
+        first_captured_at_ = observation.captured_at;
+        memory_max_bytes_ = observation.memory_max_bytes;
+    } else {
+        if (observation.captured_at <= *last_captured_at_) {
+            invalid_series_reason_ = MemoryLimitForecastAvailability::non_increasing_timestamps;
+        }
+        if (observation.memory_max_bytes != *memory_max_bytes_) {
+            invalid_series_reason_ = MemoryLimitForecastAvailability::unstable_memory_max;
+        }
+    }
+
+    const auto offset = observation.captured_at - *first_captured_at_;
+    const long double time_seconds =
+        static_cast<long double>(offset.count()) / std::chrono::milliseconds{1}.count() / 1000.0L;
+    sum_time_seconds_ += time_seconds;
+    sum_memory_bytes_ += static_cast<long double>(observation.current_memory_bytes);
+    sum_time_squared_ += time_seconds * time_seconds;
+    sum_time_memory_ += time_seconds * static_cast<long double>(observation.current_memory_bytes);
+    latest_current_memory_bytes_ = observation.current_memory_bytes;
+    last_captured_at_ = observation.captured_at;
+    ++observation_count_;
+}
+
+MemoryLimitForecast MemoryLimitForecastAccumulator::finish() const {
+    if (observation_count_ < kMinimumObservationCount) {
         return unavailable(MemoryLimitForecastAvailability::insufficient_observations);
     }
-
-    const std::uint64_t memory_max = observations.front().memory_max_bytes;
-    for (std::size_t index = 1; index < observations.size(); ++index) {
-        if (observations[index].captured_at <= observations[index - 1].captured_at) {
-            return unavailable(MemoryLimitForecastAvailability::non_increasing_timestamps);
-        }
-        if (observations[index].memory_max_bytes != memory_max) {
-            return unavailable(MemoryLimitForecastAvailability::unstable_memory_max);
-        }
+    if (invalid_series_reason_.has_value()) {
+        return unavailable(*invalid_series_reason_);
     }
 
-    const auto observation_window =
-        observations.back().captured_at - observations.front().captured_at;
+    const auto observation_window = *last_captured_at_ - *first_captured_at_;
     if (observation_window < kMinimumObservationWindow) {
         return unavailable(MemoryLimitForecastAvailability::insufficient_observation_window);
     }
-
-    const MemoryLimitObservation &latest = observations.back();
-    if (latest.current_memory_bytes >= memory_max) {
+    if (latest_current_memory_bytes_ >= *memory_max_bytes_) {
         return unavailable(MemoryLimitForecastAvailability::already_at_or_above_memory_max);
     }
 
-    const auto start = observations.front().captured_at;
-    long double mean_time_seconds{};
-    long double mean_memory_bytes{};
-    for (const MemoryLimitObservation &observation : observations) {
-        const auto offset = observation.captured_at - start;
-        mean_time_seconds += static_cast<long double>(offset.count()) /
-                             std::chrono::milliseconds{1}.count() / 1000.0L;
-        mean_memory_bytes += static_cast<long double>(observation.current_memory_bytes);
-    }
-    mean_time_seconds /= static_cast<long double>(observations.size());
-    mean_memory_bytes /= static_cast<long double>(observations.size());
-
-    long double covariance{};
-    long double time_variance{};
-    for (const MemoryLimitObservation &observation : observations) {
-        const auto offset = observation.captured_at - start;
-        const long double time_seconds = static_cast<long double>(offset.count()) /
-                                         std::chrono::milliseconds{1}.count() / 1000.0L;
-        const long double centered_time = time_seconds - mean_time_seconds;
-        covariance += centered_time * (static_cast<long double>(observation.current_memory_bytes) -
-                                       mean_memory_bytes);
-        time_variance += centered_time * centered_time;
-    }
-
+    const long double count = static_cast<long double>(observation_count_);
+    const long double covariance =
+        sum_time_memory_ - (sum_time_seconds_ * sum_memory_bytes_ / count);
+    const long double time_variance =
+        sum_time_squared_ - (sum_time_seconds_ * sum_time_seconds_ / count);
     const double growth = static_cast<double>(covariance / time_variance);
     if (!std::isfinite(growth) || growth <= 0.0) {
         return unavailable(MemoryLimitForecastAvailability::non_positive_growth, growth);
     }
 
     const long double bytes_remaining =
-        static_cast<long double>(memory_max - latest.current_memory_bytes);
+        static_cast<long double>(*memory_max_bytes_ - latest_current_memory_bytes_);
     const long double milliseconds_to_limit =
         bytes_remaining / static_cast<long double>(growth) * 1000.0L;
     if (!std::isfinite(milliseconds_to_limit) ||
@@ -92,6 +87,14 @@ MemoryLimitForecast forecast_memory_limit(std::span<const MemoryLimitObservation
         .estimated_time_to_memory_max =
             std::chrono::milliseconds{static_cast<std::int64_t>(std::ceil(milliseconds_to_limit))},
     };
+}
+
+MemoryLimitForecast forecast_memory_limit(std::span<const MemoryLimitObservation> observations) {
+    MemoryLimitForecastAccumulator accumulator;
+    for (const MemoryLimitObservation &observation : observations) {
+        accumulator.add(observation);
+    }
+    return accumulator.finish();
 }
 
 } // namespace memoptima::forecast

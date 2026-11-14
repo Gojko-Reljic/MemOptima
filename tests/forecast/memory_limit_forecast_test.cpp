@@ -66,5 +66,18 @@ TEST(MemoryLimitForecast, RefusesAForecastForBoundaryOrNonGrowingMemory) {
     EXPECT_DOUBLE_EQ(*falling_forecast.growth_bytes_per_second, -50.0);
 }
 
+TEST(MemoryLimitForecast, AccumulatesAStreamingSeriesWithoutRetainingObservations) {
+    MemoryLimitForecastAccumulator accumulator;
+    accumulator.add(observation(0, 1'000));
+    accumulator.add(observation(10, 1'500));
+    accumulator.add(observation(20, 2'000));
+
+    const MemoryLimitForecast forecast = accumulator.finish();
+
+    ASSERT_EQ(forecast.availability, MemoryLimitForecastAvailability::available);
+    ASSERT_TRUE(forecast.estimated_time_to_memory_max.has_value());
+    EXPECT_EQ(*forecast.estimated_time_to_memory_max, std::chrono::seconds{20});
+}
+
 } // namespace
 } // namespace memoptima::forecast
