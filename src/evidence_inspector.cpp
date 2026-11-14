@@ -1,30 +1,32 @@
 #include <memoptima/evidence_inspector.hpp>
 
-#include <memoptima/evidence_input_reader.hpp>
-#include <memoptima/evidence_record_parser.hpp>
+#include "evidence_artifact_reader.hpp"
 
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <charconv>
 #include <limits>
 #include <map>
 #include <set>
 #include <string>
 #include <string_view>
-#include <vector>
+#include <utility>
 
 namespace memoptima {
 namespace {
+
 using Json = nlohmann::ordered_json;
 
 int risk_rank(const std::string &risk) {
-    if (risk == "critical")
+    if (risk == "critical") {
         return 3;
-    if (risk == "high")
+    }
+    if (risk == "high") {
         return 2;
-    if (risk == "moderate")
+    }
+    if (risk == "moderate") {
         return 1;
+    }
     return 0;
 }
 
@@ -36,147 +38,116 @@ struct Aggregate {
     std::string last_coverage;
 };
 
-std::string format_validation_errors(const std::vector<EvidenceValidationError> &errors) {
-    std::string detail;
-    for (const auto &error : errors) {
-        if (!detail.empty())
-            detail += '\n';
-        detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path + ": " +
-                  error.detail;
-    }
-    return detail;
-}
-
 bool parse_decimal(std::string_view text, std::uint64_t &value) {
     const auto [position, conversion_error] =
         std::from_chars(text.data(), text.data() + text.size(), value);
     return conversion_error == std::errc{} && position == text.data() + text.size();
 }
+
+class InspectionSink final : public detail::EvidenceArtifactRecordSink {
+  public:
+    explicit InspectionSink(const std::filesystem::path &artifact_path)
+        : summary_{.artifact_path = artifact_path,
+                   .schema_version = 1,
+                   .application_version = {},
+                   .requested_sample_count = 0,
+                   .requested_interval_ms = {},
+                   .completed_sample_count = 0,
+                   .first_capture_at_utc = {},
+                   .last_capture_at_utc = {},
+                   .discovery_warning_count = 0,
+                   .skipped_container_count = 0,
+                   .incomplete = false,
+                   .terminal_outcome = {},
+                   .containers = {}} {}
+
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::EvidenceArtifactRecord &record) override {
+        const Json value = Json::parse(record.canonical_json);
+        if (record.type == EvidenceRecordType::session_start) {
+            summary_.application_version = value.at("application_version").get<std::string>();
+            summary_.requested_sample_count =
+                value.at("requested_sample_count").get<std::uint32_t>();
+            summary_.requested_interval_ms = value.at("requested_interval_ms").get<std::string>();
+            return {};
+        }
+        if (record.type == EvidenceRecordType::session_end) {
+            summary_.terminal_outcome = value.at("outcome").get<std::string>();
+            return {};
+        }
+
+        ++summary_.completed_sample_count;
+        const auto captured_at = value.at("captured_at_utc").get<std::string>();
+        if (summary_.first_capture_at_utc.empty()) {
+            summary_.first_capture_at_utc = captured_at;
+        }
+        summary_.last_capture_at_utc = captured_at;
+        summary_.discovery_warning_count += value.at("discovery_warnings").size();
+
+        std::uint64_t skipped{};
+        if (!parse_decimal(value.at("skipped_container_count").get<std::string>(), skipped) ||
+            skipped >
+                std::numeric_limits<std::uint64_t>::max() - summary_.skipped_container_count) {
+            return failure(record.line_number,
+                           "skipped container count cannot be aggregated safely.");
+        }
+        summary_.skipped_container_count += skipped;
+
+        std::set<std::string> sample_container_ids;
+        for (const auto &container : value.at("containers")) {
+            const auto id = container.at("container_id").get<std::string>();
+            if (!sample_container_ids.insert(id).second) {
+                return failure(record.line_number,
+                               "a container ID occurs more than once in one sample.");
+            }
+            const auto risk = container.at("assessment").at("overall_risk").get<std::string>();
+            const auto coverage = container.at("assessment").at("coverage").get<std::string>();
+            auto &aggregate = aggregates_[id];
+            ++aggregate.samples_seen;
+            if (risk_rank(risk) > risk_rank(aggregate.highest_risk)) {
+                aggregate.highest_risk = risk;
+            }
+            if (coverage == "partial") {
+                ++aggregate.partial_coverage_samples;
+            }
+            aggregate.last_risk = risk;
+            aggregate.last_coverage = coverage;
+        }
+        return {};
+    }
+
+    [[nodiscard]] EvidenceInspectionSummary finish(bool incomplete) {
+        summary_.incomplete = incomplete;
+        for (const auto &[id, aggregate] : aggregates_) {
+            summary_.containers.push_back({id, aggregate.samples_seen, aggregate.highest_risk,
+                                           aggregate.partial_coverage_samples, aggregate.last_risk,
+                                           aggregate.last_coverage});
+        }
+        return std::move(summary_);
+    }
+
+  private:
+    [[nodiscard]] static std::unexpected<detail::EvidenceArtifactTraversalError>
+    failure(std::uint64_t line_number, std::string detail) {
+        return std::unexpected(detail::EvidenceArtifactTraversalError{
+            .detail = "Line " + std::to_string(line_number) + ": " + std::move(detail),
+        });
+    }
+
+    EvidenceInspectionSummary summary_;
+    std::map<std::string, Aggregate> aggregates_;
+};
+
 } // namespace
 
 std::expected<EvidenceInspectionSummary, EvidenceInspectionError>
 inspect_evidence_artifact(const std::filesystem::path &path) {
-    auto input = EvidenceInputReader::open(path);
-    if (!input.has_value())
-        return std::unexpected(EvidenceInspectionError{input.error().detail});
-    EvidenceInspectionSummary summary{.artifact_path = path,
-                                      .schema_version = 1,
-                                      .application_version = {},
-                                      .requested_sample_count = 0,
-                                      .requested_interval_ms = {},
-                                      .completed_sample_count = 0,
-                                      .first_capture_at_utc = {},
-                                      .last_capture_at_utc = {},
-                                      .discovery_warning_count = 0,
-                                      .skipped_container_count = 0,
-                                      .incomplete = false,
-                                      .terminal_outcome = {},
-                                      .containers = {}};
-    std::map<std::string, Aggregate> aggregates;
-    bool saw_start{};
-    bool saw_end{};
-    std::uint32_t expected_sequence = 1;
-    std::uint64_t line_number{};
-    std::vector<EvidenceValidationError> validation_errors;
-    while (true) {
-        const auto line = input->next_line();
-        if (!line.has_value())
-            return std::unexpected(EvidenceInspectionError{line.error().detail});
-        if (!line->has_value())
-            break;
-        ++line_number;
-        const auto record = parse_evidence_record(**line, line_number);
-        if (!record.has_value()) {
-            // Bound diagnostics so one malformed artifact cannot create unbounded error output.
-            for (const auto &error : record.error()) {
-                if (validation_errors.size() == 20)
-                    break;
-                validation_errors.push_back(error);
-            }
-            if (validation_errors.size() == 20)
-                break;
-            continue;
-        }
-        if (saw_end || (!saw_start && record->type != EvidenceRecordType::session_start) ||
-            (saw_start && record->type == EvidenceRecordType::session_start))
-            return std::unexpected(EvidenceInspectionError{"Line " + std::to_string(line_number) +
-                                                           ": invalid record order."});
-        const Json value = Json::parse(record->canonical_json);
-        if (record->type == EvidenceRecordType::session_start) {
-            saw_start = true;
-            summary.application_version = value.at("application_version").get<std::string>();
-            summary.requested_sample_count =
-                value.at("requested_sample_count").get<std::uint32_t>();
-            summary.requested_interval_ms = value.at("requested_interval_ms").get<std::string>();
-        } else if (record->type == EvidenceRecordType::sample) {
-            if (value.at("sample_sequence").get<std::uint32_t>() != expected_sequence++)
-                return std::unexpected(
-                    EvidenceInspectionError{"Line " + std::to_string(line_number) +
-                                            ": sample sequences must be contiguous."});
-            if (summary.completed_sample_count == summary.requested_sample_count)
-                return std::unexpected(EvidenceInspectionError{
-                    "Line " + std::to_string(line_number) +
-                    ": sample count exceeds the requested sampling contract."});
-            ++summary.completed_sample_count;
-            const auto captured_at = value.at("captured_at_utc").get<std::string>();
-            if (summary.first_capture_at_utc.empty())
-                summary.first_capture_at_utc = captured_at;
-            summary.last_capture_at_utc = captured_at;
-            summary.discovery_warning_count += value.at("discovery_warnings").size();
-            std::uint64_t skipped{};
-            if (!parse_decimal(value.at("skipped_container_count").get<std::string>(), skipped) ||
-                skipped >
-                    std::numeric_limits<std::uint64_t>::max() - summary.skipped_container_count)
-                return std::unexpected(EvidenceInspectionError{
-                    "Line " + std::to_string(line_number) +
-                    ": skipped container count cannot be aggregated safely."});
-            summary.skipped_container_count += skipped;
-            std::set<std::string> sample_container_ids;
-            for (const auto &container : value.at("containers")) {
-                const auto id = container.at("container_id").get<std::string>();
-                if (!sample_container_ids.insert(id).second)
-                    return std::unexpected(EvidenceInspectionError{
-                        "Line " + std::to_string(line_number) +
-                        ": a container ID occurs more than once in one sample."});
-                const auto risk = container.at("assessment").at("overall_risk").get<std::string>();
-                const auto coverage = container.at("assessment").at("coverage").get<std::string>();
-                auto &aggregate = aggregates[id];
-                ++aggregate.samples_seen;
-                if (risk_rank(risk) > risk_rank(aggregate.highest_risk))
-                    aggregate.highest_risk = risk;
-                if (coverage == "partial")
-                    ++aggregate.partial_coverage_samples;
-                aggregate.last_risk = risk;
-                aggregate.last_coverage = coverage;
-            }
-        } else {
-            saw_end = true;
-            summary.terminal_outcome = value.at("outcome").get<std::string>();
-            if (value.at("completed_sample_count").get<std::uint32_t>() !=
-                summary.completed_sample_count)
-                return std::unexpected(
-                    EvidenceInspectionError{"Line " + std::to_string(line_number) +
-                                            ": terminal sample count does not match the records."});
-            if (summary.terminal_outcome == "completed" &&
-                summary.completed_sample_count != summary.requested_sample_count)
-                return std::unexpected(EvidenceInspectionError{
-                    "Line " + std::to_string(line_number) +
-                    ": a completed session must contain every requested sample."});
-        }
+    InspectionSink sink{path};
+    const auto traversal = detail::traverse_evidence_artifact(path, sink);
+    if (!traversal.has_value()) {
+        return std::unexpected(EvidenceInspectionError{.detail = traversal.error().detail});
     }
-    if (!validation_errors.empty())
-        return std::unexpected(
-            EvidenceInspectionError{format_validation_errors(validation_errors)});
-    if (!saw_start)
-        return std::unexpected(
-            EvidenceInspectionError{"The artifact has no session_start record."});
-    // An interrupted producer may legitimately omit session_end; preserve usable samples as partial
-    // evidence.
-    summary.incomplete = !saw_end;
-    for (const auto &[id, aggregate] : aggregates)
-        summary.containers.push_back({id, aggregate.samples_seen, aggregate.highest_risk,
-                                      aggregate.partial_coverage_samples, aggregate.last_risk,
-                                      aggregate.last_coverage});
-    return summary;
+    return sink.finish(traversal->incomplete);
 }
+
 } // namespace memoptima
