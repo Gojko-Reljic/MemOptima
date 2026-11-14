@@ -31,6 +31,7 @@ add_executable(memoptima_core_tests
     sampling/sampling_configuration_test.cpp
     sampling/session_runner_test.cpp
     utc_timestamp_test.cpp
+    utc_timestamp_parser_test.cpp
 )
 
 target_include_directories(memoptima_core_tests

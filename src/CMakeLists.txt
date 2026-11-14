@@ -29,6 +29,7 @@ add_library(memoptima_core STATIC
     process_memory_info.cpp
     sampling/sampling_configuration.cpp
     utc_timestamp.cpp
+    utc_timestamp_parser.cpp
 )
 
 target_include_directories(memoptima_core
