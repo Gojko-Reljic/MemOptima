@@ -10,6 +10,7 @@ add_library(memoptima_core STATIC
     evidence_input_reader.cpp
     evidence_inspector.cpp
     evidence_record_parser.cpp
+    forecast/memory_limit_forecast.cpp
     sampling/evidence_models.cpp
     sampling/jsonl_serializer.cpp
     sampling/jsonl_writer.cpp

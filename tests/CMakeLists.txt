@@ -10,6 +10,7 @@ add_executable(memoptima_core_tests
     evidence_input_reader_test.cpp
     evidence_inspector_test.cpp
     evidence_record_parser_test.cpp
+    forecast/memory_limit_forecast_test.cpp
     cli/containers_formatter_test.cpp
     cli/formatting_test.cpp
     cli/monitor_runner_test.cpp
