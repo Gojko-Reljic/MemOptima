@@ -69,13 +69,64 @@ The migration must preserve schema-v1 acceptance, safe input handling, and exist
 Cross-session analysis is local and opt-in. It accepts a manifest that explicitly names the evidence
 artifacts to analyze and must model an observation epoch before comparing container data across
 sessions. An epoch requires an unchanged full Docker container ID and cgroup path. It ends when
-continuity cannot be established, including identity changes, timestamp discontinuity, material limit
-changes, counter resets, or unavailable required metrics.
+continuity cannot be established, including identity changes, non-increasing timestamps, material
+limit changes, counter resets, or unavailable required metrics. Time gaps remain visible quality
+signals: they mark an epoch as sparse and prohibit a time-to-limit estimate, but do not by themselves
+end a strict-identity epoch.
 
-The detailed timestamp, limit-change, counter-reset, and manifest-format rules remain pending owner
+An interval is sparse only when it exceeds twice the larger adjacent declared sampling interval. This
+tolerates expected collection jitter without hiding material unobserved periods.
+
+`memory.current` rate calculations require at least three observations across ten seconds with
+strictly increasing timestamps. A time-to-limit estimate additionally requires continuous quality and
+a stable finite `memory.max`. An unlimited limit does not suppress the current-memory trend.
+Every semantic `memory.max` change closes an observation epoch.
+
+An unavailable `memory.current` closes an epoch because its rate cannot cross an unknown point. An
+unavailable or unlimited `memory.max` preserves the current-memory trend but makes a time-to-limit
+estimate unavailable. No metric is silently skipped.
+
+Overlapping evidence sessions for the same strict container identity are rejected as ambiguous input.
+MemOptima does not deduplicate or choose between concurrent samples without an owner-approved rule.
+
+When a container is absent from a selected session, its absence becomes an explicit observation gap.
+It does not silently imply continuous observation or create a new identity. If the same strict
+identity appears later, the gap contributes to sparse quality under the approved gap rule.
+
+Version 0.7 reports a numeric rate and evidence quality. It does not classify a trend as stable,
+rising, falling, anomalous, or risky before v0.8 evaluation establishes defensible thresholds.
+
+JSON results retain full Docker IDs and cgroup paths for local auditability and reliable downstream
+joins. Human-readable terminal tables abbreviate container IDs only for readability.
+
+The JSON output is one versioned report document containing manifest metadata, a global summary, and
+epoch results. It is bounded by the active-epoch processing limit.
+
+The trend command returns exit code `0` for every valid report, including a report in which no epoch
+has an available rate or time-to-limit estimate. It returns `1` for input or runtime failures and `2`
+for command-usage failures.
+
+The detailed timestamp, limit-change, counter-reset, and manifest-path rules remain pending owner
 approval and must be recorded in `DECISIONS.md` before implementation. v0.7 processing streams its
 inputs and is limited to 128 manifest artifacts and 4,096 active container observation epochs. It
 must return a clear resource-limit result rather than silently truncate a trend.
+
+The manifest is a single versioned JSON document with a closed schema and an explicit artifact list.
+Artifact paths are relative to the manifest directory and cannot escape its directory tree. Detailed
+validation diagnostics remain pending owner approval. The manifest selects artifacts but does not set
+their analytical order: MemOptima sorts them by validated session start time and rejects duplicates.
+It fails closed when any selected artifact is unavailable, unsafe, malformed, or lifecycle-invalid.
+Manifest version 1 is closed and contains only `manifest_version`, `artifacts`, and artifact `path`.
+
+The public cross-session command is `memoptima trend manifest <FILE>`. It writes a human-readable
+table by default and provides JSON when requested through `--format json`.
+
+Each trend result represents one container observation epoch. Global summaries count result statuses
+but never merge separate epochs into a single apparent trend.
+
+Version 0.7 treats `memory.current` as the only primary trend metric. `memory.max` provides finite,
+unlimited, stable, or changed limit context and eligibility; it is not itself a trend. PSI, swap, and
+cache remain retained evidence for later, separately modeled intelligence capabilities.
 
 ## Result contracts
 

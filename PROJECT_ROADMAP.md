@@ -32,6 +32,31 @@ v0.7 adds a local, read-only cross-session trend capability. It will analyze a m
 explicitly names a selected set of evidence artifacts rather than introduce a daemon, a database
 service, or automatic actions.
 
+The manifest is one versioned JSON document with a closed schema and an explicit artifact list.
+Artifact paths are relative to the manifest directory and cannot escape its directory tree.
+MemOptima orders the selected artifacts by validated session start time and rejects duplicates.
+It fails closed when any artifact is unavailable, unsafe, malformed, or lifecycle-invalid.
+Manifest version 1 is closed and contains only `manifest_version`, `artifacts`, and artifact `path`.
+The public command is `memoptima trend manifest <FILE>`, with table output by default and JSON on
+request.
+Each result represents one container observation epoch; global summaries do not merge separate epochs.
+Version 0.7 trends `memory.current`; `memory.max` provides only limit context and eligibility.
+Time gaps remain visible quality signals: they mark a trend as sparse and prohibit a time-to-limit
+estimate, but do not by themselves end a strict-identity epoch.
+An interval is sparse only when it exceeds twice the larger adjacent declared sampling interval.
+`memory.current` rate requires at least three observations across ten seconds; a time-to-limit estimate
+also requires continuous quality and a stable finite `memory.max`.
+Version 0.7 reports numeric rates and evidence quality, not uncalibrated direction labels or risk scores.
+JSON retains full Docker IDs and cgroup paths for local auditability; terminal tables abbreviate IDs.
+JSON output is one versioned report document containing manifest metadata, a summary, and epoch results.
+The trend command returns success for every valid report, including reports with no eligible epochs.
+Every semantic `memory.max` change closes an observation epoch.
+Unavailable `memory.current` closes an epoch; unavailable or unlimited `memory.max` preserves the
+usage trend but prevents a time-to-limit estimate.
+Overlapping evidence sessions for the same strict container identity are rejected as ambiguous input.
+An absent container becomes an explicit observation gap, not a silently continuous period or a new
+identity.
+
 ### Planned outcomes
 
 - Typed internal evidence traversal that preserves schema-v1 compatibility.

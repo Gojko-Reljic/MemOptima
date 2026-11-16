@@ -104,6 +104,220 @@ scope. New entries must include the alternatives considered and their consequenc
 - **Consequence:** The table and JSON formats must represent the same result categories. The JSON
   schema is a public contract requiring documentation and tests before implementation.
 
+## ADR-011: Use a single versioned JSON trend manifest
+
+- **Status:** Approved
+- **Decision:** A cross-session input manifest is one versioned JSON document with a closed schema
+  and an explicit artifact list.
+- **Alternatives considered:** JSON Lines; an untyped text file containing paths.
+- **Reason:** A JSON document supports strict validation, a stable manifest version, and later
+  provenance fields without changing the fundamental input model.
+- **Consequence:** The manifest format, path semantics, and validation diagnostics must be documented
+  and tested as a public contract before implementation.
+
+## ADR-012: Restrict artifact paths to the manifest directory tree
+
+- **Status:** Approved
+- **Decision:** Artifact paths are relative to the manifest directory and may not escape its directory
+  tree through absolute paths or parent traversal.
+- **Alternatives considered:** Allow relative and absolute paths; require absolute paths only.
+- **Reason:** A self-contained trend set is portable, reproducible, and prevents a manifest from
+  selecting arbitrary local files.
+- **Consequence:** Users organize a manifest and its evidence below one directory. Input validation
+  rejects absolute paths and paths that resolve outside that tree.
+
+## ADR-013: Order trend artifacts by validated session start time
+
+- **Status:** Approved
+- **Decision:** The manifest selects artifacts, while MemOptima orders them by validated session
+  start time. Equal timestamps use a stable path order and duplicate artifact references are errors.
+- **Alternatives considered:** Treat manifest order as analytical order; require the user to provide
+  an already chronological list.
+- **Reason:** Analysis must not change because a user manually reordered the same artifact list.
+- **Consequence:** Sorting uses only validated evidence metadata and does not override strict epoch
+  continuity rules.
+
+## ADR-014: Fail closed when a selected artifact cannot be processed
+
+- **Status:** Approved
+- **Decision:** Trend analysis produces no report when any artifact named by the manifest is
+  unavailable, unsafe, malformed, or lifecycle-invalid.
+- **Alternatives considered:** Silently skip invalid artifacts; provide a partial mode immediately.
+- **Reason:** A trend must represent the exact selected evidence set and must not hide an omitted time
+  period behind a seemingly complete result.
+- **Consequence:** Diagnostics identify the offending path and reason. A future partial mode, if
+  approved, must be explicit and visibly mark every affected result as partial.
+
+## ADR-015: Keep manifest version 1 minimal and closed
+
+- **Status:** Approved
+- **Decision:** Manifest version 1 accepts only `manifest_version`, `artifacts`, and artifact `path`.
+- **Alternatives considered:** Optional artifact labels; a free-form metadata object.
+- **Reason:** The manifest selects evidence and should not introduce unvalidated annotations that
+  appear authoritative or affect analysis.
+- **Consequence:** Unknown fields are validation errors. Later metadata requires a separately
+  approved manifest version or a strictly defined contract extension.
+
+## ADR-016: Use the `trend manifest` CLI command
+
+- **Status:** Approved
+- **Decision:** The public v0.7 command is `memoptima trend manifest <FILE>`. It produces a table by
+  default and JSON when requested through `--format json`.
+- **Alternatives considered:** `trends manifest <FILE>`; `analyze trends <FILE>`.
+- **Reason:** The singular command follows the existing `forecast evidence` and `inspect evidence`
+  command style while making the manifest input explicit.
+- **Consequence:** Help text, exit behavior, table output, and JSON output form part of the public
+  CLI contract and require tests.
+
+## ADR-017: Report trends per container observation epoch
+
+- **Status:** Approved
+- **Decision:** Each v0.7 trend result represents exactly one container observation epoch. A global
+  summary counts statuses but does not merge separate epochs.
+- **Alternatives considered:** Aggregate all epochs for one container ID; provide only a global
+  summary.
+- **Reason:** Separate epochs may have gaps, redeployments, or changed conditions that cannot safely
+  be represented as one continuous trend.
+- **Consequence:** Table output may abbreviate IDs for readability, but JSON retains the full Docker
+  ID and epoch context.
+
+## ADR-018: Trend `memory.current` only in v0.7
+
+- **Status:** Approved
+- **Decision:** v0.7 derives trends only from `memory.current`. `memory.max` supplies limit context
+  and eligibility, not a separate trend.
+- **Alternatives considered:** Combine current memory, swap, PSI, and cache in one trend model;
+  combine current memory and PSI.
+- **Reason:** The existing forecast foundation already models current memory. The other signals need
+  distinct aggregation and interpretation rules before they can support reliable conclusions.
+- **Consequence:** PSI, swap, and cache remain retained evidence and are candidates for v0.8
+  intelligence work.
+
+## ADR-019: Represent time gaps as explicit trend-quality signals
+
+- **Status:** Approved
+- **Decision:** A time gap does not by itself end a strict-identity observation epoch. The result
+  records the largest gap, marks the trend as sparse, and prohibits a time-to-limit estimate.
+- **Alternatives considered:** End an epoch at every gap; silently accept gaps as continuous data.
+- **Reason:** Cross-session analysis needs to retain long-term identity while making unobserved
+  intervals explicit and preventing them from supporting an unsafe limit-crossing estimate.
+- **Consequence:** Non-increasing timestamps remain epoch-breaking errors. Table and JSON output must
+  distinguish continuous and sparse quality.
+
+## ADR-020: Derive sparse gaps from adjacent sampling intervals
+
+- **Status:** Approved
+- **Decision:** A gap is sparse only when it exceeds twice the larger declared sampling interval of
+  its adjacent observations.
+- **Alternatives considered:** One fixed duration threshold; mark every artifact boundary as sparse.
+- **Reason:** The threshold follows the evidence collection contract and tolerates expected jitter
+  without masking a material unobserved period.
+- **Consequence:** Trend processing reads the relevant sampling interval from validated evidence and
+  records the largest observed gap for every epoch.
+
+## ADR-021: Reuse v0.6 minimum evidence for current-memory rates
+
+- **Status:** Approved
+- **Decision:** A `memory.current` rate requires at least three observations across at least ten
+  seconds with strictly increasing timestamps. A time-to-limit estimate additionally requires
+  continuous quality and a stable finite `memory.max`.
+- **Alternatives considered:** A new five-observation, sixty-second threshold; requiring a finite
+  limit for every current-memory trend.
+- **Reason:** The existing minimum is tested, and current-memory behavior remains useful even when a
+  container has no finite hard limit.
+- **Consequence:** Sparse or unlimited epochs may report a current-memory trend, but not a
+  time-to-limit estimate.
+
+## ADR-022: Report numeric rates without v0.7 risk classification
+
+- **Status:** Approved
+- **Decision:** v0.7 reports numeric current-memory rates and evidence quality without stable,
+  rising, falling, anomaly, or risk labels.
+- **Alternatives considered:** Direction labels with uncalibrated thresholds; immediate risk scores.
+- **Reason:** Labels and risk scores need empirical calibration and backtesting before they can make
+  reliable claims.
+- **Consequence:** v0.8 evaluation may introduce calibrated classifications with documented evidence
+  and limitations.
+
+## ADR-023: Retain full container identity in JSON trend results
+
+- **Status:** Approved
+- **Decision:** JSON trend results include the full Docker container ID and cgroup path. Terminal
+  tables abbreviate container IDs only for readability.
+- **Alternatives considered:** Redact identifiers everywhere; add an identifier-redaction option in
+  v0.7.
+- **Reason:** Local evidence already contains these identifiers, and full values are necessary for
+  auditability and reliable joins by automation or a future dashboard.
+- **Consequence:** A future sharing/export feature may add explicit redaction as a separately
+  approved public contract.
+
+## ADR-024: Emit one versioned JSON trend report document
+
+- **Status:** Approved
+- **Decision:** JSON output is one versioned report document containing manifest metadata, a global
+  summary, and a bounded array of epoch results.
+- **Alternatives considered:** JSON Lines; an unversioned array of epoch objects.
+- **Reason:** One document keeps report metadata and its results atomically connected and is well
+  suited to the bounded v0.7 analysis size.
+- **Consequence:** The JSON schema must define a `result_version` and be documented and tested as a
+  public output contract.
+
+## ADR-025: Treat valid ineligible reports as successful CLI execution
+
+- **Status:** Approved
+- **Decision:** `trend manifest` returns `0` for every valid report, including one with no eligible
+  epochs; it returns `1` for input or runtime failures and `2` for usage failures.
+- **Alternatives considered:** Return non-zero when no rate is available; assign one exit code per
+  result condition.
+- **Reason:** Evidence ineligibility is a valid, useful diagnostic outcome rather than a command
+  failure.
+- **Consequence:** Scripts can distinguish successful analysis from operational failure without
+  treating sparse or insufficient evidence as an error.
+
+## ADR-026: Close an epoch for every `memory.max` change
+
+- **Status:** Approved
+- **Decision:** Every semantic `memory.max` change closes an observation epoch, including finite-to-
+finite, finite-to-unlimited, and unlimited-to-finite changes.
+- **Alternatives considered:** Ignore limit changes; use an arbitrary percentage threshold.
+- **Reason:** A changed hard memory budget changes the operational meaning of current memory and any
+  limit-crossing estimate.
+- **Consequence:** The same container may appear in multiple epochs within one report, each with its
+  own limit context.
+
+## ADR-027: Handle current-memory and limit availability separately
+
+- **Status:** Approved
+- **Decision:** An unavailable `memory.current` closes an epoch. An unavailable or unlimited
+  `memory.max` preserves the current-memory trend but prevents a time-to-limit estimate.
+- **Alternatives considered:** Close an epoch for every unavailable metric; skip unavailable current
+  memory samples and join the remaining points.
+- **Reason:** The usage rate cannot cross an unknown current-memory point, while a valid usage trend
+  remains informative even without a usable hard-limit context.
+- **Consequence:** Results expose the unavailable limit reason and never silently omit a metric.
+
+## ADR-028: Reject overlapping sessions for one strict identity
+
+- **Status:** Approved
+- **Decision:** A manifest is rejected when selected evidence sessions overlap for the same full
+  Docker container ID and cgroup path.
+- **Alternatives considered:** Deduplicate equal timestamps; merge all concurrent samples.
+- **Reason:** Concurrent evidence can contain duplicate or conflicting measurements, and selecting an
+  authoritative point without an explicit rule would compromise the trend.
+- **Consequence:** Users select a non-overlapping artifact set. MemOptima reports the conflicting
+  sessions rather than producing an ambiguous trend.
+
+## ADR-029: Represent absent containers as explicit observation gaps
+
+- **Status:** Approved
+- **Decision:** An absent container in a selected session is an explicit observation gap. If the same
+  strict identity reappears later, it remains in the epoch and the gap contributes to sparse quality.
+- **Alternatives considered:** End an epoch at every absence; silently ignore absences.
+- **Reason:** A partial scan or a temporary absence is not necessarily a new workload, but it must
+  never appear as uninterrupted observation.
+- **Consequence:** Sparse epochs cannot produce time-to-limit estimates, and output exposes their
+  evidence quality.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
