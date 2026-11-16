@@ -6,8 +6,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <ranges>
 #include <set>
 #include <string>
+#include <system_error>
 #include <utility>
 
 namespace memoptima::trends {
@@ -81,6 +83,49 @@ parse_artifact_path(std::string_view text, const std::filesystem::path &director
         return TrendManifestLoadErrorCode::input_too_large;
     }
     return TrendManifestLoadErrorCode::input_read_failed;
+}
+
+[[nodiscard]] bool is_within_directory(const std::filesystem::path &path,
+                                       const std::filesystem::path &directory) {
+    const std::filesystem::path relative = path.lexically_relative(directory);
+    return !relative.empty() && *relative.begin() != "..";
+}
+
+[[nodiscard]] std::expected<std::filesystem::path, TrendManifestLoadError>
+canonical_manifest_directory(const std::filesystem::path &manifest_path) {
+    std::error_code error;
+    const std::filesystem::path directory = std::filesystem::weakly_canonical(
+        manifest_path.parent_path().empty() ? std::filesystem::path{"."}
+                                            : manifest_path.parent_path(),
+        error);
+    if (error) {
+        return load_error(TrendManifestLoadErrorCode::input_open_failed,
+                          "Unable to resolve the manifest directory: " + error.message());
+    }
+    return directory;
+}
+
+[[nodiscard]] std::expected<void, TrendManifestLoadError>
+validate_artifact_containment(TrendManifest &manifest) {
+    for (std::size_t index{}; index < manifest.artifact_paths.size(); ++index) {
+        std::error_code error;
+        const std::filesystem::path resolved =
+            std::filesystem::weakly_canonical(manifest.artifact_paths[index], error);
+        if (error) {
+            return load_error(
+                TrendManifestLoadErrorCode::parse_failed,
+                "$.artifacts[" + std::to_string(index) +
+                    "].path: Unable to resolve the artifact path: " + error.message());
+        }
+        if (!is_within_directory(resolved, manifest.directory)) {
+            return load_error(TrendManifestLoadErrorCode::parse_failed,
+                              "$.artifacts[" + std::to_string(index) +
+                                  "].path: The artifact path resolves outside the manifest "
+                                  "directory.");
+        }
+        manifest.artifact_paths[index] = resolved;
+    }
+    return {};
 }
 
 } // namespace
@@ -173,6 +218,17 @@ load_trend_manifest(const std::filesystem::path &manifest_path) {
         return load_error(load_error_code(input.error().code), input.error().detail);
     }
 
+    std::error_code size_error;
+    const std::uintmax_t input_size = std::filesystem::file_size(manifest_path, size_error);
+    if (size_error) {
+        return load_error(TrendManifestLoadErrorCode::input_read_failed,
+                          "Unable to determine the manifest size: " + size_error.message());
+    }
+    if (input_size > kTrendManifestMaximumBytes) {
+        return load_error(TrendManifestLoadErrorCode::input_too_large,
+                          "The manifest exceeds the configured size limit.");
+    }
+
     std::string text;
     while (true) {
         const auto line = input->next_line();
@@ -182,23 +238,26 @@ load_trend_manifest(const std::filesystem::path &manifest_path) {
         if (!line->has_value()) {
             break;
         }
-        const std::size_t separator_size = text.empty() ? 0U : 1U;
-        if ((**line).size() > kTrendManifestMaximumBytes - text.size() - separator_size) {
-            return load_error(TrendManifestLoadErrorCode::input_too_large,
-                              "The manifest exceeds the configured size limit.");
-        }
         if (!text.empty()) {
             text.push_back('\n');
         }
         text += **line;
     }
 
-    const auto parsed = parse_trend_manifest(text, manifest_path.parent_path());
+    const auto directory = canonical_manifest_directory(manifest_path);
+    if (!directory.has_value()) {
+        return std::unexpected(directory.error());
+    }
+    auto parsed = parse_trend_manifest(text, *directory);
     if (!parsed.has_value()) {
         return load_error(TrendManifestLoadErrorCode::parse_failed,
                           parsed.error().json_path + ": " + parsed.error().detail);
     }
-    return *parsed;
+    const auto containment = validate_artifact_containment(*parsed);
+    if (!containment.has_value()) {
+        return std::unexpected(containment.error());
+    }
+    return std::move(*parsed);
 }
 
 } // namespace memoptima::trends

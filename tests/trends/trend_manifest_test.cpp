@@ -119,5 +119,78 @@ TEST(TrendManifest, LoaderBoundsTheAggregateManifestSize) {
     EXPECT_FALSE(cleanup_error) << cleanup_error.message();
 }
 
+TEST(TrendManifest, LoaderCountsLeadingBlankLinesTowardTheSizeLimit) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    const auto manifest_path = directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << std::string(kTrendManifestMaximumBytes + 1U, '\n')
+               << R"({"manifest_version":1,"artifacts":[{"path":"artifact.jsonl"}]})";
+    }
+
+    const auto result = load_trend_manifest(manifest_path);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::input_too_large);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
+TEST(TrendManifest, LoaderRejectsDataAfterAnExactlyFullLine) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    const auto manifest_path = directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << std::string(kTrendManifestMaximumBytes, ' ') << '\n';
+    }
+
+    const auto result = load_trend_manifest(manifest_path);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::input_too_large);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
+TEST(TrendManifest, LoaderRejectsArtifactPathEscapingThroughAnIntermediateLink) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto outside = directory.parent_path() / (directory.filename().string() + "-outside");
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    ASSERT_TRUE(std::filesystem::create_directory(outside));
+    std::filesystem::create_directory_symlink(outside, directory / "evidence");
+    const auto manifest_path = directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << R"({"manifest_version":1,"artifacts":[{"path":"evidence/session.jsonl"}]})";
+    }
+
+    const auto result = load_trend_manifest(manifest_path);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::parse_failed);
+    EXPECT_NE(result.error().detail.find("$.artifacts[0].path"), std::string::npos);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+    std::filesystem::remove_all(outside, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
 } // namespace
 } // namespace memoptima::trends

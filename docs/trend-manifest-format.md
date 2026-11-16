@@ -36,7 +36,11 @@ Unknown fields are validation errors. A path cannot be an array, object, number,
 ## Path rules
 
 Paths are interpreted relative to the manifest directory. A path cannot be absolute and cannot escape
-the manifest directory tree through parent traversal or normalization.
+the manifest directory tree through parent traversal, normalization, or a symbolic link in an
+intermediate directory. MemOptima resolves the manifest directory and artifact paths at load time
+before accepting them. This check cannot prevent a later filesystem change after loading; consumers
+that require a strict filesystem race guarantee must open artifacts through a directory descriptor
+with an operating-system containment mechanism.
 
 Each resolved artifact must be a safe regular non-symlink file accepted by MemOptima's evidence input
 reader. The same normalized relative path may occur only once; duplicates are validation errors.
