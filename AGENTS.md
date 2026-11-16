@@ -10,7 +10,6 @@
 
 ## Language
 
-- Communicate with the project owner in Serbian unless the owner requests another language.
 - Keep repository content in English, including source code, comments, documentation, tests, user
   messages, diagnostics, and commit messages.
 
