@@ -318,6 +318,17 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Consequence:** Sparse epochs cannot produce time-to-limit estimates, and output exposes their
   evidence quality.
 
+## ADR-030: Separate safe manifest loading from pure manifest parsing
+
+- **Status:** Approved
+- **Decision:** A filesystem adapter safely loads one manifest file, then a pure parser and validator
+  converts its JSON text and source directory into a typed `TrendManifest` model.
+- **Alternatives considered:** One combined file-reading parser; CLI-owned manifest parsing.
+- **Reason:** Separating I/O from validation keeps the parser independently testable and prevents CLI
+  code from becoming the owner of domain input rules.
+- **Consequence:** The loader and parser have distinct error contracts, while future trend services
+  consume the typed model without reparsing JSON.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

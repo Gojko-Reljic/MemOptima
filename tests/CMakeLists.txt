@@ -33,6 +33,7 @@ add_executable(memoptima_core_tests
     sampling/jsonl_writer_test.cpp
     sampling/sampling_configuration_test.cpp
     sampling/session_runner_test.cpp
+    trends/trend_manifest_test.cpp
     utc_timestamp_test.cpp
     utc_timestamp_parser_test.cpp
 )

@@ -30,6 +30,7 @@ add_library(memoptima_core STATIC
     memory_snapshot.cpp
     process_memory_info.cpp
     sampling/sampling_configuration.cpp
+    trends/trend_manifest.cpp
     utc_timestamp.cpp
     utc_timestamp_parser.cpp
 )
