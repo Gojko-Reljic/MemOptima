@@ -39,5 +39,4 @@
 ## Review
 
 - Every GitHub pull request requires an independent review and owner approval before merging.
-- CodeRabbit review becomes mandatory when the owner connects and explicitly enables it for this
-  repository.
+- CodeRabbit review is mandatory for every GitHub pull request before owner approval and merging.
