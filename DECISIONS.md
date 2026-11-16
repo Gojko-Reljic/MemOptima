@@ -329,6 +329,20 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Consequence:** The loader and parser have distinct error contracts, while future trend services
   consume the typed model without reparsing JSON.
 
+## ADR-031: Preserve physical line-termination metadata for bounded manifest loading
+
+- **Status:** Approved
+- **Decision:** `EvidenceInputReader` exposes whether its most recently returned physical line ended
+  with a newline byte. The trend manifest loader uses this metadata to enforce its aggregate byte
+  limit while reading the already-opened descriptor.
+- **Alternatives considered:** Count every returned line as newline-terminated; depend only on a
+  pathname `file_size` check; replace the existing reader API with a new line-result type.
+- **Reason:** Exact delimiter information prevents a file that grows during reading from bypassing
+  the bounded loader while retaining valid manifests that occupy exactly the configured limit with
+  no final newline.
+- **Consequence:** Existing `next_line()` callers remain source-compatible. Consumers that need
+  physical-byte accounting can use the additional read-only metadata.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

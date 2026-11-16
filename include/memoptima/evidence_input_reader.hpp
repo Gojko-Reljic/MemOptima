@@ -40,6 +40,11 @@ class EvidenceInputReader {
     // Returns the next physical line without its newline, or nullopt when the input reaches EOF.
     [[nodiscard]] std::expected<std::optional<std::string>, EvidenceInputError> next_line();
 
+    // Reports whether the most recently returned line ended with a newline byte.
+    [[nodiscard]] bool last_line_was_terminated() const noexcept {
+        return last_line_was_terminated_;
+    }
+
   private:
     EvidenceInputReader(int descriptor, std::size_t maximum_line_bytes) noexcept
         : descriptor_{descriptor}, maximum_line_bytes_{maximum_line_bytes} {}
@@ -53,6 +58,7 @@ class EvidenceInputReader {
     std::size_t buffer_position_ = 0;
     std::size_t buffer_size_ = 0;
     bool reached_eof_ = false;
+    bool last_line_was_terminated_ = false;
 };
 
 } // namespace memoptima

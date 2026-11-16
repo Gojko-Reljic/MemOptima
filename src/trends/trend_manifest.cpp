@@ -230,6 +230,7 @@ load_trend_manifest(const std::filesystem::path &manifest_path) {
     }
 
     std::string text;
+    std::size_t physical_bytes{};
     while (true) {
         const auto line = input->next_line();
         if (!line.has_value()) {
@@ -238,6 +239,13 @@ load_trend_manifest(const std::filesystem::path &manifest_path) {
         if (!line->has_value()) {
             break;
         }
+        const std::size_t delimiter_bytes = input->last_line_was_terminated() ? 1U : 0U;
+        if (physical_bytes > kTrendManifestMaximumBytes - delimiter_bytes ||
+            (**line).size() > kTrendManifestMaximumBytes - physical_bytes - delimiter_bytes) {
+            return load_error(TrendManifestLoadErrorCode::input_too_large,
+                              "The manifest exceeds the configured size limit.");
+        }
+        physical_bytes += delimiter_bytes + (**line).size();
         if (!text.empty()) {
             text.push_back('\n');
         }
