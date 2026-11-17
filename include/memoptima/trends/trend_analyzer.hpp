@@ -3,8 +3,10 @@
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -141,7 +143,7 @@ class TrendAnalyzer {
 
     [[nodiscard]] std::expected<void, TrendAnalyzerError> end_session(const TrendSessionEnd &end);
 
-    // The lifecycle-only implementation returns an empty analysis after validating events.
+    // Returns epoch metadata. Rate and time-to-limit calculations are deferred.
     [[nodiscard]] std::expected<TrendAnalysis, TrendAnalyzerError> finish();
 
   private:
@@ -152,8 +154,22 @@ class TrendAnalyzer {
         finished,
     };
 
+    struct Epoch {
+        TrendEpochResult result;
+        std::uint64_t last_interval_ms;
+        bool observed_in_session;
+    };
+
+    void start_epoch(const TrendObservation &observation, std::uint32_t index);
+    void append_observation(Epoch &epoch, std::uint64_t current_bytes);
+
     State state_{State::between_sessions};
+    std::uint64_t session_interval_ms_{};
+    TrendTimePoint sample_time_{};
     std::set<TrendContainerIdentity> sample_identities_;
+    std::map<TrendContainerIdentity, std::size_t> latest_epoch_by_identity_;
+    std::vector<Epoch> epochs_;
+    std::size_t active_epoch_count_{};
 };
 
 } // namespace memoptima::trends

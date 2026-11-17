@@ -397,6 +397,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   gap. A gap exceeding twice the larger adjacent declared interval makes the epoch sparse. A
   semantic maximum change closes an epoch. A non-increasing timestamp closes an epoch with an
   explicit continuity-break reason; input order is never sorted or silently repaired.
+  When current memory is available, the observation with the non-increasing timestamp starts the
+  next epoch, even if its maximum has also changed. An incomplete session marks every epoch to
+  which it contributed an observation with available current memory, including epochs closed
+  before the end of the session.
 - **Status precedence:** A time-to-limit result reports one primary status in this order:
   already-at-or-above maximum, unlimited maximum, unavailable maximum, sparse evidence, unavailable
   rate, non-positive growth, duration out of range, then available. Quality and maximum context
@@ -411,6 +415,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   per sample, including observations with unavailable current memory. At capacity, an otherwise valid
   observation returns `duplicate_observation` for an existing identity and `resource_limit_exceeded`
   for a new identity. This bounds the state required for duplicate detection and sample membership.
+  The analyzer accepts up to 4,096 active epochs and 4,096 total epochs, counting both active and
+  closed epochs toward the total. `observe()` rejects an observation that would exceed either
+  bound before changing sample membership or epoch state.
 - **Alternatives considered:** A batch analyzer that owns file I/O; a flat observation-only API;
   endpoint-only rates; optional values without status reasons; sorting non-monotonic evidence.
   For sample membership, relying on the replay adapter alone would leave direct API calls unbounded.
