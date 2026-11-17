@@ -18,6 +18,7 @@ add_library(memoptima_core STATIC
     sampling/jsonl_writer.cpp
     sampling/session_runner.cpp
     trends/evidence_session_catalog.cpp
+    trends/trend_analyzer.cpp
     linux/cgroup_v2/cgroup_v2_capability_checker.cpp
     linux/cgroup_v2/cgroup_memory_parser.cpp
     linux/cgroup_v2/cgroup_memory_reader.cpp
