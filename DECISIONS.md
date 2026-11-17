@@ -373,6 +373,41 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   equivalent behavior is tested. PSI, swap, cache, assessment, and diagnostic details remain outside
   the v0.7 projection.
 
+## ADR-034: Define a session-aware streaming trend analyzer
+
+- **Status:** Approved
+- **Decision:** v0.7 trend analysis is split into a pure, session-aware domain analyzer and an
+  internal replay adapter. The adapter rereads cataloged evidence artifacts through the typed
+  projection and supplies explicit session, sample, observation, and end events. The analyzer has
+  no filesystem, JSON, Docker, or CLI dependency.
+- **Observation model:** Session and sample events provide capture time and declared sampling
+  interval. Every container observation carries a full Docker container ID, cgroup path, optional
+  `memory.current`, and an explicit `memory.max` state: finite, unlimited, or unavailable. Missing
+  current memory closes an epoch; unlimited or unavailable maximum preserves a usage trend but
+  prevents a time-to-limit estimate.
+- **Result model:** Each epoch has explicit evidence quality, rate status, and time-to-limit status.
+  A rate is available only with at least three observations spanning at least ten seconds. It is
+  calculated with ordinary least-squares linear regression across all eligible observations, using
+  time offsets from the first observation. A time-to-limit estimate uses the latest observed current
+  memory and that regression rate, is expressed as whole milliseconds rounded down, and additionally
+  requires continuous evidence, a stable finite maximum, and positive growth. Reaching or exceeding
+  the maximum is reported explicitly, not as a future estimate. Available durations use unsigned
+  64-bit milliseconds; a non-finite or out-of-range duration reports an explicit status instead.
+- **Continuity:** At each sample boundary, a container absent from that sample is an observation
+  gap. A gap exceeding twice the larger adjacent declared interval makes the epoch sparse. A
+  semantic maximum change closes an epoch. A non-increasing timestamp closes an epoch with an
+  explicit continuity-break reason; input order is never sorted or silently repaired.
+- **Status precedence:** A time-to-limit result reports one primary status in this order:
+  already-at-or-above maximum, unlimited maximum, unavailable maximum, sparse evidence, unavailable
+  rate, non-positive growth, duration out of range, then available. Quality and maximum context
+  remain separate result fields, so lower-priority facts are not hidden.
+- **Alternatives considered:** A batch analyzer that owns file I/O; a flat observation-only API;
+  endpoint-only rates; optional values without status reasons; sorting non-monotonic evidence.
+- **Reason:** The design retains bounded streaming behavior while making analytical policy pure,
+  deterministic, testable, explainable, and reusable by the future CLI, JSON report, and dashboard.
+- **Consequence:** The next implementation introduces a public trend-result contract and pure
+  analyzer tests before adding the `trend manifest` application use case or CLI presentation.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
