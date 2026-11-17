@@ -77,7 +77,9 @@ TEST(TrendAnalyzerTest, AcceptsSamplesAcrossCompleteAndIncompleteSessions) {
     EXPECT_EQ(epoch.quality, TrendEvidenceQuality::continuous);
     EXPECT_TRUE(epoch.contains_incomplete_session);
     EXPECT_FALSE(epoch.termination_reason.has_value());
-    EXPECT_FALSE(epoch.current_memory.growth_bytes_per_second.has_value());
+    EXPECT_EQ(epoch.current_memory.rate_status, TrendRateStatus::available);
+    ASSERT_TRUE(epoch.current_memory.growth_bytes_per_second.has_value());
+    EXPECT_DOUBLE_EQ(*epoch.current_memory.growth_bytes_per_second, 0.0);
     EXPECT_FALSE(epoch.time_to_limit.estimated_duration_ms.has_value());
 }
 
@@ -504,6 +506,175 @@ TEST(TrendAnalyzerTest, RejectsTheFirstEpochBeyondTheTotalLimitBeforeChangingSta
     EXPECT_EQ(last.current_memory.last_bytes, 25U);
     EXPECT_EQ(last.maximum_memory.bytes, limit);
     EXPECT_EQ(analysis->summary.incomplete_epoch_count, limit);
+}
+
+TEST(TrendAnalyzerTest, FitsAllObservationsAndReportsFiniteSignedRates) {
+    struct RateCase {
+        std::chrono::milliseconds middle_time;
+        std::array<std::uint64_t, 3> bytes;
+        double expected_rate;
+    };
+    constexpr std::array cases{
+        RateCase{10s, {0, 100, 100}, 5.0},  RateCase{5s, {0, 100, 100}, 50.0 / 13.0},
+        RateCase{10s, {100, 60, 20}, -4.0}, RateCase{10s, {100, 100, 100}, 0.0},
+        RateCase{10s, {0, 0, 1}, 0.05},
+    };
+    for (const auto &rate_case : cases) {
+        SCOPED_TRACE(rate_case.expected_rate);
+        TrendAnalyzer analyzer;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        auto value = observation();
+        value.current_memory_bytes = rate_case.bytes[0];
+        accept_sample(analyzer, start, {value});
+        value.current_memory_bytes = rate_case.bytes[1];
+        accept_sample(analyzer, start + rate_case.middle_time, {value});
+        value.current_memory_bytes = rate_case.bytes[2];
+        accept_sample(analyzer, start + 20s, {value});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &current = analysis->epochs.front().current_memory;
+        EXPECT_EQ(current.rate_status, TrendRateStatus::available);
+        ASSERT_TRUE(current.growth_bytes_per_second.has_value());
+        EXPECT_DOUBLE_EQ(*current.growth_bytes_per_second, rate_case.expected_rate);
+        EXPECT_EQ(analysis->summary.rate_available_epoch_count, 1U);
+    }
+}
+
+TEST(TrendAnalyzerTest, RequiresThreeObservationsBeforeCheckingTheTenSecondWindow) {
+    struct EligibilityCase {
+        bool has_middle_observation;
+        std::chrono::milliseconds window;
+        TrendRateStatus expected_status;
+    };
+    constexpr std::array cases{
+        EligibilityCase{false, 9999ms, TrendRateStatus::insufficient_observations},
+        EligibilityCase{false, 10s, TrendRateStatus::insufficient_observations},
+        EligibilityCase{true, 9999ms, TrendRateStatus::insufficient_duration},
+        EligibilityCase{true, 10s, TrendRateStatus::available},
+    };
+    for (const auto &eligibility : cases) {
+        SCOPED_TRACE(eligibility.window.count());
+        TrendAnalyzer analyzer;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        accept_sample(analyzer, start, {observation()});
+        if (eligibility.has_middle_observation) {
+            accept_sample(analyzer, start + eligibility.window / 2, {observation()});
+        }
+        accept_sample(analyzer, start + eligibility.window, {observation()});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &current = analysis->epochs.front().current_memory;
+        const bool available = eligibility.expected_status == TrendRateStatus::available;
+        EXPECT_EQ(current.rate_status, eligibility.expected_status);
+        EXPECT_EQ(current.growth_bytes_per_second.has_value(), available);
+        EXPECT_EQ(analysis->summary.rate_available_epoch_count, available ? 1U : 0U);
+    }
+}
+
+TEST(TrendAnalyzerTest, PreservesByteSizedGrowthAtLargeTimestampsAndMemoryValues) {
+    const auto start = TrendTimePoint::max() - 20s;
+    constexpr auto maximum_bytes = std::numeric_limits<std::uint64_t>::max();
+    TrendAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session({start, 10'000U}).has_value());
+    auto value = observation();
+    value.maximum_memory = {.kind = TrendMemoryMaximumKind::unlimited};
+    value.current_memory_bytes = maximum_bytes - 2U;
+    accept_sample(analyzer, start, {value});
+    value.current_memory_bytes = maximum_bytes - 1U;
+    accept_sample(analyzer, start + 10s, {value});
+    value.current_memory_bytes = maximum_bytes;
+    accept_sample(analyzer, TrendTimePoint::max(), {value});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 1U);
+    const auto &current = analysis->epochs.front().current_memory;
+    EXPECT_EQ(current.rate_status, TrendRateStatus::available);
+    ASSERT_TRUE(current.growth_bytes_per_second.has_value());
+    EXPECT_DOUBLE_EQ(*current.growth_bytes_per_second, 0.1);
+}
+
+TEST(TrendAnalyzerTest, KeepsRateAvailableForSparseEpochWithUnavailableMaximum) {
+    TrendAnalyzer analyzer;
+    const auto start = session_start.started_at;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    auto value = observation();
+    value.maximum_memory = {.kind = TrendMemoryMaximumKind::unavailable};
+    value.current_memory_bytes = 30U;
+    accept_sample(analyzer, start, {value});
+    value.current_memory_bytes = 60U;
+    accept_sample(analyzer, start + 30s, {value});
+    value.current_memory_bytes = 70U;
+    accept_sample(analyzer, start + 40s, {value});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 1U);
+    const auto &epoch = analysis->epochs.front();
+    EXPECT_EQ(epoch.quality, TrendEvidenceQuality::sparse);
+    EXPECT_EQ(epoch.current_memory.rate_status, TrendRateStatus::available);
+    ASSERT_TRUE(epoch.current_memory.growth_bytes_per_second.has_value());
+    EXPECT_DOUBLE_EQ(*epoch.current_memory.growth_bytes_per_second, 1.0);
+}
+
+TEST(TrendAnalyzerTest, AccumulatesRatesIndependentlyOnBothSidesOfEpochBreaks) {
+    TrendAnalyzer analyzer;
+    const auto start = session_start.started_at;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    auto value = observation();
+    value.current_memory_bytes = 0U;
+    accept_sample(analyzer, start, {value});
+    value.current_memory_bytes = 50U;
+    accept_sample(analyzer, start + 5s, {value});
+    value.current_memory_bytes = 100U;
+    accept_sample(analyzer, start + 10s, {value});
+
+    value.maximum_memory.bytes = 1000U;
+    value.current_memory_bytes = 300U;
+    accept_sample(analyzer, start + 20s, {value});
+    value.current_memory_bytes = 275U;
+    accept_sample(analyzer, start + 25s, {value});
+    value.current_memory_bytes = 250U;
+    accept_sample(analyzer, start + 30s, {value});
+
+    value.current_memory_bytes = std::nullopt;
+    accept_sample(analyzer, start + 40s, {value});
+    value.current_memory_bytes = 99U;
+    accept_sample(analyzer, start + 50s, {value});
+    value.current_memory_bytes = 500U;
+    accept_sample(analyzer, start + 50s, {value});
+    accept_sample(analyzer, start + 55s, {value});
+    accept_sample(analyzer, start + 60s, {value});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 4U);
+    const auto &epochs = analysis->epochs;
+    const std::array<std::optional<double>, 4> expected_rates{10.0, -5.0, std::nullopt, 0.0};
+    for (std::size_t index = 0; index < expected_rates.size(); ++index) {
+        SCOPED_TRACE(index);
+        const auto &current = epochs[index].current_memory;
+        const auto expected = expected_rates[index];
+        EXPECT_EQ(current.rate_status, expected ? TrendRateStatus::available
+                                                : TrendRateStatus::insufficient_observations);
+        ASSERT_EQ(current.growth_bytes_per_second.has_value(), expected.has_value());
+        if (expected) {
+            EXPECT_DOUBLE_EQ(*current.growth_bytes_per_second, *expected);
+        }
+    }
+    EXPECT_EQ(analysis->summary.rate_available_epoch_count, 3U);
+    EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 0U);
 }
 
 } // namespace
