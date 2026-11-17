@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -164,7 +165,7 @@ TEST_F(TrendEvidenceSessionCatalogTest, TypedReaderProjectsValidatedTrendMetrics
     ASSERT_TRUE(traversal.has_value());
     EXPECT_FALSE(traversal->incomplete);
     ASSERT_EQ(sink.starts.size(), 1U);
-    EXPECT_EQ(sink.starts[0].requested_interval, std::chrono::seconds{10});
+    EXPECT_EQ(sink.starts[0].requested_interval_ms, 10'000U);
     ASSERT_EQ(sink.samples.size(), 1U);
     ASSERT_EQ(sink.samples[0].containers.size(), 1U);
     const auto &container = sink.samples[0].containers[0];
@@ -261,6 +262,37 @@ TEST_F(TrendEvidenceSessionCatalogTest, TypedReaderDistinguishesUnlimitedAndUnav
               detail::TypedEvidenceMemoryMaximumKind::unlimited);
     EXPECT_EQ(unavailable_sink.samples[0].containers[0].maximum_memory.kind,
               detail::TypedEvidenceMemoryMaximumKind::unavailable);
+}
+
+TEST_F(TrendEvidenceSessionCatalogTest, TypedReaderPreservesTheMaximumUnsignedInterval) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto path = write_artifact("maximum-interval.jsonl", std::chrono::seconds{0},
+                                     {{snapshot(std::string{id}, "/docker/interval")}}, false);
+    replace_text(path, R"("requested_interval_ms":"10000")",
+                 R"("requested_interval_ms":"18446744073709551615")");
+    CapturingTypedEvidenceSink sink;
+
+    ASSERT_TRUE(detail::traverse_typed_evidence_artifact(path, sink).has_value());
+    ASSERT_EQ(sink.starts.size(), 1U);
+    EXPECT_EQ(sink.starts[0].requested_interval_ms, std::numeric_limits<std::uint64_t>::max());
+}
+
+TEST_F(TrendEvidenceSessionCatalogTest, CatalogPreservesTimestampsBeyondNativeSystemClockRange) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto path = write_artifact("future.jsonl", std::chrono::seconds{0},
+                                     {{snapshot(std::string{id}, "/docker/future")}}, false);
+    replace_text(path, "1970-01-01", "2300-01-01");
+    replace_text(path, "1970-01-01", "2300-01-01");
+    replace_text(path, "1970-01-01", "2300-01-01");
+
+    const auto catalog = load_trend_evidence_catalog(
+        manifest(R"({"manifest_version":1,"artifacts":[{"path":"future.jsonl"}]})"));
+
+    ASSERT_TRUE(catalog.has_value());
+    ASSERT_EQ(catalog->sessions.size(), 1U);
+    EXPECT_EQ(catalog->sessions[0].started_at_utc, "2300-01-01T00:00:00.000Z");
 }
 
 TEST_F(TrendEvidenceSessionCatalogTest, AllowsTheSameContainerIdAtDifferentCgroupPaths) {

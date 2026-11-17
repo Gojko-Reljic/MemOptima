@@ -5,7 +5,6 @@
 #include <nlohmann/json.hpp>
 
 #include <charconv>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -120,17 +119,14 @@ class TypedRecordAdapter final : public EvidenceArtifactRecordSink {
             if (!started_at.has_value()) {
                 return std::unexpected(started_at.error());
             }
-            if (!interval.has_value() ||
-                *interval > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
-                return typed_error(record.line_number,
-                                   "requested_interval_ms cannot be represented safely.");
+            if (!interval.has_value()) {
+                return std::unexpected(interval.error());
             }
             return sink_.consume(TypedEvidenceSessionStart{
                 .line_number = record.line_number,
                 .started_at = *started_at,
                 .requested_sample_count = value.at("requested_sample_count").get<std::uint32_t>(),
-                .requested_interval =
-                    std::chrono::milliseconds{static_cast<std::int64_t>(*interval)},
+                .requested_interval_ms = *interval,
             });
         }
         if (record.type == EvidenceRecordType::sample) {

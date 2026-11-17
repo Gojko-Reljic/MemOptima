@@ -1,8 +1,7 @@
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
-#include <memoptima/utc_timestamp.hpp>
-
 #include "typed_evidence_artifact_reader.hpp"
+#include "utc_timestamp_parser.hpp"
 
 #include <algorithm>
 #include <map>
@@ -22,19 +21,6 @@ catalog_error(TrendEvidenceCatalogErrorCode code, const std::filesystem::path &a
     });
 }
 
-[[nodiscard]] std::expected<std::string, detail::EvidenceArtifactTraversalError>
-format_timestamp(std::chrono::sys_time<std::chrono::milliseconds> value,
-                 std::uint64_t line_number) {
-    const auto formatted = format_utc_timestamp(value, UtcTimestampPrecision::milliseconds);
-    if (!formatted.has_value()) {
-        return std::unexpected(detail::EvidenceArtifactTraversalError{
-            .detail = "Line " + std::to_string(line_number) +
-                      ": typed timestamp cannot be formatted: " + formatted.error().detail,
-        });
-    }
-    return *formatted;
-}
-
 class CatalogSink final : public detail::TypedEvidenceArtifactSink {
   public:
     explicit CatalogSink(const std::filesystem::path &artifact_path)
@@ -42,23 +28,15 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
 
     std::expected<void, detail::EvidenceArtifactTraversalError>
     consume(const detail::TypedEvidenceSessionStart &start) override {
-        const auto started_at = format_timestamp(start.started_at, start.line_number);
-        if (!started_at.has_value()) {
-            return std::unexpected(started_at.error());
-        }
         session_.artifact_path = artifact_path_;
-        session_.started_at_utc = *started_at;
-        session_.requested_interval_ms =
-            static_cast<std::uint64_t>(start.requested_interval.count());
+        session_.started_at_utc = detail::format_canonical_utc_timestamp(start.started_at);
+        session_.requested_interval_ms = start.requested_interval_ms;
         return {};
     }
 
     std::expected<void, detail::EvidenceArtifactTraversalError>
     consume(const detail::TypedEvidenceSample &sample) override {
-        const auto captured_at = format_timestamp(sample.captured_at, sample.line_number);
-        if (!captured_at.has_value()) {
-            return std::unexpected(captured_at.error());
-        }
+        const std::string captured_at = detail::format_canonical_utc_timestamp(sample.captured_at);
         for (const auto &container : sample.containers) {
             TrendContainerIdentity identity{
                 .container_id = container.container_id.value(),
@@ -67,15 +45,15 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
             auto [position, inserted] = windows_.try_emplace(
                 std::move(identity),
                 TrendContainerObservationWindow{.identity = {},
-                                                .first_captured_at_utc = *captured_at,
-                                                .last_captured_at_utc = *captured_at});
+                                                .first_captured_at_utc = captured_at,
+                                                .last_captured_at_utc = captured_at});
             if (inserted) {
                 position->second.identity = position->first;
             } else {
                 position->second.first_captured_at_utc =
-                    std::min(position->second.first_captured_at_utc, *captured_at);
+                    std::min(position->second.first_captured_at_utc, captured_at);
                 position->second.last_captured_at_utc =
-                    std::max(position->second.last_captured_at_utc, *captured_at);
+                    std::max(position->second.last_captured_at_utc, captured_at);
             }
             if (windows_.size() > kTrendEvidenceCatalogMaximumContainerWindows) {
                 return std::unexpected(detail::EvidenceArtifactTraversalError{

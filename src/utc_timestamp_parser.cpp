@@ -2,6 +2,8 @@
 
 #include <charconv>
 #include <cstdint>
+#include <iomanip>
+#include <sstream>
 
 namespace memoptima::detail {
 namespace {
@@ -69,6 +71,20 @@ parse_canonical_utc_timestamp(std::string_view text) {
     return std::chrono::sys_time<std::chrono::milliseconds>{midnight} + std::chrono::hours{*hour} +
            std::chrono::minutes{*minute} + std::chrono::seconds{*second} +
            std::chrono::milliseconds{*millisecond};
+}
+
+std::string format_canonical_utc_timestamp(std::chrono::sys_time<std::chrono::milliseconds> value) {
+    const auto day = std::chrono::floor<std::chrono::days>(value);
+    const std::chrono::year_month_day date{day};
+    const std::chrono::hh_mm_ss time_of_day{value - day};
+    std::ostringstream output;
+    output << std::setfill('0') << std::setw(4) << static_cast<int>(date.year()) << '-'
+           << std::setw(2) << static_cast<unsigned>(date.month()) << '-' << std::setw(2)
+           << static_cast<unsigned>(date.day()) << 'T' << std::setw(2)
+           << time_of_day.hours().count() << ':' << std::setw(2) << time_of_day.minutes().count()
+           << ':' << std::setw(2) << time_of_day.seconds().count() << '.' << std::setw(3)
+           << time_of_day.subseconds().count() << 'Z';
+    return output.str();
 }
 
 } // namespace memoptima::detail

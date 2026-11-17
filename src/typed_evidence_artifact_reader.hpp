@@ -18,7 +18,7 @@ struct TypedEvidenceSessionStart {
     std::uint64_t line_number;
     std::chrono::sys_time<std::chrono::milliseconds> started_at;
     std::uint32_t requested_sample_count;
-    std::chrono::milliseconds requested_interval;
+    std::uint64_t requested_interval_ms;
 };
 
 enum class TypedEvidenceMemoryMaximumKind {
