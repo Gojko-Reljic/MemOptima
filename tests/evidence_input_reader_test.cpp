@@ -54,8 +54,11 @@ TEST_F(EvidenceInputReaderTest, ReadsPhysicalLinesAndFinalUnterminatedLine) {
     ASSERT_TRUE(reader.has_value());
 
     const auto first = reader->next_line();
+    const bool first_was_terminated = reader->last_line_was_terminated();
     const auto second = reader->next_line();
+    const bool second_was_terminated = reader->last_line_was_terminated();
     const auto third = reader->next_line();
+    const bool third_was_terminated = reader->last_line_was_terminated();
     const auto end = reader->next_line();
 
     ASSERT_TRUE(first.has_value());
@@ -65,6 +68,9 @@ TEST_F(EvidenceInputReaderTest, ReadsPhysicalLinesAndFinalUnterminatedLine) {
     EXPECT_EQ(*first, "first");
     EXPECT_EQ(*second, "second");
     EXPECT_EQ(*third, "third");
+    EXPECT_TRUE(first_was_terminated);
+    EXPECT_TRUE(second_was_terminated);
+    EXPECT_FALSE(third_was_terminated);
     EXPECT_FALSE(end->has_value());
 }
 

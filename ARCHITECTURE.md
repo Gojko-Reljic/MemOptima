@@ -118,6 +118,10 @@ their analytical order: MemOptima sorts them by validated session start time and
 It fails closed when any selected artifact is unavailable, unsafe, malformed, or lifecycle-invalid.
 Manifest version 1 is closed and contains only `manifest_version`, `artifacts`, and artifact `path`.
 
+Manifest processing has two layers: a filesystem adapter safely reads one manifest file, then a pure
+parser and validator maps its JSON text and source directory to a typed manifest model. CLI handlers
+depend on the typed model and do not own manifest validation rules.
+
 The public cross-session command is `memoptima trend manifest <FILE>`. It writes a human-readable
 table by default and provides JSON when requested through `--format json`.
 

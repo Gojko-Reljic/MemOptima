@@ -58,7 +58,8 @@ EvidenceInputReader::EvidenceInputReader(EvidenceInputReader &&other) noexcept
     : descriptor_{std::exchange(other.descriptor_, -1)},
       maximum_line_bytes_{other.maximum_line_bytes_}, buffer_{other.buffer_},
       buffer_position_{other.buffer_position_}, buffer_size_{other.buffer_size_},
-      reached_eof_{other.reached_eof_} {}
+      reached_eof_{other.reached_eof_}, last_line_was_terminated_{other.last_line_was_terminated_} {
+}
 
 EvidenceInputReader &EvidenceInputReader::operator=(EvidenceInputReader &&other) noexcept {
     if (this != &other) {
@@ -71,6 +72,7 @@ EvidenceInputReader &EvidenceInputReader::operator=(EvidenceInputReader &&other)
         buffer_position_ = other.buffer_position_;
         buffer_size_ = other.buffer_size_;
         reached_eof_ = other.reached_eof_;
+        last_line_was_terminated_ = other.last_line_was_terminated_;
     }
     return *this;
 }
@@ -109,14 +111,17 @@ std::expected<std::optional<std::string>, EvidenceInputError> EvidenceInputReade
             buffer_position_ += segment_length;
             if (newline != nullptr) {
                 ++buffer_position_;
+                last_line_was_terminated_ = true;
                 return line;
             }
         }
 
         if (reached_eof_) {
             if (line.empty()) {
+                last_line_was_terminated_ = false;
                 return std::optional<std::string>{};
             }
+            last_line_was_terminated_ = false;
             return line;
         }
 
