@@ -1,5 +1,7 @@
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
+#include <memoptima/docker_container_memory_snapshot.hpp>
+
 #include "evidence_artifact_reader.hpp"
 
 #include <nlohmann/json.hpp>
@@ -65,8 +67,16 @@ class CatalogSink final : public detail::EvidenceArtifactRecordSink {
 
         const std::string captured_at = value.at("captured_at_utc").get<std::string>();
         for (const auto &container : value.at("containers")) {
+            const auto container_id =
+                DockerContainerId::parse(container.at("container_id").get<std::string>());
+            if (!container_id.has_value()) {
+                return std::unexpected(detail::EvidenceArtifactTraversalError{
+                    .detail = "Line " + std::to_string(record.line_number) +
+                              ": container_id is invalid: " + container_id.error().detail,
+                });
+            }
             TrendContainerIdentity identity{
-                .container_id = container.at("container_id").get<std::string>(),
+                .container_id = container_id->value(),
                 .cgroup_path = container.at("cgroup_path").get<std::string>(),
             };
             auto [position, inserted] = windows_.try_emplace(

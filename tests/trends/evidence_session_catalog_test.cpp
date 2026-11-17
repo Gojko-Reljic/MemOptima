@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -106,6 +107,21 @@ class TrendEvidenceSessionCatalogTest : public testing::Test {
         return *parsed;
     }
 
+    void replace_container_id(const std::filesystem::path &path, std::string_view original,
+                              std::string_view replacement) const {
+        std::ifstream input{path};
+        ASSERT_TRUE(input.is_open());
+        std::string content{std::istreambuf_iterator<char>{input},
+                            std::istreambuf_iterator<char>{}};
+        const auto position = content.find(original);
+        ASSERT_NE(position, std::string::npos);
+        content.replace(position, original.size(), replacement);
+
+        std::ofstream output{path, std::ios::trunc};
+        ASSERT_TRUE(output.is_open());
+        output << content;
+    }
+
     std::filesystem::path directory_;
 };
 
@@ -148,6 +164,27 @@ TEST_F(TrendEvidenceSessionCatalogTest, RejectsOverlappingStrictContainerIdentit
     ASSERT_FALSE(catalog.has_value());
     EXPECT_EQ(catalog.error().code, TrendEvidenceCatalogErrorCode::ambiguous_session_overlap);
     EXPECT_EQ(catalog.error().artifact_path.filename(), "second.jsonl");
+}
+
+TEST_F(TrendEvidenceSessionCatalogTest, RejectsOverlappingIdentityRegardlessOfIdLetterCase) {
+    constexpr std::string_view lowercase_id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    constexpr std::string_view uppercase_id{
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"};
+    write_artifact("first.jsonl", std::chrono::seconds{0},
+                   {{snapshot(std::string{lowercase_id}, "/docker/shared")},
+                    {snapshot(std::string{lowercase_id}, "/docker/shared")}},
+                   false);
+    const auto second =
+        write_artifact("second.jsonl", std::chrono::seconds{5},
+                       {{snapshot(std::string{lowercase_id}, "/docker/shared")}}, false);
+    replace_container_id(second, lowercase_id, uppercase_id);
+
+    const auto catalog = load_trend_evidence_catalog(manifest(
+        R"({"manifest_version":1,"artifacts":[{"path":"first.jsonl"},{"path":"second.jsonl"}]})"));
+
+    ASSERT_FALSE(catalog.has_value());
+    EXPECT_EQ(catalog.error().code, TrendEvidenceCatalogErrorCode::ambiguous_session_overlap);
 }
 
 TEST_F(TrendEvidenceSessionCatalogTest, AllowsTheSameContainerIdAtDifferentCgroupPaths) {
