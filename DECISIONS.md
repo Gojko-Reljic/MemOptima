@@ -391,15 +391,16 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   time offsets from the first observation. A time-to-limit estimate uses the latest observed current
   memory and that regression rate, is expressed as whole milliseconds rounded down, and additionally
   requires continuous evidence, a stable finite maximum, and positive growth. Reaching or exceeding
-  the maximum is reported explicitly, not as a future estimate.
+  the maximum is reported explicitly, not as a future estimate. Available durations use unsigned
+  64-bit milliseconds; a non-finite or out-of-range duration reports an explicit status instead.
 - **Continuity:** At each sample boundary, a container absent from that sample is an observation
   gap. A gap exceeding twice the larger adjacent declared interval makes the epoch sparse. A
   semantic maximum change closes an epoch. A non-increasing timestamp closes an epoch with an
   explicit continuity-break reason; input order is never sorted or silently repaired.
 - **Status precedence:** A time-to-limit result reports one primary status in this order:
   already-at-or-above maximum, unlimited maximum, unavailable maximum, sparse evidence, unavailable
-  rate, non-positive growth, then available. Quality and maximum context remain separate result
-  fields, so lower-priority facts are not hidden.
+  rate, non-positive growth, duration out of range, then available. Quality and maximum context
+  remain separate result fields, so lower-priority facts are not hidden.
 - **Alternatives considered:** A batch analyzer that owns file I/O; a flat observation-only API;
   endpoint-only rates; optional values without status reasons; sorting non-monotonic evidence.
 - **Reason:** The design retains bounded streaming behavior while making analytical policy pure,
