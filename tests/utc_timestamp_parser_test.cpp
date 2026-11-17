@@ -3,9 +3,17 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <locale>
 
 namespace memoptima::detail {
 namespace {
+
+class GroupingNumberPunctuation final : public std::numpunct<char> {
+  protected:
+    [[nodiscard]] char do_thousands_sep() const override { return ','; }
+
+    [[nodiscard]] std::string do_grouping() const override { return "\3"; }
+};
 
 TEST(UtcTimestampParser, ParsesEpochAndPreEpochValuesInUtc) {
     const auto epoch = parse_canonical_utc_timestamp("1970-01-01T00:00:00.000Z");
@@ -33,6 +41,16 @@ TEST(UtcTimestampParser, RejectsNonCanonicalAndInvalidCalendarValues) {
                                         "2024-01-01T24:00:00.000Z", "2024-01-01T00:00:00.000+00"}) {
         EXPECT_FALSE(parse_canonical_utc_timestamp(text).has_value()) << text;
     }
+}
+
+TEST(UtcTimestampParser, FormatsCanonicalValuesIndependentlyOfTheGlobalLocale) {
+    const auto timestamp = parse_canonical_utc_timestamp("2300-01-02T03:04:05.006Z");
+    ASSERT_TRUE(timestamp.has_value());
+
+    const std::locale original =
+        std::locale::global(std::locale{std::locale::classic(), new GroupingNumberPunctuation});
+    EXPECT_EQ(format_canonical_utc_timestamp(*timestamp), "2300-01-02T03:04:05.006Z");
+    std::locale::global(original);
 }
 
 } // namespace

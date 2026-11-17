@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cstdint>
 #include <iomanip>
+#include <locale>
 #include <sstream>
 
 namespace memoptima::detail {
@@ -78,6 +79,9 @@ std::string format_canonical_utc_timestamp(std::chrono::sys_time<std::chrono::mi
     const std::chrono::year_month_day date{day};
     const std::chrono::hh_mm_ss time_of_day{value - day};
     std::ostringstream output;
+    // Evidence timestamps are a schema contract, so their digits must not inherit user locale
+    // rules.
+    output.imbue(std::locale::classic());
     output << std::setfill('0') << std::setw(4) << static_cast<int>(date.year()) << '-'
            << std::setw(2) << static_cast<unsigned>(date.month()) << '-' << std::setw(2)
            << static_cast<unsigned>(date.day()) << 'T' << std::setw(2)
