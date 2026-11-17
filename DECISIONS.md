@@ -407,9 +407,13 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   returns one bounded and deterministically sorted `TrendAnalysis` from `finish()`. Event-order,
   duplicate-observation, noncanonical-metric, and resource-limit failures are errors; valid but
   ineligible evidence remains a result with explicit status fields. An analyzer instance is single
-  use after a successful `finish()`.
+  use after a successful `finish()`. The analyzer accepts up to 4,096 distinct strict identities
+  per sample, including observations with unavailable current memory. At capacity, an otherwise valid
+  observation returns `duplicate_observation` for an existing identity and `resource_limit_exceeded`
+  for a new identity. This bounds the state required for duplicate detection and sample membership.
 - **Alternatives considered:** A batch analyzer that owns file I/O; a flat observation-only API;
   endpoint-only rates; optional values without status reasons; sorting non-monotonic evidence.
+  For sample membership, relying on the replay adapter alone would leave direct API calls unbounded.
 - **Reason:** The design retains bounded streaming behavior while making analytical policy pure,
   deterministic, testable, explainable, and reusable by the future CLI, JSON report, and dashboard.
 - **Consequence:** The next implementation introduces the specified public trend-result contract and
