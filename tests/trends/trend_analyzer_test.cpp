@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <string>
@@ -119,6 +120,29 @@ TEST(TrendAnalyzerTest, DetectsDuplicateObservationsByBothPartsOfTheIdentity) {
     ASSERT_TRUE(analyzer.observe(value).has_value());
     value.identity = observation().identity;
     value.identity.container_id = std::string(64, 'b');
+    EXPECT_TRUE(analyzer.observe(value).has_value());
+}
+
+TEST(TrendAnalyzerTest, BoundsDistinctIdentitiesPerSampleAndPreservesDuplicateErrors) {
+    TrendAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    ASSERT_TRUE(analyzer.begin_sample(sample_start).has_value());
+    auto value = observation();
+    value.current_memory_bytes = std::nullopt;
+
+    constexpr std::size_t sample_identity_limit = 4096U;
+    for (std::size_t index = 0; index < sample_identity_limit; ++index) {
+        value.identity.cgroup_path = "/docker/container-" + std::to_string(index);
+        ASSERT_TRUE(analyzer.observe(value).has_value()) << "Identity index: " << index;
+    }
+    expect_error(analyzer.observe(value), TrendAnalyzerErrorCode::duplicate_observation);
+
+    value.identity.cgroup_path = "/docker/overflow";
+    expect_error(analyzer.observe(value), TrendAnalyzerErrorCode::resource_limit_exceeded);
+
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+    ASSERT_TRUE(
+        analyzer.begin_sample({sample_start.captured_at + std::chrono::seconds{10}}).has_value());
     EXPECT_TRUE(analyzer.observe(value).has_value());
 }
 

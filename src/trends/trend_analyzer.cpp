@@ -1,6 +1,13 @@
 #include <memoptima/trends/trend_analyzer.hpp>
 
+#include <cstddef>
+
 namespace memoptima::trends {
+namespace {
+
+constexpr std::size_t kMaximumSampleIdentities = 4096U;
+
+} // namespace
 
 std::expected<void, TrendAnalyzerError> TrendAnalyzer::begin_session(const TrendSessionStart &) {
     if (state_ != State::between_sessions) {
@@ -37,6 +44,12 @@ TrendAnalyzer::observe(const TrendObservation &observation) {
     if (!canonical_maximum) {
         return std::unexpected(TrendAnalyzerError{TrendAnalyzerErrorCode::invalid_observation,
                                                   "The maximum memory value is not canonical."});
+    }
+
+    if (sample_identities_.size() >= kMaximumSampleIdentities &&
+        !sample_identities_.contains(observation.identity)) {
+        return std::unexpected(TrendAnalyzerError{TrendAnalyzerErrorCode::resource_limit_exceeded,
+                                                  "The sample identity limit was reached."});
     }
 
     if (!sample_identities_.insert(observation.identity).second) {
