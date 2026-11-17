@@ -10,6 +10,7 @@ add_library(memoptima_core STATIC
     evidence_input_reader.cpp
     evidence_inspector.cpp
     evidence_record_parser.cpp
+    typed_evidence_artifact_reader.cpp
     forecast/evidence_forecast.cpp
     forecast/memory_limit_forecast.cpp
     sampling/evidence_models.cpp

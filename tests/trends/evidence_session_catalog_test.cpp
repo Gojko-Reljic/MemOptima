@@ -3,6 +3,8 @@
 #include <memoptima/sampling/sampling_configuration.hpp>
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
+#include "typed_evidence_artifact_reader.hpp"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -107,8 +109,8 @@ class TrendEvidenceSessionCatalogTest : public testing::Test {
         return *parsed;
     }
 
-    void replace_container_id(const std::filesystem::path &path, std::string_view original,
-                              std::string_view replacement) const {
+    void replace_text(const std::filesystem::path &path, std::string_view original,
+                      std::string_view replacement) const {
         std::ifstream input{path};
         ASSERT_TRUE(input.is_open());
         std::string content{std::istreambuf_iterator<char>{input},
@@ -124,6 +126,56 @@ class TrendEvidenceSessionCatalogTest : public testing::Test {
 
     std::filesystem::path directory_;
 };
+
+class CapturingTypedEvidenceSink final : public detail::TypedEvidenceArtifactSink {
+  public:
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::TypedEvidenceSessionStart &start) override {
+        starts.push_back(start);
+        return {};
+    }
+
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::TypedEvidenceSample &sample) override {
+        samples.push_back(sample);
+        return {};
+    }
+
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::TypedEvidenceSessionEnd &end) override {
+        ends.push_back(end);
+        return {};
+    }
+
+    std::vector<detail::TypedEvidenceSessionStart> starts;
+    std::vector<detail::TypedEvidenceSample> samples;
+    std::vector<detail::TypedEvidenceSessionEnd> ends;
+};
+
+TEST_F(TrendEvidenceSessionCatalogTest, TypedReaderProjectsValidatedTrendMetrics) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto path = write_artifact("typed.jsonl", std::chrono::seconds{0},
+                                     {{snapshot(std::string{id}, "/docker/typed")}}, false);
+    CapturingTypedEvidenceSink sink;
+
+    const auto traversal = detail::traverse_typed_evidence_artifact(path, sink);
+
+    ASSERT_TRUE(traversal.has_value());
+    EXPECT_FALSE(traversal->incomplete);
+    ASSERT_EQ(sink.starts.size(), 1U);
+    EXPECT_EQ(sink.starts[0].requested_interval, std::chrono::seconds{10});
+    ASSERT_EQ(sink.samples.size(), 1U);
+    ASSERT_EQ(sink.samples[0].containers.size(), 1U);
+    const auto &container = sink.samples[0].containers[0];
+    EXPECT_EQ(container.container_id.value(), id);
+    EXPECT_EQ(container.cgroup_path, "/docker/typed");
+    EXPECT_EQ(container.current_memory_bytes, 100U);
+    EXPECT_EQ(container.maximum_memory.kind, detail::TypedEvidenceMemoryMaximumKind::finite);
+    EXPECT_EQ(container.maximum_memory.bytes, 400U);
+    ASSERT_EQ(sink.ends.size(), 1U);
+    EXPECT_EQ(sink.ends[0].outcome, sampling::SamplingSessionOutcome::completed);
+}
 
 TEST_F(TrendEvidenceSessionCatalogTest, SortsSessionsAndPreservesIncompleteStatus) {
     constexpr std::string_view first_id{
@@ -178,13 +230,37 @@ TEST_F(TrendEvidenceSessionCatalogTest, RejectsOverlappingIdentityRegardlessOfId
     const auto second =
         write_artifact("second.jsonl", std::chrono::seconds{5},
                        {{snapshot(std::string{lowercase_id}, "/docker/shared")}}, false);
-    replace_container_id(second, lowercase_id, uppercase_id);
+    replace_text(second, lowercase_id, uppercase_id);
 
     const auto catalog = load_trend_evidence_catalog(manifest(
         R"({"manifest_version":1,"artifacts":[{"path":"first.jsonl"},{"path":"second.jsonl"}]})"));
 
     ASSERT_FALSE(catalog.has_value());
     EXPECT_EQ(catalog.error().code, TrendEvidenceCatalogErrorCode::ambiguous_session_overlap);
+}
+
+TEST_F(TrendEvidenceSessionCatalogTest, TypedReaderDistinguishesUnlimitedAndUnavailableMaximum) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto unlimited =
+        write_artifact("unlimited.jsonl", std::chrono::seconds{0},
+                       {{snapshot(std::string{id}, "/docker/unlimited")}}, false);
+    const auto unavailable =
+        write_artifact("unavailable.jsonl", std::chrono::seconds{20},
+                       {{snapshot(std::string{id}, "/docker/unavailable")}}, false);
+    replace_text(unlimited, R"("max_bytes":"400")", R"("max_bytes":"max")");
+    replace_text(unavailable, R"("max_bytes":"400")", R"("max_bytes":null)");
+
+    CapturingTypedEvidenceSink unlimited_sink;
+    CapturingTypedEvidenceSink unavailable_sink;
+    ASSERT_TRUE(detail::traverse_typed_evidence_artifact(unlimited, unlimited_sink).has_value());
+    ASSERT_TRUE(
+        detail::traverse_typed_evidence_artifact(unavailable, unavailable_sink).has_value());
+
+    EXPECT_EQ(unlimited_sink.samples[0].containers[0].maximum_memory.kind,
+              detail::TypedEvidenceMemoryMaximumKind::unlimited);
+    EXPECT_EQ(unavailable_sink.samples[0].containers[0].maximum_memory.kind,
+              detail::TypedEvidenceMemoryMaximumKind::unavailable);
 }
 
 TEST_F(TrendEvidenceSessionCatalogTest, AllowsTheSameContainerIdAtDifferentCgroupPaths) {

@@ -358,6 +358,21 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   4,096 distinct container observation windows and leaves numeric trend calculation to the next
   streaming layer.
 
+## ADR-033: Add an internal typed streaming evidence projection for trends
+
+- **Status:** Approved
+- **Decision:** v0.7 trends consume a minimal typed projection of validated schema-v1 evidence through
+  explicit start, sample, and end callbacks. It includes parsed timestamps, normalized full Docker
+  IDs, cgroup paths, `memory.current`, and the finite, unlimited, or unavailable state of
+  `memory.max`. The adapter remains internal and is layered over the existing validator.
+- **Alternatives considered:** Let every trend consumer parse canonical JSON; replace all existing
+  evidence consumers in one migration; construct a separate trend validator.
+- **Reason:** A typed projection removes JSON knowledge from trends while preserving bounded streaming
+  behavior and avoiding a broad regression risk for stable v0.6 consumers.
+- **Consequence:** The catalog is migrated first. Forecast and inspection may migrate separately after
+  equivalent behavior is tested. PSI, swap, cache, assessment, and diagnostic details remain outside
+  the v0.7 projection.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
