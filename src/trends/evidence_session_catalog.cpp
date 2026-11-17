@@ -1,22 +1,15 @@
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
-#include <memoptima/docker_container_memory_snapshot.hpp>
-
-#include "evidence_artifact_reader.hpp"
-
-#include <nlohmann/json.hpp>
+#include "typed_evidence_artifact_reader.hpp"
+#include "utc_timestamp_parser.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <map>
 #include <string>
-#include <string_view>
 #include <utility>
 
 namespace memoptima::trends {
 namespace {
-
-using Json = nlohmann::ordered_json;
 
 [[nodiscard]] std::unexpected<TrendEvidenceCatalogError>
 catalog_error(TrendEvidenceCatalogErrorCode code, const std::filesystem::path &artifact_path,
@@ -28,56 +21,26 @@ catalog_error(TrendEvidenceCatalogErrorCode code, const std::filesystem::path &a
     });
 }
 
-[[nodiscard]] std::expected<std::uint64_t, detail::EvidenceArtifactTraversalError>
-parse_decimal(std::string_view text, std::uint64_t line_number, std::string_view field_name) {
-    std::uint64_t value{};
-    const auto [position, error] = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (error != std::errc{} || position != text.data() + text.size()) {
-        return std::unexpected(detail::EvidenceArtifactTraversalError{
-            .detail = "Line " + std::to_string(line_number) + ": " + std::string{field_name} +
-                      " cannot be converted safely.",
-        });
-    }
-    return value;
-}
-
-class CatalogSink final : public detail::EvidenceArtifactRecordSink {
+class CatalogSink final : public detail::TypedEvidenceArtifactSink {
   public:
     explicit CatalogSink(const std::filesystem::path &artifact_path)
         : artifact_path_{artifact_path} {}
 
     std::expected<void, detail::EvidenceArtifactTraversalError>
-    consume(const detail::EvidenceArtifactRecord &record) override {
-        const Json value = Json::parse(record.canonical_json);
-        if (record.type == EvidenceRecordType::session_start) {
-            session_.artifact_path = artifact_path_;
-            session_.started_at_utc = value.at("started_at_utc").get<std::string>();
-            const auto interval =
-                parse_decimal(value.at("requested_interval_ms").get<std::string>(),
-                              record.line_number, "requested_interval_ms");
-            if (!interval.has_value()) {
-                return std::unexpected(interval.error());
-            }
-            session_.requested_interval_ms = *interval;
-            return {};
-        }
-        if (record.type != EvidenceRecordType::sample) {
-            return {};
-        }
+    consume(const detail::TypedEvidenceSessionStart &start) override {
+        session_.artifact_path = artifact_path_;
+        session_.started_at_utc = detail::format_canonical_utc_timestamp(start.started_at);
+        session_.requested_interval_ms = start.requested_interval_ms;
+        return {};
+    }
 
-        const std::string captured_at = value.at("captured_at_utc").get<std::string>();
-        for (const auto &container : value.at("containers")) {
-            const auto container_id =
-                DockerContainerId::parse(container.at("container_id").get<std::string>());
-            if (!container_id.has_value()) {
-                return std::unexpected(detail::EvidenceArtifactTraversalError{
-                    .detail = "Line " + std::to_string(record.line_number) +
-                              ": container_id is invalid: " + container_id.error().detail,
-                });
-            }
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::TypedEvidenceSample &sample) override {
+        const std::string captured_at = detail::format_canonical_utc_timestamp(sample.captured_at);
+        for (const auto &container : sample.containers) {
             TrendContainerIdentity identity{
-                .container_id = container_id->value(),
-                .cgroup_path = container.at("cgroup_path").get<std::string>(),
+                .container_id = container.container_id.value(),
+                .cgroup_path = container.cgroup_path.string(),
             };
             auto [position, inserted] = windows_.try_emplace(
                 std::move(identity),
@@ -94,11 +57,16 @@ class CatalogSink final : public detail::EvidenceArtifactRecordSink {
             }
             if (windows_.size() > kTrendEvidenceCatalogMaximumContainerWindows) {
                 return std::unexpected(detail::EvidenceArtifactTraversalError{
-                    .detail = "Line " + std::to_string(record.line_number) +
+                    .detail = "Line " + std::to_string(sample.line_number) +
                               ": the artifact exceeds the configured container-window limit.",
                 });
             }
         }
+        return {};
+    }
+
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::TypedEvidenceSessionEnd &) override {
         return {};
     }
 
@@ -120,7 +88,7 @@ class CatalogSink final : public detail::EvidenceArtifactRecordSink {
 [[nodiscard]] std::expected<TrendEvidenceSession, TrendEvidenceCatalogError>
 load_session(const std::filesystem::path &artifact_path) {
     CatalogSink sink{artifact_path};
-    const auto traversal = detail::traverse_evidence_artifact(artifact_path, sink);
+    const auto traversal = detail::traverse_typed_evidence_artifact(artifact_path, sink);
     if (!traversal.has_value()) {
         const auto code =
             traversal.error().detail.find("container-window limit") != std::string::npos

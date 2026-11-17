@@ -16,4 +16,8 @@ struct UtcTimestampParseError {
                             UtcTimestampParseError>
 parse_canonical_utc_timestamp(std::string_view text);
 
+// Formats the schema-1 UTC millisecond representation without narrowing to system_clock.
+[[nodiscard]] std::string
+format_canonical_utc_timestamp(std::chrono::sys_time<std::chrono::milliseconds> value);
+
 } // namespace memoptima::detail
