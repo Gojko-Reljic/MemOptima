@@ -401,12 +401,19 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   already-at-or-above maximum, unlimited maximum, unavailable maximum, sparse evidence, unavailable
   rate, non-positive growth, duration out of range, then available. Quality and maximum context
   remain separate result fields, so lower-priority facts are not hidden.
+- **Public API:** The public `trends` contract exposes plain aggregate input and result structures,
+  strong C++ time and integer types, and one stateful `TrendAnalyzer`. It accepts ordered session,
+  sample, observation, and session-end events through `std::expected`-returning methods, then
+  returns one bounded and deterministically sorted `TrendAnalysis` from `finish()`. Event-order,
+  duplicate-observation, noncanonical-metric, and resource-limit failures are errors; valid but
+  ineligible evidence remains a result with explicit status fields. An analyzer instance is single
+  use after a successful `finish()`.
 - **Alternatives considered:** A batch analyzer that owns file I/O; a flat observation-only API;
   endpoint-only rates; optional values without status reasons; sorting non-monotonic evidence.
 - **Reason:** The design retains bounded streaming behavior while making analytical policy pure,
   deterministic, testable, explainable, and reusable by the future CLI, JSON report, and dashboard.
-- **Consequence:** The next implementation introduces a public trend-result contract and pure
-  analyzer tests before adding the `trend manifest` application use case or CLI presentation.
+- **Consequence:** The next implementation introduces the specified public trend-result contract and
+  pure analyzer tests before adding the `trend manifest` application use case or CLI presentation.
 
 ## Pending decisions
 
