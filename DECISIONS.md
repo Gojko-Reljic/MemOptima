@@ -343,6 +343,21 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Consequence:** Existing `next_line()` callers remain source-compatible. Consumers that need
   physical-byte accounting can use the additional read-only metadata.
 
+## ADR-032: Stream artifacts through a bounded session catalog
+
+- **Status:** Approved
+- **Decision:** The trend session catalog retains ordered session metadata and one first/last
+  observation window per strict container identity. It preserves incomplete-artifact status but does
+  not retain every sample. A later analyzer rereads the validated, ordered artifacts through the
+  streaming input path.
+- **Alternatives considered:** Retain every sample in memory; create a temporary local spool file.
+- **Reason:** The catalog must sort artifacts and reject ambiguous overlap without making memory
+  consumption proportional to all JSONL input. Incomplete artifacts can still provide observed data
+  when their status remains explicit.
+- **Consequence:** The catalog is a reusable public `trends` interface. It limits each artifact to
+  4,096 distinct container observation windows and leaves numeric trend calculation to the next
+  streaming layer.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
