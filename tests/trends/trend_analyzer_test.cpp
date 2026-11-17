@@ -2,14 +2,20 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
+#include <initializer_list>
+#include <limits>
 #include <optional>
 #include <string>
 
 namespace memoptima::trends {
 namespace {
+
+using namespace std::chrono_literals;
 
 constexpr TrendSessionStart session_start{.started_at = TrendTimePoint{},
                                           .requested_interval_ms = 10'000};
@@ -27,6 +33,15 @@ void expect_error(const std::expected<Value, TrendAnalyzerError> &result,
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().code, code);
     EXPECT_FALSE(result.error().detail.empty());
+}
+
+void accept_sample(TrendAnalyzer &analyzer, TrendTimePoint captured_at,
+                   std::initializer_list<TrendObservation> observations) {
+    ASSERT_TRUE(analyzer.begin_sample({captured_at}).has_value());
+    for (const auto &value : observations) {
+        ASSERT_TRUE(analyzer.observe(value).has_value());
+    }
+    ASSERT_TRUE(analyzer.end_sample().has_value());
 }
 
 TEST(TrendAnalyzerTest, AcceptsSamplesAcrossCompleteAndIncompleteSessions) {
@@ -49,7 +64,21 @@ TEST(TrendAnalyzerTest, AcceptsSamplesAcrossCompleteAndIncompleteSessions) {
     ASSERT_TRUE(analyzer.observe(observation()).has_value());
     ASSERT_TRUE(analyzer.end_sample().has_value());
     ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
-    EXPECT_TRUE(analyzer.finish().has_value());
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 1U);
+    const auto &epoch = analysis->epochs.front();
+    EXPECT_EQ(epoch.epoch_index, 1U);
+    EXPECT_EQ(epoch.first_observed_at, sample_start.captured_at);
+    EXPECT_EQ(epoch.last_observed_at, next_start);
+    EXPECT_EQ(epoch.observation_count, 3U);
+    EXPECT_EQ(epoch.observation_window_ms, 20'000U);
+    EXPECT_EQ(epoch.largest_gap_ms, 10'000U);
+    EXPECT_EQ(epoch.quality, TrendEvidenceQuality::continuous);
+    EXPECT_TRUE(epoch.contains_incomplete_session);
+    EXPECT_FALSE(epoch.termination_reason.has_value());
+    EXPECT_FALSE(epoch.current_memory.growth_bytes_per_second.has_value());
+    EXPECT_FALSE(epoch.time_to_limit.estimated_duration_ms.has_value());
 }
 
 TEST(TrendAnalyzerTest, RejectsMisorderedEventsAndKeepsTheActiveState) {
@@ -167,6 +196,314 @@ TEST(TrendAnalyzerTest, ValidatesMaximumMemoryWithoutReservingAnInvalidObservati
     value.current_memory_bytes = std::nullopt;
     value.maximum_memory = {.kind = TrendMemoryMaximumKind::unavailable};
     EXPECT_TRUE(analyzer.observe(value).has_value());
+}
+
+TEST(TrendAnalyzerTest, ClosesEpochOnEverySemanticMaximumChange) {
+    constexpr auto finite = TrendMemoryMaximumKind::finite;
+    constexpr auto unlimited = TrendMemoryMaximumKind::unlimited;
+    constexpr auto unavailable = TrendMemoryMaximumKind::unavailable;
+    constexpr std::array maximums{
+        TrendMemoryMaximum{finite, 100}, TrendMemoryMaximum{finite, 200},
+        TrendMemoryMaximum{unlimited},   TrendMemoryMaximum{unavailable},
+        TrendMemoryMaximum{unlimited},   TrendMemoryMaximum{finite, 0},
+        TrendMemoryMaximum{unavailable}, TrendMemoryMaximum{finite, 100},
+    };
+    TrendAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    auto value = observation();
+    auto captured_at = session_start.started_at;
+    std::uint64_t bytes = 10U;
+    for (const auto maximum : maximums) {
+        value.maximum_memory = maximum;
+        value.current_memory_bytes = bytes++;
+        accept_sample(analyzer, captured_at, {value});
+        captured_at += 10s;
+    }
+    value.current_memory_bytes = bytes;
+    accept_sample(analyzer, captured_at, {value});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), maximums.size());
+    for (std::size_t index = 0; index + 1U < maximums.size(); ++index) {
+        const auto &epoch = analysis->epochs[index];
+        EXPECT_EQ(epoch.epoch_index, index + 1U);
+        EXPECT_EQ(epoch.maximum_memory.kind, maximums[index].kind);
+        EXPECT_EQ(epoch.maximum_memory.bytes, maximums[index].bytes);
+        EXPECT_EQ(epoch.observation_count, 1U);
+        EXPECT_EQ(epoch.termination_reason, TrendContinuityBreakReason::memory_maximum_changed);
+    }
+    const auto &last = analysis->epochs.back();
+    EXPECT_EQ(last.epoch_index, maximums.size());
+    EXPECT_EQ(last.maximum_memory.kind, finite);
+    EXPECT_EQ(last.maximum_memory.bytes, 100U);
+    EXPECT_EQ(last.observation_count, 2U);
+    EXPECT_EQ(last.current_memory.first_bytes, bytes - 1U);
+    EXPECT_EQ(last.current_memory.last_bytes, bytes);
+    EXPECT_FALSE(last.termination_reason.has_value());
+}
+
+TEST(TrendAnalyzerTest, UnavailableCurrentClosesTheEpochAndAvailableCurrentStartsAnother) {
+    TrendAnalyzer analyzer;
+    const auto start = session_start.started_at;
+    auto missing = observation();
+    missing.current_memory_bytes = std::nullopt;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    accept_sample(analyzer, start, {missing});
+    accept_sample(analyzer, start + 10s, {observation()});
+    accept_sample(analyzer, start + 20s, {missing});
+    accept_sample(analyzer, start + 30s, {missing});
+    auto resumed = observation();
+    resumed.current_memory_bytes = 0;
+    accept_sample(analyzer, start + 40s, {resumed});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 2U);
+    const auto &closed = analysis->epochs.front();
+    EXPECT_EQ(closed.epoch_index, 1U);
+    EXPECT_EQ(closed.observation_count, 1U);
+    EXPECT_EQ(closed.last_observed_at, start + 10s);
+    EXPECT_EQ(closed.termination_reason, TrendContinuityBreakReason::current_memory_unavailable);
+    const auto &active = analysis->epochs.back();
+    EXPECT_EQ(active.epoch_index, 2U);
+    EXPECT_EQ(active.first_observed_at, start + 40s);
+    EXPECT_EQ(active.current_memory.first_bytes, 0U);
+    EXPECT_EQ(active.largest_gap_ms, 0U);
+    EXPECT_FALSE(active.termination_reason.has_value());
+}
+
+TEST(TrendAnalyzerTest, NonIncreasingObservationsOpenNewEpochsInInputOrder) {
+    TrendAnalyzer analyzer;
+    const auto start = session_start.started_at;
+    auto value = observation();
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    accept_sample(analyzer, start + 20s, {value});
+    value.current_memory_bytes = 30U;
+    value.maximum_memory.bytes = 200U;
+    accept_sample(analyzer, start + 20s, {value});
+    value.current_memory_bytes = 40U;
+    accept_sample(analyzer, start + 10s, {value});
+    value.current_memory_bytes = 50U;
+    accept_sample(analyzer, start + 15s, {value});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 3U);
+    for (std::size_t index = 0; index < 2U; ++index) {
+        const auto &closed = analysis->epochs[index];
+        EXPECT_EQ(closed.epoch_index, index + 1U);
+        EXPECT_EQ(closed.first_observed_at, start + 20s);
+        EXPECT_EQ(closed.termination_reason, TrendContinuityBreakReason::non_increasing_timestamp);
+    }
+    EXPECT_EQ(analysis->epochs[1].current_memory.first_bytes, 30U);
+    EXPECT_EQ(analysis->epochs[1].maximum_memory.bytes, 200U);
+    const auto &active = analysis->epochs.back();
+    EXPECT_EQ(active.epoch_index, 3U);
+    EXPECT_EQ(active.first_observed_at, start + 10s);
+    EXPECT_EQ(active.last_observed_at, start + 15s);
+    EXPECT_EQ(active.current_memory.first_bytes, 40U);
+    EXPECT_EQ(active.current_memory.last_bytes, 50U);
+    EXPECT_EQ(active.observation_count, 2U);
+    EXPECT_EQ(active.largest_gap_ms, 5000U);
+    EXPECT_FALSE(active.termination_reason.has_value());
+}
+
+TEST(TrendAnalyzerTest, MeasuresAbsenceBetweenActualObservationsAtTheSparseThreshold) {
+    for (const auto excess : {0ms, 1ms}) {
+        SCOPED_TRACE(excess.count());
+        TrendAnalyzer analyzer;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        accept_sample(analyzer, start + 20s, {observation()});
+        accept_sample(analyzer, start + 30s, {});
+        accept_sample(analyzer, start + 40s + excess, {observation()});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &epoch = analysis->epochs.front();
+        EXPECT_EQ(epoch.observation_count, 2U);
+        EXPECT_EQ(epoch.largest_gap_ms, (20s + excess).count());
+        EXPECT_EQ(epoch.quality,
+                  excess == 0ms ? TrendEvidenceQuality::continuous : TrendEvidenceQuality::sparse);
+        EXPECT_FALSE(epoch.termination_reason.has_value());
+    }
+}
+
+TEST(TrendAnalyzerTest, UsesAdjacentObservationIntervalsAcrossAnAbsentSession) {
+    for (const bool larger_interval_first : {false, true}) {
+        SCOPED_TRACE(larger_interval_first);
+        for (const auto excess : {0ms, 1ms}) {
+            SCOPED_TRACE(excess.count());
+            TrendAnalyzer analyzer;
+            const auto start = session_start.started_at;
+            const auto first_interval = larger_interval_first ? 20'000U : 10'000U;
+            const auto next_interval = larger_interval_first ? 10'000U : 20'000U;
+            ASSERT_TRUE(analyzer.begin_session({start, first_interval}).has_value());
+            accept_sample(analyzer, start, {observation()});
+            ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+            ASSERT_TRUE(analyzer.begin_session({start + 20s, 60'000U}).has_value());
+            accept_sample(analyzer, start + 20s, {});
+            ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+
+            const auto resumed_at = start + 40s + excess;
+            ASSERT_TRUE(analyzer.begin_session({resumed_at, next_interval}).has_value());
+            accept_sample(analyzer, resumed_at, {observation()});
+            accept_sample(analyzer, resumed_at + 10s, {observation()});
+            ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+            const auto analysis = analyzer.finish();
+            ASSERT_TRUE(analysis.has_value());
+            ASSERT_EQ(analysis->epochs.size(), 1U);
+            const auto &epoch = analysis->epochs.front();
+            EXPECT_EQ(epoch.observation_count, 3U);
+            EXPECT_EQ(epoch.observation_window_ms, (50s + excess).count());
+            EXPECT_EQ(epoch.largest_gap_ms, (40s + excess).count());
+            EXPECT_EQ(epoch.quality, excess == 0ms ? TrendEvidenceQuality::continuous
+                                                   : TrendEvidenceQuality::sparse);
+            EXPECT_FALSE(epoch.contains_incomplete_session);
+        }
+    }
+}
+
+TEST(TrendAnalyzerTest, RepresentsFullTimestampSpanAndLargeSamplingIntervals) {
+    constexpr auto full_span = std::numeric_limits<std::uint64_t>::max();
+    for (const auto interval : {full_span / 2U, full_span / 2U + 1U}) {
+        SCOPED_TRACE(interval);
+        TrendAnalyzer analyzer;
+        ASSERT_TRUE(analyzer.begin_session({TrendTimePoint::min(), interval}).has_value());
+        accept_sample(analyzer, TrendTimePoint::min(), {observation()});
+        accept_sample(analyzer, TrendTimePoint::max(), {observation()});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &epoch = analysis->epochs.front();
+        EXPECT_EQ(epoch.observation_window_ms, full_span);
+        EXPECT_EQ(epoch.largest_gap_ms, full_span);
+        EXPECT_EQ(epoch.quality, interval == full_span / 2U ? TrendEvidenceQuality::sparse
+                                                            : TrendEvidenceQuality::continuous);
+    }
+}
+
+TEST(TrendAnalyzerTest, MarksAllAndOnlyEpochsThatReceivedIncompleteSessionData) {
+    TrendAnalyzer analyzer;
+    const auto start = session_start.started_at;
+    auto other_path = observation();
+    other_path.identity.cgroup_path = "/docker/second";
+    auto other_id = observation();
+    other_id.identity.container_id.back() = 'b';
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    accept_sample(analyzer, start, {other_id, other_path, observation()});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    ASSERT_TRUE(analyzer.begin_session({start + 10s, 10'000U}).has_value());
+    other_id.current_memory_bytes = std::nullopt;
+    accept_sample(analyzer, start + 10s, {observation(), other_id});
+    auto changed_maximum = observation();
+    changed_maximum.maximum_memory.bytes = 200U;
+    accept_sample(analyzer, start + 20s, {changed_maximum});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+
+    ASSERT_TRUE(analyzer.begin_session({start + 30s, 10'000U}).has_value());
+    accept_sample(analyzer, start + 30s, {other_path, changed_maximum});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), 4U);
+    const auto &epochs = analysis->epochs;
+    EXPECT_EQ(epochs[0].identity, observation().identity);
+    EXPECT_EQ(epochs[0].epoch_index, 1U);
+    EXPECT_TRUE(epochs[0].contains_incomplete_session);
+    EXPECT_EQ(epochs[0].termination_reason, TrendContinuityBreakReason::memory_maximum_changed);
+    EXPECT_EQ(epochs[1].identity, observation().identity);
+    EXPECT_EQ(epochs[1].epoch_index, 2U);
+    EXPECT_TRUE(epochs[1].contains_incomplete_session);
+    EXPECT_EQ(epochs[2].identity, other_path.identity);
+    EXPECT_EQ(epochs[2].epoch_index, 1U);
+    EXPECT_EQ(epochs[2].quality, TrendEvidenceQuality::sparse);
+    EXPECT_FALSE(epochs[2].contains_incomplete_session);
+    EXPECT_EQ(epochs[3].identity, other_id.identity);
+    EXPECT_EQ(epochs[3].epoch_index, 1U);
+    EXPECT_EQ(epochs[3].termination_reason, TrendContinuityBreakReason::current_memory_unavailable);
+    EXPECT_FALSE(epochs[3].contains_incomplete_session);
+    const auto &summary = analysis->summary;
+    EXPECT_EQ(summary.epoch_count, 4U);
+    EXPECT_EQ(summary.continuous_epoch_count, 3U);
+    EXPECT_EQ(summary.sparse_epoch_count, 1U);
+    EXPECT_EQ(summary.incomplete_epoch_count, 2U);
+    EXPECT_EQ(summary.rate_available_epoch_count, 0U);
+    EXPECT_EQ(summary.time_to_limit_available_epoch_count, 0U);
+}
+
+TEST(TrendAnalyzerTest, BoundsActiveEpochsAcrossSamples) {
+    constexpr std::size_t limit = 4096U;
+    TrendAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    ASSERT_TRUE(analyzer.begin_sample(sample_start).has_value());
+    auto value = observation();
+    for (std::size_t index = 0; index < limit; ++index) {
+        value.identity.cgroup_path = "/docker/container-" + std::to_string(index);
+        ASSERT_TRUE(analyzer.observe(value).has_value()) << index;
+    }
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+
+    ASSERT_TRUE(analyzer.begin_sample({sample_start.captured_at + 10s}).has_value());
+    ASSERT_TRUE(analyzer.observe(value).has_value());
+    value.identity.cgroup_path = "/docker/overflow";
+    expect_error(analyzer.observe(value), TrendAnalyzerErrorCode::resource_limit_exceeded);
+    value.current_memory_bytes = std::nullopt;
+    ASSERT_TRUE(analyzer.observe(value).has_value());
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    EXPECT_EQ(analysis->epochs.size(), limit);
+    EXPECT_EQ(analysis->summary.epoch_count, limit);
+}
+
+TEST(TrendAnalyzerTest, RejectsTheFirstEpochBeyondTheTotalLimitBeforeChangingState) {
+    constexpr std::uint32_t limit = 4096U;
+    TrendAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+    auto value = observation();
+    auto captured_at = sample_start.captured_at;
+    for (std::uint32_t index = 1U; index <= limit; ++index) {
+        value.maximum_memory.bytes = index;
+        accept_sample(analyzer, captured_at, {value});
+        captured_at += 1ms;
+    }
+
+    ASSERT_TRUE(analyzer.begin_sample({captured_at}).has_value());
+    auto changed_maximum = value;
+    changed_maximum.maximum_memory.bytes = limit + 1U;
+    expect_error(analyzer.observe(changed_maximum),
+                 TrendAnalyzerErrorCode::resource_limit_exceeded);
+    value.current_memory_bytes = 25U;
+    ASSERT_TRUE(analyzer.observe(value).has_value());
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+    ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+
+    const auto analysis = analyzer.finish();
+    ASSERT_TRUE(analysis.has_value());
+    ASSERT_EQ(analysis->epochs.size(), limit);
+    EXPECT_EQ(analysis->epochs.front().epoch_index, 1U);
+    const auto &last = analysis->epochs.back();
+    EXPECT_EQ(last.epoch_index, limit);
+    EXPECT_FALSE(last.termination_reason.has_value());
+    EXPECT_EQ(last.observation_count, 2U);
+    EXPECT_EQ(last.current_memory.last_bytes, 25U);
+    EXPECT_EQ(last.maximum_memory.bytes, limit);
+    EXPECT_EQ(analysis->summary.incomplete_epoch_count, limit);
 }
 
 } // namespace
