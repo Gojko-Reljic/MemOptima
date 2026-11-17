@@ -1,7 +1,10 @@
 #include <memoptima/trends/trend_analyzer.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <limits>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 
@@ -11,6 +14,8 @@ namespace {
 constexpr std::size_t kMaximumSampleIdentities = 4096U;
 constexpr std::size_t kMaximumActiveEpochs = 4096U;
 constexpr std::size_t kMaximumEpochResults = 4096U;
+constexpr std::uint64_t kMinimumRateObservations = 3U;
+constexpr std::uint64_t kMinimumRateWindowMs = 10'000U;
 
 std::optional<TrendContinuityBreakReason> continuity_break(const TrendEpochResult &result,
                                                            const TrendObservation &observation,
@@ -174,8 +179,50 @@ void TrendAnalyzer::append_observation(Epoch &epoch, std::uint64_t current_bytes
     result.observation_window_ms = elapsed_ms(result.first_observed_at, sample_time_);
     result.current_memory.last_bytes = current_bytes;
     ++result.observation_count;
+    update_rate_statistics(epoch);
     epoch.last_interval_ms = session_interval_ms_;
     epoch.observed_in_session = true;
+}
+
+void TrendAnalyzer::update_rate_statistics(Epoch &epoch) {
+    const auto &result = epoch.result;
+    const long double time_seconds =
+        static_cast<long double>(result.observation_window_ms) / 1000.0L;
+    const auto first_bytes = result.current_memory.first_bytes;
+    const auto current_bytes = result.current_memory.last_bytes;
+    const long double memory_offset = current_bytes >= first_bytes
+                                          ? static_cast<long double>(current_bytes - first_bytes)
+                                          : -static_cast<long double>(first_bytes - current_bytes);
+
+    // The first point is at (0, 0), which initializes both means and centered sums.
+    const long double count = static_cast<long double>(result.observation_count);
+    const long double time_delta = time_seconds - epoch.mean_time_seconds;
+    const long double memory_delta = memory_offset - epoch.mean_memory_offset_bytes;
+    epoch.mean_time_seconds += time_delta / count;
+    epoch.mean_memory_offset_bytes += memory_delta / count;
+    const long double weight = static_cast<long double>(result.observation_count - 1U) / count;
+    epoch.time_variance_sum += weight * time_delta * time_delta;
+    epoch.time_memory_covariance_sum += weight * time_delta * memory_delta;
+}
+
+void TrendAnalyzer::finalize_rate(Epoch &epoch) {
+    auto &result = epoch.result;
+    if (result.observation_count < kMinimumRateObservations) {
+        return;
+    }
+    if (result.observation_window_ms < kMinimumRateWindowMs) {
+        result.current_memory.rate_status = TrendRateStatus::insufficient_duration;
+        return;
+    }
+
+    const long double slope = epoch.time_memory_covariance_sum / epoch.time_variance_sum;
+    constexpr auto max_double = static_cast<long double>(std::numeric_limits<double>::max());
+    if (!std::isfinite(slope) || std::abs(slope) > max_double) {
+        throw std::overflow_error(
+            "The calculated current-memory rate is outside the supported range.");
+    }
+    result.current_memory.growth_bytes_per_second = static_cast<double>(slope);
+    result.current_memory.rate_status = TrendRateStatus::available;
 }
 
 std::expected<void, TrendAnalyzerError> TrendAnalyzer::end_sample() {
@@ -216,12 +263,19 @@ std::expected<TrendAnalysis, TrendAnalyzerError> TrendAnalyzer::finish() {
 
     TrendAnalysis analysis{};
     analysis.epochs.reserve(epochs_.size());
+    // Validate each rate before moving any results out of the analyzer.
+    for (auto &epoch : epochs_) {
+        finalize_rate(epoch);
+    }
     for (auto &epoch : epochs_) {
         if (epoch.result.quality == TrendEvidenceQuality::sparse) {
             ++analysis.summary.sparse_epoch_count;
         }
         if (epoch.result.contains_incomplete_session) {
             ++analysis.summary.incomplete_epoch_count;
+        }
+        if (epoch.result.current_memory.rate_status == TrendRateStatus::available) {
+            ++analysis.summary.rate_available_epoch_count;
         }
         analysis.epochs.push_back(std::move(epoch.result));
     }

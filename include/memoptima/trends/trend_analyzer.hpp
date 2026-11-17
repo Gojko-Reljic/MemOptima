@@ -143,7 +143,7 @@ class TrendAnalyzer {
 
     [[nodiscard]] std::expected<void, TrendAnalyzerError> end_session(const TrendSessionEnd &end);
 
-    // Returns epoch metadata. Rate and time-to-limit calculations are deferred.
+    // Returns epoch metadata and current-memory rates. Time-to-limit calculations are deferred.
     [[nodiscard]] std::expected<TrendAnalysis, TrendAnalyzerError> finish();
 
   private:
@@ -158,10 +158,16 @@ class TrendAnalyzer {
         TrendEpochResult result;
         std::uint64_t last_interval_ms;
         bool observed_in_session;
+        long double mean_time_seconds{};
+        long double mean_memory_offset_bytes{};
+        long double time_variance_sum{};
+        long double time_memory_covariance_sum{};
     };
 
     void start_epoch(const TrendObservation &observation, std::uint32_t index);
     void append_observation(Epoch &epoch, std::uint64_t current_bytes);
+    static void update_rate_statistics(Epoch &epoch);
+    static void finalize_rate(Epoch &epoch);
 
     State state_{State::between_sessions};
     std::uint64_t session_interval_ms_{};
