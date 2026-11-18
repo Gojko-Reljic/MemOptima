@@ -426,6 +426,50 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Consequence:** The next implementation introduces the specified public trend-result contract and
   pure analyzer tests before adding the `trend manifest` application use case or CLI presentation.
 
+## ADR-035: Add an atomic validated trend replay service
+
+- **Status:** Approved
+- **Decision:** The public `trends` module adds one application service in
+  `trend_analysis_service.hpp`:
+
+  ```cpp
+  [[nodiscard]] std::expected<TrendAnalysis, TrendAnalysisError>
+  analyze_trend_manifest(const TrendManifest &manifest);
+  ```
+
+  The service first creates a bounded `TrendEvidenceCatalog`, then replays its ordered artifact
+  paths through the internal typed evidence reader into one `TrendAnalyzer`. It returns either one
+  complete `TrendAnalysis` or one `TrendAnalysisError`; it never exposes a partial result.
+- **Replay contract:** For each cataloged artifact, replay maps the typed session start to
+  `begin_session`, every typed sample to `begin_sample`, zero or more `observe` calls, and
+  `end_sample`, then invokes `end_session` only after the artifact traversal succeeds. The replay
+  traversal result supplies the `incomplete` value to `end_session`, so a valid artifact without an
+  end record remains analytically explicit rather than being rejected or silently treated as
+  complete.
+- **Replay validation:** After an artifact is streamed and before its analyzer session is closed or
+  any result is returned, replay compares its catalog-relevant metadata with the corresponding
+  first-pass catalog entry: session start time, declared sampling interval, incomplete status, and
+  the minimum/maximum captured timestamp windows for every strict container identity. Any difference
+  is `evidence_replay_failed`. The service does not add a content hash in v0.7; the comparison
+  protects the ordering and overlap facts established by cataloging while leaving valid replayed
+  measurements as the analyzer input.
+- **Error contract:** `TrendAnalysisError` has exactly three categories: `catalog_failed`,
+  `evidence_replay_failed`, and `analyzer_failed`. It carries optional artifact context and an
+  English diagnostic detail. Catalog errors are mapped to `catalog_failed`; typed-reader failures
+  and catalog/replay mismatches are mapped to `evidence_replay_failed`; rejected analyzer events or
+  finalization are mapped to `analyzer_failed`.
+- **Alternatives considered:** Put cataloging and replay directly in the CLI; expose the internal
+  typed reader publicly; retain all evidence samples between cataloging and analysis; accept replay
+  metadata changes; add a whole-artifact cryptographic hash in v0.7.
+- **Reason:** A small application boundary lets the future CLI, JSON report, dashboard, and API
+  share one validated orchestration path without giving them access to internal evidence parsing.
+  Revalidating catalog-defining metadata makes the two-pass streaming design auditable without
+  making memory proportional to all selected evidence.
+- **Consequence:** The later CLI calls this service and remains a presentation layer. Tests cover
+  successful multi-artifact replay, each error category, incomplete artifacts, and detection of a
+  catalog/replay metadata mismatch. v0.7 still does not claim an OOM prediction, a confirmed memory
+  leak, or a safe automatic action.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
