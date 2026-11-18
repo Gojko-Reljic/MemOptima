@@ -66,11 +66,16 @@ TrendTimeToLimitResult evaluate_time_to_limit(const TrendEpochResult &epoch,
     }
 
     const auto bytes_remaining = maximum_bytes - latest_bytes;
-    // Form the inverse OLS slope from the working-precision sums.
-    const long double milliseconds_per_byte =
-        1000.0L * time_variance_sum / time_memory_covariance_sum;
+    const long double scaled_variance = 1000.0L * time_variance_sum;
+    const long double milliseconds_per_byte = scaled_variance / time_memory_covariance_sum;
+    // Recover the rounding error in the inverse slope before flooring the estimate.
+    const long double remainder =
+        std::fma(-milliseconds_per_byte, time_memory_covariance_sum, scaled_variance) +
+        std::fma(1000.0L, time_variance_sum, -scaled_variance);
+    const auto remaining = static_cast<long double>(bytes_remaining);
+    const long double correction = remaining * remainder / time_memory_covariance_sum;
     const long double duration_ms =
-        std::floor(static_cast<long double>(bytes_remaining) * milliseconds_per_byte);
+        std::floor(std::fma(remaining, milliseconds_per_byte, correction));
     // The exclusive power-of-two bound is exact even if UINT64_MAX would round up.
     const long double upper_bound = std::ldexp(1.0L, std::numeric_limits<std::uint64_t>::digits);
     if (!std::isfinite(duration_ms) || duration_ms >= upper_bound) {

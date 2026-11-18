@@ -763,6 +763,7 @@ TEST(TrendAnalyzerTest, EstimatesWholeMillisecondsFromTheLatestActualObservation
     constexpr std::array cases{
         DurationCase{{0, 100, 100}, 200, 20'000},
         DurationCase{{0, 0, 1}, std::uint64_t{1} << 40U, 21'990'232'555'500'000U},
+        DurationCase{{0, 70, 140}, 147, 1000},
         DurationCase{{0, 30, 60}, 61, 333},
         DurationCase{{0, 20'000, 40'000}, 40'001, 0},
     };
@@ -794,7 +795,8 @@ TEST(TrendAnalyzerTest, EstimatesWholeMillisecondsFromTheLatestActualObservation
 TEST(TrendAnalyzerTest, RejectsDurationAtOrAboveTheExclusiveUint64Bound) {
     // A slope of 500 B/s makes the duration two milliseconds for each remaining byte.
     constexpr auto first_out_of_range_bytes = std::uint64_t{1} << 63U;
-    constexpr auto in_range_bytes = first_out_of_range_bytes - 4096U;
+    // The in-range byte count and duration are exact even with 53 bits of precision.
+    constexpr auto in_range_bytes = first_out_of_range_bytes - 3072U;
     for (const auto remaining :
          {in_range_bytes, first_out_of_range_bytes, first_out_of_range_bytes + 4096U}) {
         SCOPED_TRACE(remaining);
