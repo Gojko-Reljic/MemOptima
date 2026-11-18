@@ -470,6 +470,24 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   catalog/replay metadata mismatch. v0.7 still does not claim an OOM prediction, a confirmed memory
   leak, or a safe automatic action.
 
+## ADR-036: Name catalog observation windows by temporal bounds
+
+- **Status:** Approved
+- **Decision:** In the next C++ implementation change, replace the public
+  `TrendContainerObservationWindow` members `first_captured_at_utc` and `last_captured_at_utc` with
+  `minimum_captured_at_utc` and `maximum_captured_at_utc`. Until that change is merged, the existing
+  member names remain the current API.
+- **Reason:** The catalog calculates the minimum and maximum capture timestamps across every sample
+  for one strict identity. The previous names could be read as first and last timestamps in artifact
+  input order, which is a different contract and would weaken the meaning of overlap and replay
+  validation.
+- **Alternatives considered:** Retain the old names and document their nonliteral meaning; store
+  both input-order and temporal-bound timestamps.
+- **Consequence:** The next C++ change makes the public v0.7 API semantically precise before
+  release. Catalog implementation, tests, and later replay comparison will use the renamed members.
+  The change preserves runtime behavior but requires source updates for callers of this pre-release
+  C++ API.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
