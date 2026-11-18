@@ -103,6 +103,11 @@ load_session(const std::filesystem::path &artifact_path) {
 
 std::expected<TrendEvidenceCatalog, TrendEvidenceCatalogError>
 load_trend_evidence_catalog(const TrendManifest &manifest) {
+    if (manifest.artifact_paths.size() > kTrendManifestMaximumArtifacts) {
+        return catalog_error(TrendEvidenceCatalogErrorCode::resource_limit_exceeded, {},
+                             "The manifest exceeds the configured artifact limit.");
+    }
+
     TrendEvidenceCatalog catalog;
     catalog.sessions.reserve(manifest.artifact_paths.size());
     for (const auto &artifact_path : manifest.artifact_paths) {

@@ -128,6 +128,16 @@ class TrendAnalysisServiceTest : public testing::Test {
     };
 }
 
+[[nodiscard]] std::string container_id_for(std::size_t index) {
+    constexpr std::string_view hexadecimal = "0123456789abcdef";
+    std::string id(64U, 'a');
+    for (std::size_t digit{}; digit < 4U; ++digit) {
+        const auto shift = (3U - digit) * 4U;
+        id[60U + digit] = hexadecimal[(index >> shift) & 0xFU];
+    }
+    return id;
+}
+
 TEST_F(TrendAnalysisServiceTest, ReplaysCompleteAndIncompleteCatalogSessions) {
     constexpr std::string_view complete_id{
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
@@ -165,6 +175,108 @@ TEST_F(TrendAnalysisServiceTest, MapsInvalidCatalogArtifactToCatalogFailure) {
     ASSERT_FALSE(analysis.has_value());
     EXPECT_EQ(analysis.error().code, TrendAnalysisErrorCode::catalog_failed);
     EXPECT_EQ(analysis.error().artifact_path, invalid);
+}
+
+TEST_F(TrendAnalysisServiceTest, MapsAnOversizedDirectManifestToCatalogFailure) {
+    TrendManifest manifest{.directory = directory_, .artifact_paths = {}};
+    manifest.artifact_paths.resize(kTrendManifestMaximumArtifacts + 1U,
+                                   directory_ / "unread-artifact.jsonl");
+
+    const auto analysis = analyze_trend_manifest(manifest);
+
+    ASSERT_FALSE(analysis.has_value());
+    EXPECT_EQ(analysis.error().code, TrendAnalysisErrorCode::catalog_failed);
+}
+
+TEST_F(TrendAnalysisServiceTest, MapsCatalogReplayMismatchToReplayFailure) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto artifact =
+        write_artifact("mismatch.jsonl", std::chrono::seconds{0},
+                       {{snapshot(std::string{id}, "/docker/mismatch", 100)}}, false);
+    TrendAnalyzer analyzer;
+    const TrendEvidenceSession cataloged{
+        .artifact_path = artifact,
+        .started_at_utc = "1970-01-01T00:00:01.000Z",
+        .requested_interval_ms = 10'000U,
+        .incomplete = false,
+        .container_windows = {},
+    };
+
+    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+
+    ASSERT_FALSE(replayed.has_value());
+    EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::evidence_replay_failed);
+    EXPECT_EQ(replayed.error().artifact_path, artifact);
+}
+
+TEST_F(TrendAnalysisServiceTest, MapsAnalyzerResourceLimitToAnalyzerFailure) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const TrendContainerIdentity identity{.container_id = std::string{id},
+                                          .cgroup_path = "/docker/limit"};
+    TrendAnalyzer analyzer;
+    for (std::uint64_t index{}; index < 4096U; ++index) {
+        ASSERT_TRUE(analyzer
+                        .begin_session({.started_at = TrendTimePoint{std::chrono::milliseconds{
+                                            static_cast<std::int64_t>(index)}},
+                                        .requested_interval_ms = 1U})
+                        .has_value());
+        ASSERT_TRUE(analyzer
+                        .begin_sample({.captured_at = TrendTimePoint{std::chrono::milliseconds{
+                                           static_cast<std::int64_t>(index)}}})
+                        .has_value());
+        ASSERT_TRUE(analyzer
+                        .observe({.identity = identity,
+                                  .current_memory_bytes = 1U,
+                                  .maximum_memory = {.kind = TrendMemoryMaximumKind::finite,
+                                                     .bytes = index}})
+                        .has_value());
+        ASSERT_TRUE(analyzer.end_sample().has_value());
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    }
+
+    const auto artifact = write_artifact("analyzer-limit.jsonl", std::chrono::seconds{10},
+                                         {{snapshot(std::string{id}, "/docker/limit", 1)}}, false);
+    const TrendEvidenceSession cataloged{
+        .artifact_path = artifact,
+        .started_at_utc = "1970-01-01T00:00:10.000Z",
+        .requested_interval_ms = 10'000U,
+        .incomplete = false,
+        .container_windows = {{.identity = identity,
+                               .minimum_captured_at_utc = "1970-01-01T00:00:10.000Z",
+                               .maximum_captured_at_utc = "1970-01-01T00:00:10.000Z"}},
+    };
+
+    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+
+    ASSERT_FALSE(replayed.has_value());
+    EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::analyzer_failed);
+    EXPECT_EQ(replayed.error().artifact_path, artifact);
+}
+
+TEST_F(TrendAnalysisServiceTest, BoundsNewReplayIdentityWindowsBeforeAllocation) {
+    std::vector<DockerContainerMemorySnapshot> containers;
+    containers.reserve(kTrendEvidenceCatalogMaximumContainerWindows + 1U);
+    for (std::size_t index{}; index <= kTrendEvidenceCatalogMaximumContainerWindows; ++index) {
+        containers.push_back(snapshot(container_id_for(index), "/docker/replay-bound", 1U));
+    }
+    const auto artifact = write_artifact("replay-bound.jsonl", std::chrono::seconds{0},
+                                         {std::move(containers)}, false);
+    TrendAnalyzer analyzer;
+    const TrendEvidenceSession cataloged{
+        .artifact_path = artifact,
+        .started_at_utc = "1970-01-01T00:00:00.000Z",
+        .requested_interval_ms = 10'000U,
+        .incomplete = false,
+        .container_windows = {},
+    };
+
+    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+
+    ASSERT_FALSE(replayed.has_value());
+    EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::evidence_replay_failed);
+    EXPECT_EQ(replayed.error().artifact_path, artifact);
 }
 
 TEST(TrendAnalysisReplayMetadata, AcceptsEquivalentCatalogMetadata) {

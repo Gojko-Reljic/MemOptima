@@ -65,7 +65,10 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
                 .container_id = container.container_id.value(),
                 .cgroup_path = container.cgroup_path.string(),
             };
-            update_window(identity, captured_at);
+            const auto window = update_window(identity, captured_at);
+            if (!window.has_value()) {
+                return window;
+            }
             const auto observed = forward(
                 analyzer_.observe({.identity = identity,
                                    .current_memory_bytes = container.current_memory_bytes,
@@ -107,7 +110,14 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
         });
     }
 
-    void update_window(const TrendContainerIdentity &identity, const std::string &captured_at) {
+    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
+    update_window(const TrendContainerIdentity &identity, const std::string &captured_at) {
+        if (!windows_.contains(identity) &&
+            windows_.size() >= kTrendEvidenceCatalogMaximumContainerWindows) {
+            return std::unexpected(memoptima::detail::EvidenceArtifactTraversalError{
+                .detail = "The replayed artifact exceeds the configured container-window limit.",
+            });
+        }
         auto [position, inserted] = windows_.try_emplace(
             identity, TrendContainerObservationWindow{.identity = identity,
                                                       .minimum_captured_at_utc = captured_at,
@@ -118,6 +128,7 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
             position->second.maximum_captured_at_utc =
                 std::max(position->second.maximum_captured_at_utc, captured_at);
         }
+        return {};
     }
 
     TrendAnalyzer &analyzer_;
@@ -195,6 +206,11 @@ replay_metadata_mismatch(const TrendEvidenceSession &catalog_session,
     return std::nullopt;
 }
 
+std::expected<void, TrendAnalysisError>
+replay_trend_evidence_session(const TrendEvidenceSession &session, TrendAnalyzer &analyzer) {
+    return replay_session(session, analyzer);
+}
+
 } // namespace detail
 
 std::expected<TrendAnalysis, TrendAnalysisError>
@@ -207,7 +223,7 @@ analyze_trend_manifest(const TrendManifest &manifest) {
 
     TrendAnalyzer analyzer;
     for (const auto &session : catalog->sessions) {
-        const auto replayed = replay_session(session, analyzer);
+        const auto replayed = detail::replay_trend_evidence_session(session, analyzer);
         if (!replayed.has_value()) {
             return std::unexpected(replayed.error());
         }
