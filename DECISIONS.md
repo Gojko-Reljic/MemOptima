@@ -449,10 +449,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Replay validation:** After an artifact is streamed and before its analyzer session is closed or
   any result is returned, replay compares its catalog-relevant metadata with the corresponding
   first-pass catalog entry: session start time, declared sampling interval, incomplete status, and
-  the first/last captured timestamp windows for every strict container identity. Any difference is
-  `evidence_replay_failed`. The service does not add a content hash in v0.7; the comparison protects
-  the ordering and overlap facts established by cataloging while leaving valid replayed measurements
-  as the analyzer input.
+  the minimum/maximum captured timestamp windows for every strict container identity. Any difference
+  is `evidence_replay_failed`. The service does not add a content hash in v0.7; the comparison
+  protects the ordering and overlap facts established by cataloging while leaving valid replayed
+  measurements as the analyzer input.
 - **Error contract:** `TrendAnalysisError` has exactly three categories: `catalog_failed`,
   `evidence_replay_failed`, and `analyzer_failed`. It carries optional artifact context and an
   English diagnostic detail. Catalog errors are mapped to `catalog_failed`; typed-reader failures
