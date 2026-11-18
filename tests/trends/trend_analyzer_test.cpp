@@ -632,6 +632,7 @@ TEST(TrendAnalyzerTest, AccumulatesRatesIndependentlyOnBothSidesOfEpochBreaks) {
     const auto start = session_start.started_at;
     ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
     auto value = observation();
+    value.maximum_memory.bytes = 200U;
     value.current_memory_bytes = 0U;
     accept_sample(analyzer, start, {value});
     value.current_memory_bytes = 50U;
@@ -674,7 +675,189 @@ TEST(TrendAnalyzerTest, AccumulatesRatesIndependentlyOnBothSidesOfEpochBreaks) {
         }
     }
     EXPECT_EQ(analysis->summary.rate_available_epoch_count, 3U);
-    EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 0U);
+    EXPECT_EQ(epochs.front().time_to_limit.status, TrendTimeToLimitStatus::available);
+    EXPECT_EQ(epochs.front().time_to_limit.estimated_duration_ms, 10'000U);
+    EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 1U);
+}
+
+TEST(TrendAnalyzerTest, AppliesTimeToLimitStatusPrecedence) {
+    using Kind = TrendMemoryMaximumKind;
+    using Status = TrendTimeToLimitStatus;
+    struct StatusCase {
+        const char *description;
+        TrendMemoryMaximum maximum;
+        std::optional<std::uint64_t> middle_bytes;
+        std::uint64_t latest_bytes;
+        std::chrono::milliseconds window;
+        TrendTimeToLimitStatus expected_status;
+    };
+    constexpr TrendMemoryMaximum finite{Kind::finite, 200};
+    constexpr std::array cases{
+        StatusCase{"at maximum despite sparse evidence and unavailable rate",
+                   {Kind::finite, 100},
+                   std::nullopt,
+                   100,
+                   60s,
+                   Status::already_at_or_above_maximum},
+        StatusCase{"above maximum with positive growth",
+                   {Kind::finite, 100},
+                   101,
+                   102,
+                   20s,
+                   Status::already_at_or_above_maximum},
+        StatusCase{"unlimited maximum despite sparse evidence and unavailable rate",
+                   {Kind::unlimited},
+                   std::nullopt,
+                   110,
+                   60s,
+                   Status::unlimited_maximum},
+        StatusCase{"unavailable maximum despite sparse evidence and positive growth",
+                   {Kind::unavailable},
+                   110,
+                   120,
+                   60s,
+                   Status::unavailable_maximum},
+        StatusCase{"sparse evidence despite unavailable rate", finite, std::nullopt, 110, 60s,
+                   Status::sparse_evidence},
+        StatusCase{"sparse evidence despite zero growth", finite, 100, 100, 60s,
+                   Status::sparse_evidence},
+        StatusCase{"insufficient observations", finite, std::nullopt, 110, 20s,
+                   Status::rate_unavailable},
+        StatusCase{"insufficient duration", finite, 105, 110, 9s, Status::rate_unavailable},
+        StatusCase{"zero growth", finite, 100, 100, 20s, Status::non_positive_growth},
+        StatusCase{"negative growth", finite, 95, 90, 20s, Status::non_positive_growth},
+    };
+    for (const auto &status_case : cases) {
+        SCOPED_TRACE(status_case.description);
+        TrendAnalyzer analyzer;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        auto value = observation();
+        value.maximum_memory = status_case.maximum;
+        value.current_memory_bytes = 100U;
+        accept_sample(analyzer, start, {value});
+        if (status_case.middle_bytes) {
+            value.current_memory_bytes = status_case.middle_bytes;
+            accept_sample(analyzer, start + status_case.window / 2, {value});
+        }
+        value.current_memory_bytes = status_case.latest_bytes;
+        accept_sample(analyzer, start + status_case.window, {value});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &time_to_limit = analysis->epochs.front().time_to_limit;
+        EXPECT_EQ(time_to_limit.status, status_case.expected_status);
+        EXPECT_FALSE(time_to_limit.estimated_duration_ms.has_value());
+        EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 0U);
+    }
+}
+
+TEST(TrendAnalyzerTest, EstimatesWholeMillisecondsFromTheLatestActualObservation) {
+    struct DurationCase {
+        std::array<std::uint64_t, 3> bytes;
+        std::uint64_t maximum;
+        std::uint64_t expected_ms;
+    };
+    constexpr std::array cases{
+        DurationCase{{0, 100, 100}, 200, 20'000},
+        DurationCase{{0, 0, 1}, std::uint64_t{1} << 40U, 21'990'232'555'500'000U},
+        DurationCase{{0, 30, 60}, 61, 333},
+        DurationCase{{0, 20'000, 40'000}, 40'001, 0},
+    };
+    for (const auto &duration_case : cases) {
+        SCOPED_TRACE(duration_case.expected_ms);
+        TrendAnalyzer analyzer;
+        auto value = observation();
+        value.maximum_memory.bytes = duration_case.maximum;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        value.current_memory_bytes = duration_case.bytes[0];
+        accept_sample(analyzer, start, {value});
+        value.current_memory_bytes = duration_case.bytes[1];
+        accept_sample(analyzer, start + 10s, {value});
+        value.current_memory_bytes = duration_case.bytes[2];
+        accept_sample(analyzer, start + 20s, {value});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &time_to_limit = analysis->epochs.front().time_to_limit;
+        EXPECT_EQ(time_to_limit.status, TrendTimeToLimitStatus::available);
+        EXPECT_EQ(time_to_limit.estimated_duration_ms, duration_case.expected_ms);
+        EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 1U);
+    }
+}
+
+TEST(TrendAnalyzerTest, RejectsDurationAtOrAboveTheExclusiveUint64Bound) {
+    // A slope of 500 B/s makes the duration two milliseconds for each remaining byte.
+    constexpr auto first_out_of_range_bytes = std::uint64_t{1} << 63U;
+    constexpr auto in_range_bytes = first_out_of_range_bytes - 4096U;
+    for (const auto remaining :
+         {in_range_bytes, first_out_of_range_bytes, first_out_of_range_bytes + 4096U}) {
+        SCOPED_TRACE(remaining);
+        TrendAnalyzer analyzer;
+        auto value = observation();
+        value.maximum_memory.bytes = remaining + 10'000U;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        value.current_memory_bytes = 0U;
+        accept_sample(analyzer, start, {value});
+        value.current_memory_bytes = 5000U;
+        accept_sample(analyzer, start + 10s, {value});
+        value.current_memory_bytes = 10'000U;
+        accept_sample(analyzer, start + 20s, {value});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &epoch = analysis->epochs.front();
+        ASSERT_TRUE(epoch.current_memory.growth_bytes_per_second.has_value());
+        EXPECT_DOUBLE_EQ(*epoch.current_memory.growth_bytes_per_second, 500.0);
+        if (remaining == in_range_bytes) {
+            EXPECT_EQ(epoch.time_to_limit.status, TrendTimeToLimitStatus::available);
+            EXPECT_EQ(epoch.time_to_limit.estimated_duration_ms, 2U * in_range_bytes);
+            EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 1U);
+        } else {
+            EXPECT_EQ(epoch.time_to_limit.status, TrendTimeToLimitStatus::duration_out_of_range);
+            EXPECT_FALSE(epoch.time_to_limit.estimated_duration_ms.has_value());
+            EXPECT_EQ(analysis->summary.time_to_limit_available_epoch_count, 0U);
+        }
+    }
+}
+
+TEST(TrendAnalyzerTest, AllowsTimeToLimitWithAMissedSampleAtTheExactGapThreshold) {
+    for (const auto excess : {0ms, 1ms}) {
+        SCOPED_TRACE(excess.count());
+        TrendAnalyzer analyzer;
+        const auto start = session_start.started_at;
+        ASSERT_TRUE(analyzer.begin_session(session_start).has_value());
+        auto value = observation();
+        value.current_memory_bytes = 0U;
+        accept_sample(analyzer, start + 10s, {value});
+        value.current_memory_bytes = 10U;
+        accept_sample(analyzer, start + 20s, {value});
+        accept_sample(analyzer, start + 30s, {});
+        value.current_memory_bytes = 30U;
+        accept_sample(analyzer, start + 40s + excess, {value});
+        ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+        const auto analysis = analyzer.finish();
+        ASSERT_TRUE(analysis.has_value());
+        ASSERT_EQ(analysis->epochs.size(), 1U);
+        const auto &epoch = analysis->epochs.front();
+        EXPECT_EQ(epoch.current_memory.rate_status, TrendRateStatus::available);
+        if (excess == 0ms) {
+            EXPECT_EQ(epoch.time_to_limit.status, TrendTimeToLimitStatus::available);
+            EXPECT_EQ(epoch.time_to_limit.estimated_duration_ms, 70'000U);
+        } else {
+            EXPECT_EQ(epoch.time_to_limit.status, TrendTimeToLimitStatus::sparse_evidence);
+            EXPECT_FALSE(epoch.time_to_limit.estimated_duration_ms.has_value());
+        }
+    }
 }
 
 } // namespace

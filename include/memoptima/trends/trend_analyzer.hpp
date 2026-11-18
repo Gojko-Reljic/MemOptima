@@ -143,7 +143,7 @@ class TrendAnalyzer {
 
     [[nodiscard]] std::expected<void, TrendAnalyzerError> end_session(const TrendSessionEnd &end);
 
-    // Returns epoch metadata and current-memory rates. Time-to-limit calculations are deferred.
+    // Returns epoch metadata, current-memory rates, and time-to-limit results.
     [[nodiscard]] std::expected<TrendAnalysis, TrendAnalyzerError> finish();
 
   private:

@@ -39,6 +39,46 @@ std::uint64_t elapsed_ms(TrendTimePoint first, TrendTimePoint last) {
            static_cast<std::uint64_t>(first.time_since_epoch().count());
 }
 
+TrendTimeToLimitResult evaluate_time_to_limit(const TrendEpochResult &epoch,
+                                              long double time_variance_sum,
+                                              long double time_memory_covariance_sum) {
+    using Status = TrendTimeToLimitStatus;
+    const auto [maximum_kind, maximum_bytes] = epoch.maximum_memory;
+    const auto latest_bytes = epoch.current_memory.last_bytes;
+    if (maximum_kind == TrendMemoryMaximumKind::finite && latest_bytes >= maximum_bytes) {
+        return {Status::already_at_or_above_maximum, std::nullopt};
+    }
+    if (maximum_kind == TrendMemoryMaximumKind::unlimited) {
+        return {Status::unlimited_maximum, std::nullopt};
+    }
+    if (maximum_kind == TrendMemoryMaximumKind::unavailable) {
+        return {Status::unavailable_maximum, std::nullopt};
+    }
+    if (epoch.quality == TrendEvidenceQuality::sparse) {
+        return {Status::sparse_evidence, std::nullopt};
+    }
+    const auto growth = epoch.current_memory.growth_bytes_per_second;
+    if (!growth) {
+        return {Status::rate_unavailable, std::nullopt};
+    }
+    if (*growth <= 0.0) {
+        return {Status::non_positive_growth, std::nullopt};
+    }
+
+    const auto bytes_remaining = maximum_bytes - latest_bytes;
+    // Form the inverse OLS slope from the working-precision sums.
+    const long double milliseconds_per_byte =
+        1000.0L * time_variance_sum / time_memory_covariance_sum;
+    const long double duration_ms =
+        std::floor(static_cast<long double>(bytes_remaining) * milliseconds_per_byte);
+    // The exclusive power-of-two bound is exact even if UINT64_MAX would round up.
+    const long double upper_bound = std::ldexp(1.0L, std::numeric_limits<std::uint64_t>::digits);
+    if (!std::isfinite(duration_ms) || duration_ms >= upper_bound) {
+        return {Status::duration_out_of_range, std::nullopt};
+    }
+    return {Status::available, static_cast<std::uint64_t>(duration_ms)};
+}
+
 } // namespace
 
 std::expected<void, TrendAnalyzerError>
@@ -266,6 +306,8 @@ std::expected<TrendAnalysis, TrendAnalyzerError> TrendAnalyzer::finish() {
     // Validate each rate before moving any results out of the analyzer.
     for (auto &epoch : epochs_) {
         finalize_rate(epoch);
+        epoch.result.time_to_limit = evaluate_time_to_limit(epoch.result, epoch.time_variance_sum,
+                                                            epoch.time_memory_covariance_sum);
     }
     for (auto &epoch : epochs_) {
         if (epoch.result.quality == TrendEvidenceQuality::sparse) {
@@ -276,6 +318,9 @@ std::expected<TrendAnalysis, TrendAnalyzerError> TrendAnalyzer::finish() {
         }
         if (epoch.result.current_memory.rate_status == TrendRateStatus::available) {
             ++analysis.summary.rate_available_epoch_count;
+        }
+        if (epoch.result.time_to_limit.status == TrendTimeToLimitStatus::available) {
+            ++analysis.summary.time_to_limit_available_epoch_count;
         }
         analysis.epochs.push_back(std::move(epoch.result));
     }
