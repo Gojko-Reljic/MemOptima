@@ -45,15 +45,15 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
             auto [position, inserted] = windows_.try_emplace(
                 std::move(identity),
                 TrendContainerObservationWindow{.identity = {},
-                                                .first_captured_at_utc = captured_at,
-                                                .last_captured_at_utc = captured_at});
+                                                .minimum_captured_at_utc = captured_at,
+                                                .maximum_captured_at_utc = captured_at});
             if (inserted) {
                 position->second.identity = position->first;
             } else {
-                position->second.first_captured_at_utc =
-                    std::min(position->second.first_captured_at_utc, captured_at);
-                position->second.last_captured_at_utc =
-                    std::max(position->second.last_captured_at_utc, captured_at);
+                position->second.minimum_captured_at_utc =
+                    std::min(position->second.minimum_captured_at_utc, captured_at);
+                position->second.maximum_captured_at_utc =
+                    std::max(position->second.maximum_captured_at_utc, captured_at);
             }
             if (windows_.size() > kTrendEvidenceCatalogMaximumContainerWindows) {
                 return std::unexpected(detail::EvidenceArtifactTraversalError{
@@ -125,7 +125,8 @@ load_trend_evidence_catalog(const TrendManifest &manifest) {
     for (const auto &session : catalog.sessions) {
         for (const auto &window : session.container_windows) {
             const auto prior = observed_through.find(window.identity);
-            if (prior != observed_through.end() && window.first_captured_at_utc <= prior->second) {
+            if (prior != observed_through.end() &&
+                window.minimum_captured_at_utc <= prior->second) {
                 return catalog_error(
                     TrendEvidenceCatalogErrorCode::ambiguous_session_overlap, session.artifact_path,
                     "The artifact overlaps a previously selected session for container '" +
@@ -133,9 +134,9 @@ load_trend_evidence_catalog(const TrendManifest &manifest) {
                         window.identity.cgroup_path + "'.");
             }
             if (prior == observed_through.end()) {
-                observed_through.emplace(window.identity, window.last_captured_at_utc);
+                observed_through.emplace(window.identity, window.maximum_captured_at_utc);
             } else {
-                prior->second = std::max(prior->second, window.last_captured_at_utc);
+                prior->second = std::max(prior->second, window.maximum_captured_at_utc);
             }
         }
     }
