@@ -20,12 +20,13 @@ struct TrendContainerIdentity {
     [[nodiscard]] auto operator<=>(const TrendContainerIdentity &) const = default;
 };
 
-// The catalog retains only the observed bounds needed to order sessions and reject ambiguity.
-// A later analyzer rereads the selected artifacts instead of retaining every sample in memory.
+// The catalog retains only temporal observation bounds needed to order sessions and reject
+// ambiguity. A later analyzer rereads the selected artifacts instead of retaining every sample in
+// memory.
 struct TrendContainerObservationWindow {
     TrendContainerIdentity identity;
-    std::string first_captured_at_utc;
-    std::string last_captured_at_utc;
+    std::string minimum_captured_at_utc;
+    std::string maximum_captured_at_utc;
 };
 
 struct TrendEvidenceSession {

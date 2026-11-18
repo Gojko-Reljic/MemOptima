@@ -186,7 +186,9 @@ TEST_F(TrendEvidenceSessionCatalogTest, SortsSessionsAndPreservesIncompleteStatu
     write_artifact("later.jsonl", std::chrono::seconds{30},
                    {{snapshot(std::string{second_id}, "/docker/second")}}, false);
     write_artifact("earlier.jsonl", std::chrono::seconds{0},
-                   {{snapshot(std::string{first_id}, "/docker/first")}}, true);
+                   {{snapshot(std::string{first_id}, "/docker/first")},
+                    {snapshot(std::string{first_id}, "/docker/first")}},
+                   true);
 
     const auto catalog = load_trend_evidence_catalog(manifest(
         R"({"manifest_version":1,"artifacts":[{"path":"later.jsonl"},{"path":"earlier.jsonl"}]})"));
@@ -197,6 +199,10 @@ TEST_F(TrendEvidenceSessionCatalogTest, SortsSessionsAndPreservesIncompleteStatu
     EXPECT_TRUE(catalog->sessions[0].incomplete);
     ASSERT_EQ(catalog->sessions[0].container_windows.size(), 1U);
     EXPECT_EQ(catalog->sessions[0].container_windows[0].identity.container_id, first_id);
+    EXPECT_EQ(catalog->sessions[0].container_windows[0].minimum_captured_at_utc,
+              "1970-01-01T00:00:00.000Z");
+    EXPECT_EQ(catalog->sessions[0].container_windows[0].maximum_captured_at_utc,
+              "1970-01-01T00:00:10.000Z");
     EXPECT_EQ(catalog->sessions[1].artifact_path.filename(), "later.jsonl");
     EXPECT_FALSE(catalog->sessions[1].incomplete);
 }
