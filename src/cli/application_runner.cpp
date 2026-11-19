@@ -377,6 +377,7 @@ int run_trends_command(CommandArguments arguments) {
     }
 
     std::cout << format_trend_analysis(*analysis);
+    std::cout.flush();
     if (!std::cout) {
         std::cerr << "Error: unable to write trend analysis table to standard output.\n";
         return kExitRuntimeError;

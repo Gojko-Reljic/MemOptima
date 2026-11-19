@@ -23,6 +23,11 @@ class RejectingOutputBuffer final : public std::streambuf {
     std::streamsize xsputn(const char *, std::streamsize) override { return 0; }
 };
 
+class DeferredFailureOutputBuffer final : public std::stringbuf {
+  protected:
+    int sync() override { return -1; }
+};
+
 class ScopedStandardStreamBuffers final {
   public:
     ScopedStandardStreamBuffers(std::streambuf *standard_output, std::streambuf *standard_error)
@@ -91,6 +96,23 @@ TEST_F(ApplicationRunnerTest, ReportsAStandardOutputFailureForTrendAnalysis) {
     RejectingOutputBuffer rejecting_output;
     std::ostringstream standard_error;
     const ScopedStandardStreamBuffers redirected{&rejecting_output, standard_error.rdbuf()};
+
+    std::array<std::string, 4U> argument_storage{"memoptima", "trends", "analyze",
+                                                 manifest.string()};
+    std::array<char *, 4U> arguments{};
+    for (std::size_t index{}; index < arguments.size(); ++index)
+        arguments[index] = argument_storage[index].data();
+
+    EXPECT_EQ(run_application(static_cast<int>(arguments.size()), arguments.data()), 1);
+    EXPECT_EQ(standard_error.str(),
+              "Error: unable to write trend analysis table to standard output.\n");
+}
+
+TEST_F(ApplicationRunnerTest, ReportsADeferredStandardOutputFailureForTrendAnalysis) {
+    const auto manifest = write_empty_trend_manifest();
+    DeferredFailureOutputBuffer deferred_failure_output;
+    std::ostringstream standard_error;
+    const ScopedStandardStreamBuffers redirected{&deferred_failure_output, standard_error.rdbuf()};
 
     std::array<std::string, 4U> argument_storage{"memoptima", "trends", "analyze",
                                                  manifest.string()};
