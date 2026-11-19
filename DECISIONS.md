@@ -511,9 +511,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   value, not by a fabricated zero or an omitted row. Evidence quality and result availability stay
   distinct so that sparse or incomplete evidence remains visible.
 - **Exit contract:** The command returns `0` after a successful analysis, including analyses that
-  contain unavailable results; `1` for `catalog_failed`, `evidence_replay_failed`, or
-  `analyzer_failed`; and `2` for invalid command syntax or arguments. Successful tables are
-  written only to standard output. Diagnostics and usage errors are written only to standard error.
+  contain unavailable results; `1` for manifest loading or parsing, `catalog_failed`,
+  `evidence_replay_failed`, or `analyzer_failed`; and `2` for invalid command syntax or arguments.
+  Successful tables are written only to standard output. Diagnostics and usage errors are written
+  only to standard error.
 - **Deferred machine contract:** v0.7 does not provide a JSON flag, a report file, or a
   machine-readable trend-output schema. A versioned JSON report is reconsidered in v0.8 after PSI,
   swap, cache, and intelligence-layer requirements define the complete reporting model.
