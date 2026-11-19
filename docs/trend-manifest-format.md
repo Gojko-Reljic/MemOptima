@@ -2,9 +2,9 @@
 
 ## Purpose
 
-A trend manifest explicitly selects local evidence artifacts for `memoptima trend manifest`. It is
-one versioned JSON document, not JSON Lines. It selects evidence and does not assert a logical
-workload identity or inject analytical metadata.
+A trend manifest explicitly selects local evidence artifacts for
+`memoptima trends analyze <MANIFEST>`. It is one versioned JSON document, not JSON Lines. It
+selects evidence and does not assert a logical workload identity or inject analytical metadata.
 
 ## Manifest version 1
 

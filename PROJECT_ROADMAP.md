@@ -37,8 +37,8 @@ Artifact paths are relative to the manifest directory and cannot escape its dire
 MemOptima orders the selected artifacts by validated session start time and rejects duplicates.
 It fails closed when any artifact is unavailable, unsafe, malformed, or lifecycle-invalid.
 Manifest version 1 is closed and contains only `manifest_version`, `artifacts`, and artifact `path`.
-The public command is `memoptima trend manifest <FILE>`, with table output by default and JSON on
-request.
+The public command is `memoptima trends analyze <MANIFEST>`, with one human-readable table on
+standard output. A machine-readable, versioned JSON trend report is deferred to v0.8.
 Each result represents one container observation epoch; global summaries do not merge separate epochs.
 Version 0.7 trends `memory.current`; `memory.max` provides only limit context and eligibility.
 Time gaps remain visible quality signals: they mark a trend as sparse and prohibit a time-to-limit
@@ -47,8 +47,8 @@ An interval is sparse only when it exceeds twice the larger adjacent declared sa
 `memory.current` rate requires at least three observations across ten seconds; a time-to-limit estimate
 also requires continuous quality and a stable finite `memory.max`.
 Version 0.7 reports numeric rates and evidence quality, not uncalibrated direction labels or risk scores.
-JSON retains full Docker IDs and cgroup paths for local auditability; terminal tables abbreviate IDs.
-JSON output is one versioned report document containing manifest metadata, a summary, and epoch results.
+Terminal tables abbreviate Docker IDs while the validated manifest and evidence artifacts retain full
+identities for local auditability.
 The trend command returns success for every valid report, including reports with no eligible epochs.
 Every semantic `memory.max` change closes an observation epoch.
 Unavailable `memory.current` closes an epoch; unavailable or unlimited `memory.max` preserves the
@@ -67,7 +67,8 @@ identity.
 - Trend reports for memory usage and forecast eligibility across compatible sessions.
 - Stable result codes for invalid artifacts, valid-but-ineligible data, and available trends.
 - Streaming analysis limited to 128 manifest artifacts and 4,096 active container observation epochs.
-- A human-readable table by default and a versioned JSON result format for integrations.
+- A human-readable table for local operational analysis; a versioned JSON result format is deferred
+  to v0.8.
 - Deterministic fixtures covering gaps, interrupted sessions, limit changes, unavailable metrics, and
   container identity changes.
 
