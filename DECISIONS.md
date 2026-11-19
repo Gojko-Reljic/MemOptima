@@ -516,8 +516,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Operational duration presentation:** The table uses a shared CLI formatter that accepts a
   millisecond duration. Durations under one second are `< 1s`; durations under one minute are whole
   seconds; durations under one hour are `Xm YYs`; durations under one day are `Xh YYm`; and longer
-  durations are `Xd YYh`. The formatter does not change the existing microsecond-oriented duration
-  formatter used by other CLI output.
+  durations are `Xd YYh`. Every displayed unit is rounded down, never to the nearest unit or up.
+  The formatter does not change the existing microsecond-oriented duration formatter used by other
+  CLI output.
 - **Exit contract:** The command returns `0` after a successful analysis, including analyses that
   contain unavailable results; `1` for manifest loading or parsing, `catalog_failed`,
   `evidence_replay_failed`, `analyzer_failed`, or failure to write the table to standard output;
@@ -537,8 +538,8 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   implementation requires formatter and command integration tests for successful analyses,
   unavailable results, same-Docker-ID distinct-cgroup identities, diagnostics, and all three
   exit-code classes, including every public trend-service error category, failed table output,
-  empty analysis output, and every operational duration boundary. Any later JSON schema requires a
-  separate approved decision.
+  empty analysis output, and every operational duration boundary and rounding transition. Any later
+  JSON schema requires a separate approved decision.
 
 ## Pending decisions
 

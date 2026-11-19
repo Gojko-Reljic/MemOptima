@@ -139,8 +139,8 @@ a separately approved public schema before implementation.
 
 A successful analysis with no observation epochs writes an explicit message without a table header.
 Trend windows and available time-to-limit results use an operational duration presentation in whole
-seconds, minutes, hours, and days; the existing microsecond-oriented duration display remains
-unchanged for other CLI output.
+seconds, minutes, hours, and days, with every displayed unit rounded down; the existing
+microsecond-oriented duration display remains unchanged for other CLI output.
 
 ## Safety boundary
 
