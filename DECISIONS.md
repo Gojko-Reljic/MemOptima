@@ -488,6 +488,43 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   The change preserves runtime behavior but requires source updates for callers of this pre-release
   C++ API.
 
+## ADR-037: Provide human-first trend analysis table output in v0.7
+
+- **Status:** Approved
+- **Decision:** v0.7 exposes validated trend analysis through the command
+  `memoptima trends analyze <MANIFEST>`. The command calls the public
+  `analyze_trend_manifest` application service and writes one stable, human-readable table to
+  standard output. The table has one row per trend epoch and semantically exposes a container
+  identifier, epoch index, observation count, evidence quality, growth rate when available,
+  time-to-limit when available, and an explicit status. It does not present a trend result as an
+  OOM prediction, a confirmed memory leak, or a safe automatic action.
+- **Identifier presentation:** The table displays a Docker ID prefix of at least twelve characters.
+  The formatter extends prefixes as needed to distinguish every container identity in one result;
+  it never displays an ambiguous shortened identifier. The table remains a compact operational
+  summary rather than a full identity-inspection view.
+- **Availability presentation:** A valid analysis with ineligible epochs is successful. Unavailable
+  rate or time-to-limit values are represented by explicit status text and a non-numeric table
+  value, not by a fabricated zero or an omitted row. Evidence quality and result availability stay
+  distinct so that sparse or incomplete evidence remains visible.
+- **Exit contract:** The command returns `0` after a successful analysis, including analyses that
+  contain unavailable results; `1` for manifest loading, evidence replay, or analyzer failures;
+  and `2` for invalid command syntax or arguments. Successful tables are written only to standard
+  output. Diagnostics and usage errors are written only to standard error.
+- **Deferred machine contract:** v0.7 does not provide a JSON flag, a report file, or a
+  machine-readable trend-output schema. A versioned JSON report is reconsidered in v0.8 after PSI,
+  swap, cache, and intelligence-layer requirements define the complete reporting model.
+- **Alternatives considered:** Deliver a table and a versioned JSON schema together; expose JSON
+  only; keep the service internal until v0.8; show full Docker IDs in every table row; silently
+  omit ineligible epochs.
+- **Reason:** A table completes the user-facing evidence-to-analysis workflow for incident response
+  while avoiding a premature machine-readable compatibility promise. Explicit statuses protect
+  operators from overinterpreting limited evidence, and adaptive prefixes preserve container
+  identity without routinely making the table impractically wide.
+- **Consequence:** The CLI remains a presentation layer over the public trends service. The
+  implementation requires formatter and command integration tests for successful analyses,
+  unavailable results, adaptive identifier disambiguation, diagnostics, and all three exit-code
+  classes. Any later JSON schema requires a separate approved decision.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
