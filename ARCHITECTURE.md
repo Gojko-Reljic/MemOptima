@@ -137,6 +137,11 @@ valid-but-ineligible results without claiming an OOM prediction or confirmed mem
 versioned JSON result format for automation and the future dashboard is deferred to v0.8 and requires
 a separately approved public schema before implementation.
 
+A successful analysis with no observation epochs writes an explicit message without a table header.
+Trend windows and available time-to-limit results use an operational duration presentation in whole
+seconds, minutes, hours, and days; the existing microsecond-oriented duration display remains
+unchanged for other CLI output.
+
 ## Safety boundary
 
 The platform is currently observational and advisory. It must not make host, cgroup, container, or
