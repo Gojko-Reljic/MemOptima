@@ -12,6 +12,8 @@
 #include <memoptima/linux/process_scanner.hpp>
 #include <memoptima/sampling/sampling_configuration.hpp>
 #include <memoptima/sampling/session_runner.hpp>
+#include <memoptima/trends/trend_analysis_service.hpp>
+#include <memoptima/trends/trend_manifest.hpp>
 
 #include "assessments_formatter.hpp"
 #include "containers_formatter.hpp"
@@ -19,6 +21,7 @@
 #include "monitor_runner.hpp"
 #include "processes_formatter.hpp"
 #include "status_formatter.hpp"
+#include "trends_formatter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -65,6 +68,7 @@ void print_help(std::ostream &output) {
            << "  memoptima assess container <FULL_ID>\n"
            << "  memoptima inspect evidence <FILE>\n"
            << "  memoptima forecast evidence <FILE>\n"
+           << "  memoptima trends analyze <MANIFEST>\n"
            << "  memoptima sample containers --count <COUNT> --interval <DURATION> --output "
               "<NEW_FILE>\n\n"
            << "Options:\n"
@@ -77,6 +81,7 @@ void print_help(std::ostream &output) {
            << "  processes        Display the top memory-consuming processes.\n"
            << "  sample           Collect bounded Docker cgroup memory evidence.\n"
            << "  status           Display current RAM and swap status.\n"
+           << "  trends           Analyze cross-session container memory evidence.\n"
            << "  -v, --version    Display the application version.\n";
 }
 
@@ -352,6 +357,34 @@ int run_forecast_command(CommandArguments arguments) {
     return kExitSuccess;
 }
 
+int run_trends_command(CommandArguments arguments) {
+    if (arguments.size() != 2U || arguments.front() != "analyze") {
+        std::cerr << "Error: 'trends' requires 'analyze <MANIFEST>'.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+
+    const auto manifest = trends::load_trend_manifest(std::filesystem::path{arguments[1]});
+    if (!manifest.has_value()) {
+        std::cerr << "Error: unable to load trend manifest: " << manifest.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    const auto analysis = trends::analyze_trend_manifest(*manifest);
+    if (!analysis.has_value()) {
+        std::cerr << "Error: unable to analyze trend manifest: " << analysis.error().detail << '\n';
+        return kExitRuntimeError;
+    }
+
+    std::cout << format_trend_analysis(*analysis);
+    std::cout.flush();
+    if (!std::cout) {
+        std::cerr << "Error: unable to write trend analysis table to standard output.\n";
+        return kExitRuntimeError;
+    }
+    return kExitSuccess;
+}
+
 struct SampleContainersArguments {
     sampling::SamplingCount count;
     sampling::SamplingInterval interval;
@@ -488,12 +521,19 @@ int run_version_command(CommandArguments arguments) {
 }
 
 constexpr std::array kCommands{
-    Command{"status", run_status_command},       Command{"monitor", run_monitor_command},
-    Command{"processes", run_processes_command}, Command{"containers", run_containers_command},
-    Command{"container", run_container_command}, Command{"assess", run_assess_command},
-    Command{"inspect", run_inspect_command},     Command{"forecast", run_forecast_command},
-    Command{"sample", run_sample_command},       Command{"-h", run_help_command},
-    Command{"--help", run_help_command},         Command{"-v", run_version_command},
+    Command{"status", run_status_command},
+    Command{"monitor", run_monitor_command},
+    Command{"processes", run_processes_command},
+    Command{"containers", run_containers_command},
+    Command{"container", run_container_command},
+    Command{"assess", run_assess_command},
+    Command{"inspect", run_inspect_command},
+    Command{"forecast", run_forecast_command},
+    Command{"trends", run_trends_command},
+    Command{"sample", run_sample_command},
+    Command{"-h", run_help_command},
+    Command{"--help", run_help_command},
+    Command{"-v", run_version_command},
     Command{"--version", run_version_command},
 };
 
