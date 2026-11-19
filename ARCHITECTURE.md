@@ -148,6 +148,10 @@ use right-aligned signed IEC units with two decimal places; display normalizatio
 zero. Unavailable rates and time-to-limit values are explicit `N/A` values with one stable status
 label explaining the limiting condition.
 
+Trend tables retain the complete cgroup path and use dynamic widths bounded below by their headers.
+Identity, quality, and status text is left-aligned; numeric and duration values are right-aligned.
+Columns use two spaces between them and no trailing padding after the final status field.
+
 ## Safety boundary
 
 The platform is currently observational and advisory. It must not make host, cgroup, container, or
