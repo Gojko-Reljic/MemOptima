@@ -25,5 +25,22 @@ TEST(Formatting, FormatsPressureDurationsWithStableUnits) {
     EXPECT_EQ(format_duration(1000000), "1.00 s");
 }
 
+TEST(Formatting, FormatsOperationalDurationsAtUnitBoundaries) {
+    using namespace std::chrono_literals;
+
+    EXPECT_EQ(format_operational_duration(0ms), "< 1s");
+    EXPECT_EQ(format_operational_duration(999ms), "< 1s");
+    EXPECT_EQ(format_operational_duration(1s), "1s");
+    EXPECT_EQ(format_operational_duration(59s + 999ms), "59s");
+    EXPECT_EQ(format_operational_duration(60s), "1m 00s");
+    EXPECT_EQ(format_operational_duration(60s + 999ms), "1m 00s");
+    EXPECT_EQ(format_operational_duration(59min + 59s + 999ms), "59m 59s");
+    EXPECT_EQ(format_operational_duration(1h), "1h 00m");
+    EXPECT_EQ(format_operational_duration(1h + 59s + 999ms), "1h 00m");
+    EXPECT_EQ(format_operational_duration(23h + 59min + 59s + 999ms), "23h 59m");
+    EXPECT_EQ(format_operational_duration(24h), "1d 00h");
+    EXPECT_EQ(format_operational_duration(3 * 24h + 4h + 59min + 999ms), "3d 04h");
+}
+
 } // namespace
 } // namespace memoptima::cli

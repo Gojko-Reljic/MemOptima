@@ -39,4 +39,33 @@ std::string format_duration(std::uint64_t microseconds) {
                                  : std::format("{:.2f} s", milliseconds / 1000.0);
 }
 
+std::string format_operational_duration(std::chrono::milliseconds duration) {
+    using namespace std::chrono;
+
+    if (duration < seconds{1})
+        return "< 1s";
+
+    const auto total_seconds = static_cast<std::uint64_t>(duration_cast<seconds>(duration).count());
+    constexpr std::uint64_t kSecondsPerMinute = 60;
+    constexpr std::uint64_t kSecondsPerHour = 60 * kSecondsPerMinute;
+    constexpr std::uint64_t kSecondsPerDay = 24 * kSecondsPerHour;
+
+    if (total_seconds < kSecondsPerMinute)
+        return std::format("{}s", total_seconds);
+
+    const auto minutes = total_seconds / kSecondsPerMinute;
+    const auto seconds = total_seconds % kSecondsPerMinute;
+    if (total_seconds < kSecondsPerHour)
+        return std::format("{}m {:02d}s", minutes, seconds);
+
+    const auto hours = total_seconds / kSecondsPerHour;
+    const auto remaining_minutes = (total_seconds % kSecondsPerHour) / kSecondsPerMinute;
+    if (total_seconds < kSecondsPerDay)
+        return std::format("{}h {:02d}m", hours, remaining_minutes);
+
+    const auto days = total_seconds / kSecondsPerDay;
+    const auto remaining_hours = (total_seconds % kSecondsPerDay) / kSecondsPerHour;
+    return std::format("{}d {:02d}h", days, remaining_hours);
+}
+
 } // namespace memoptima::cli
