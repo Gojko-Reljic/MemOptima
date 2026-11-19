@@ -14,6 +14,10 @@ if(NOT DEFINED MEMOPTIMA_INSTALL_DOCDIR)
     message(FATAL_ERROR "MEMOPTIMA_INSTALL_DOCDIR must be provided.")
 endif()
 
+if(NOT DEFINED MEMOPTIMA_EXPECTED_VERSION)
+    message(FATAL_ERROR "MEMOPTIMA_EXPECTED_VERSION must be provided.")
+endif()
+
 # This controlled path is always <build>/install-test, so each test run starts with a clean prefix.
 file(REMOVE_RECURSE "${MEMOPTIMA_INSTALL_DIRECTORY}")
 
@@ -42,7 +46,11 @@ foreach(required_file
     "${installed_document_directory}/0.3.0-scope.md"
     "${installed_document_directory}/0.4.0-scope.md"
     "${installed_document_directory}/0.5.0-scope.md"
-    "${installed_document_directory}/evidence-artifact-format.md")
+    "${installed_document_directory}/0.6.0-scope.md"
+    "${installed_document_directory}/0.7.0-scope.md"
+    "${installed_document_directory}/evidence-artifact-format.md"
+    "${installed_document_directory}/trend-manifest-format.md"
+    "${installed_document_directory}/trend-report-format.md")
     if(NOT EXISTS "${required_file}")
         message(FATAL_ERROR "Expected installed file is missing: ${required_file}")
     endif()
@@ -63,7 +71,7 @@ if(NOT version_error STREQUAL "")
     message(FATAL_ERROR "Installed memoptima --version wrote to standard error: ${version_error}")
 endif()
 
-string(FIND "${version_output}" "memoptima " version_prefix_position)
-if(NOT version_prefix_position EQUAL 0)
-    message(FATAL_ERROR "Installed memoptima --version output must begin with 'memoptima ': ${version_output}")
+set(expected_version_output "memoptima ${MEMOPTIMA_EXPECTED_VERSION}\n")
+if(NOT version_output STREQUAL expected_version_output)
+    message(FATAL_ERROR "Unexpected installed version output: ${version_output}")
 endif()

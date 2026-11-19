@@ -262,6 +262,35 @@ limit based on the latest observed memory and a linear growth trend. It is not a
 memory-leak diagnosis, health result, recommendation, or action. An unlimited `memory.max` is
 reported as not applicable; incomplete or insufficient evidence receives an explicit reason.
 
+### Analyze trends across selected sessions
+
+Use a manifest to select the evidence artifacts to analyze. The manifest is one JSON document whose
+artifact paths are relative to the manifest's directory:
+
+```json
+{
+  "manifest_version": 1,
+  "artifacts": [
+    { "path": "evidence/session-001.jsonl" },
+    { "path": "evidence/session-002.jsonl" }
+  ]
+}
+```
+
+Run the analysis with:
+
+```bash
+./build/debug/src/memoptima trends analyze manifest.json
+```
+
+The command validates every selected artifact, then reports a separate `memory.current` trend for
+each compatible container observation epoch. It is read-only and does not scan directories,
+diagnose a memory leak, predict an OOM event, or change a host, container, or cgroup. A valid
+analysis with no container epochs is still successful and prints a clear empty-result message.
+
+See [Trend Manifest Format](trend-manifest-format.md) for the input contract and
+[Trend Report Format](trend-report-format.md) for the table, statuses, and limitations.
+
 ### Privacy, durability, and limits
 
 The artifact does not contain hostname, user name, IP address, machine ID, or a derived host
