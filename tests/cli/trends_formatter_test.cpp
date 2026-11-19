@@ -109,8 +109,12 @@ TEST(TrendsFormatter, DoesNotNarrowAnUnrepresentableObservationWindow) {
     epoch.time_to_limit.estimated_duration_ms = std::nullopt;
 
     const auto output = format_trend_analysis(make_analysis({epoch}));
+    const auto output_lines = lines(output);
 
-    EXPECT_NE(output.find("N/A"), std::string::npos);
+    ASSERT_EQ(output_lines.size(), 2U);
+    const auto window_column = output_lines.front().find("WINDOW");
+    ASSERT_NE(window_column, std::string::npos);
+    EXPECT_EQ(output_lines[1].substr(window_column, std::string{"WINDOW"}.size()), "   N/A");
 }
 
 TEST(TrendsFormatter, FormatsEvidenceQualityAndUnavailableStatuses) {
