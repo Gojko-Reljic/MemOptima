@@ -142,6 +142,12 @@ Trend windows and available time-to-limit results use an operational duration pr
 seconds, minutes, hours, and days, with every displayed unit rounded down; the existing
 microsecond-oriented duration display remains unchanged for other CLI output.
 
+Trend tables present evidence quality independently from time-to-limit eligibility. Quality carries
+both continuous or sparse observation coverage and incomplete-session provenance. Available rates
+use right-aligned signed IEC units with two decimal places; display normalization prevents a negative
+zero. Unavailable rates and time-to-limit values are explicit `N/A` values with one stable status
+label explaining the limiting condition.
+
 ## Safety boundary
 
 The platform is currently observational and advisory. It must not make host, cgroup, container, or
