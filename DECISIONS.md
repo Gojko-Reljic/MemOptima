@@ -563,6 +563,23 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   label, dynamic rate units, negative-zero normalization, unavailable values, column alignment,
   dynamic column widths, and absent trailing padding.
 
+## ADR-038: Release the approved cross-session trend capability as version 0.7.0
+
+- **Status:** Approved
+- **Decision:** MemOptima's next public release is version `0.7.0`. The CMake project version remains
+  the single source of truth and therefore changes the generated application version used by
+  `memoptima --version` and by newly written evidence artifacts. The evidence schema version remains
+  `1`.
+- **Alternatives considered:** Keep the public version at `0.6.0` until v0.8; publish the trends
+  capability as a patch release; introduce a separate version source for evidence artifacts.
+- **Reason:** v0.7 adds the owner-approved cross-session trend module and public
+  `memoptima trends analyze <MANIFEST>` command. A minor version communicates this additive,
+  backward-compatible product capability while preserving one auditable build-version source.
+- **Consequence:** Release preparation updates the CMake version to `0.7.0`, extends the release
+  verification to cover the trends command under Valgrind, and records the actual validation results
+  in a v0.7.0 verification document. Existing schema-v1 artifacts remain valid; new sampling
+  artifacts report application version `0.7.0` without changing their schema.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
