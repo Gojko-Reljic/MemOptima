@@ -95,7 +95,7 @@ scope. New entries must include the alternatives considered and their consequenc
 
 ## ADR-010: Provide table and versioned JSON trend results
 
-- **Status:** Approved
+- **Status:** Superseded by ADR-037
 - **Decision:** The v0.7 trend command provides a human-readable table by default and a versioned
   JSON result format on request.
 - **Alternatives considered:** Table only; JSON only.
@@ -160,7 +160,7 @@ scope. New entries must include the alternatives considered and their consequenc
 
 ## ADR-016: Use the `trend manifest` CLI command
 
-- **Status:** Approved
+- **Status:** Superseded by ADR-037
 - **Decision:** The public v0.7 command is `memoptima trend manifest <FILE>`. It produces a table by
   default and JSON when requested through `--format json`.
 - **Alternatives considered:** `trends manifest <FILE>`; `analyze trends <FILE>`.
@@ -241,7 +241,7 @@ scope. New entries must include the alternatives considered and their consequenc
 
 ## ADR-023: Retain full container identity in JSON trend results
 
-- **Status:** Approved
+- **Status:** Superseded by ADR-037
 - **Decision:** JSON trend results include the full Docker container ID and cgroup path. Terminal
   tables abbreviate container IDs only for readability.
 - **Alternatives considered:** Redact identifiers everywhere; add an identifier-redaction option in
@@ -253,7 +253,7 @@ scope. New entries must include the alternatives considered and their consequenc
 
 ## ADR-024: Emit one versioned JSON trend report document
 
-- **Status:** Approved
+- **Status:** Superseded by ADR-037
 - **Decision:** JSON output is one versioned report document containing manifest metadata, a global
   summary, and a bounded array of epoch results.
 - **Alternatives considered:** JSON Lines; an unversioned array of epoch objects.
@@ -491,25 +491,29 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 ## ADR-037: Provide human-first trend analysis table output in v0.7
 
 - **Status:** Approved
+- **Supersession:** This decision supersedes ADR-010, ADR-016, ADR-023, and ADR-024. It also
+  supersedes only the command- and output-format portions of ADR-017, ADR-019, and ADR-025; their
+  per-epoch, evidence-quality, and successful-ineligible-result policies remain approved.
 - **Decision:** v0.7 exposes validated trend analysis through the command
   `memoptima trends analyze <MANIFEST>`. The command calls the public
   `analyze_trend_manifest` application service and writes one stable, human-readable table to
-  standard output. The table has one row per trend epoch and semantically exposes a container
-  identifier, epoch index, observation count, evidence quality, growth rate when available,
-  time-to-limit when available, and an explicit status. It does not present a trend result as an
-  OOM prediction, a confirmed memory leak, or a safe automatic action.
-- **Identifier presentation:** The table displays a Docker ID prefix of at least twelve characters.
-  The formatter extends prefixes as needed to distinguish every container identity in one result;
-  it never displays an ambiguous shortened identifier. The table remains a compact operational
-  summary rather than a full identity-inspection view.
+  standard output. The table has one row per trend epoch and semantically exposes a Docker
+  identifier, cgroup path, epoch index, observation count, evidence quality, growth rate when
+  available, time-to-limit when available, and an explicit status. It does not present a trend
+  result as an OOM prediction, a confirmed memory leak, or a safe automatic action.
+- **Identifier presentation:** The table displays the complete cgroup path and a Docker ID prefix
+  of at least twelve characters. The formatter extends prefixes as needed to distinguish Docker
+  IDs in one result. A cgroup path distinguishes strict identities that share a Docker ID. Epoch
+  indices are local to a strict identity rather than globally unique. The table remains an
+  operational summary rather than a full identity-inspection view.
 - **Availability presentation:** A valid analysis with ineligible epochs is successful. Unavailable
   rate or time-to-limit values are represented by explicit status text and a non-numeric table
   value, not by a fabricated zero or an omitted row. Evidence quality and result availability stay
   distinct so that sparse or incomplete evidence remains visible.
 - **Exit contract:** The command returns `0` after a successful analysis, including analyses that
-  contain unavailable results; `1` for manifest loading, evidence replay, or analyzer failures;
-  and `2` for invalid command syntax or arguments. Successful tables are written only to standard
-  output. Diagnostics and usage errors are written only to standard error.
+  contain unavailable results; `1` for `catalog_failed`, `evidence_replay_failed`, or
+  `analyzer_failed`; and `2` for invalid command syntax or arguments. Successful tables are
+  written only to standard output. Diagnostics and usage errors are written only to standard error.
 - **Deferred machine contract:** v0.7 does not provide a JSON flag, a report file, or a
   machine-readable trend-output schema. A versioned JSON report is reconsidered in v0.8 after PSI,
   swap, cache, and intelligence-layer requirements define the complete reporting model.
@@ -522,8 +526,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   identity without routinely making the table impractically wide.
 - **Consequence:** The CLI remains a presentation layer over the public trends service. The
   implementation requires formatter and command integration tests for successful analyses,
-  unavailable results, adaptive identifier disambiguation, diagnostics, and all three exit-code
-  classes. Any later JSON schema requires a separate approved decision.
+  unavailable results, same-Docker-ID distinct-cgroup identities, diagnostics, and all three
+  exit-code classes, including every public trend-service error category. Any later JSON schema
+  requires a separate approved decision.
 
 ## Pending decisions
 

@@ -96,11 +96,9 @@ identity appears later, the gap contributes to sparse quality under the approved
 Version 0.7 reports a numeric rate and evidence quality. It does not classify a trend as stable,
 rising, falling, anomalous, or risky before v0.8 evaluation establishes defensible thresholds.
 
-JSON results retain full Docker IDs and cgroup paths for local auditability and reliable downstream
-joins. Human-readable terminal tables abbreviate container IDs only for readability.
-
-The JSON output is one versioned report document containing manifest metadata, a global summary, and
-epoch results. It is bounded by the active-epoch processing limit.
+Human-readable terminal tables retain the complete cgroup path and use an unambiguous Docker ID
+prefix for each strict identity. A versioned JSON report is deferred to v0.8, after PSI, swap,
+cache, and intelligence-layer requirements define the complete reporting model.
 
 The trend command returns exit code `0` for every valid report, including a report in which no epoch
 has an available rate or time-to-limit estimate. It returns `1` for input or runtime failures and `2`
@@ -122,8 +120,8 @@ Manifest processing has two layers: a filesystem adapter safely reads one manife
 parser and validator maps its JSON text and source directory to a typed manifest model. CLI handlers
 depend on the typed model and do not own manifest validation rules.
 
-The public cross-session command is `memoptima trend manifest <FILE>`. It writes a human-readable
-table by default and provides JSON when requested through `--format json`.
+The public cross-session command is `memoptima trends analyze <MANIFEST>`. It writes one
+human-readable table to standard output and provides no JSON output in v0.7.
 
 Each trend result represents one container observation epoch. Global summaries count result statuses
 but never merge separate epochs into a single apparent trend.
@@ -134,10 +132,10 @@ cache remain retained evidence for later, separately modeled intelligence capabi
 
 ## Result contracts
 
-The trend command presents a human-readable table by default. It also provides a versioned JSON
-result format for automation and the future dashboard. Both formats represent the same stable result
-categories, including invalid input, valid-but-ineligible evidence, resource limits, and available
-trends. The JSON schema must be documented and tested before implementation.
+The trend command presents one human-readable table. It represents successful available and
+valid-but-ineligible results without claiming an OOM prediction or confirmed memory leak. A
+versioned JSON result format for automation and the future dashboard is deferred to v0.8 and requires
+a separately approved public schema before implementation.
 
 ## Safety boundary
 
