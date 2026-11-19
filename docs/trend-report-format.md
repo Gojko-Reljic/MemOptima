@@ -12,9 +12,9 @@ the host, containers, or cgroups.
 One row represents one observation epoch. The columns are emitted in this order:
 
 ```text
-CONTAINER ID  CGROUP PATH              EPOCH  SAMPLES  WINDOW  QUALITY                 RATE          TIME TO LIMIT  STATUS
-a1b2c3d4e5f6  /docker/a1b2c3d4e5f6          1       12  1m 00s  continuous              +1.25 MiB/s        14m 20s  available
-b7c8d9e0f1a2  /docker/b7c8d9e0f1a2          1        2     10s  sparse (incomplete)            N/A             N/A  insufficient observations
+CONTAINER ID  CGROUP PATH           EPOCH  SAMPLES  WINDOW  QUALITY                      RATE  TIME TO LIMIT  STATUS
+a1b2c3d4e5f6  /docker/a1b2c3d4e5f6      1       12  1m 00s  continuous            +1.25 MiB/s        14m 20s  available
+b7c8d9e0f1a2  /docker/b7c8d9e0f1a2      1        2     10s  sparse (incomplete)           N/A            N/A  insufficient observations
 ```
 
 `CONTAINER ID`, `CGROUP PATH`, `QUALITY`, and `STATUS` are left-aligned. `EPOCH`, `SAMPLES`,
@@ -22,6 +22,7 @@ b7c8d9e0f1a2  /docker/b7c8d9e0f1a2          1        2     10s  sparse (incomple
 width and expands to the longest value in the result. Columns use two spaces between them, and no
 trailing padding follows `STATUS`. The full cgroup path is retained. Docker ID prefixes contain at
 least twelve characters and extend as needed to remain unambiguous within one result.
+Rows preserve the deterministic epoch order supplied by the analysis result.
 
 ## Column Semantics
 
