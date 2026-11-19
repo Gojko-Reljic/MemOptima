@@ -47,7 +47,7 @@ An interval is sparse only when it exceeds twice the larger adjacent declared sa
 `memory.current` rate requires at least three observations across ten seconds; a time-to-limit estimate
 also requires continuous quality and a stable finite `memory.max`.
 Version 0.7 reports numeric rates and evidence quality, not uncalibrated direction labels or risk scores.
-Terminal tables abbreviate Docker IDs while the validated manifest and evidence artifacts retain full
+Terminal tables abbreviate Docker IDs while the evidence artifacts retain full Docker and cgroup
 identities for local auditability.
 The trend command returns success for every valid report, including reports with no eligible epochs.
 Every semantic `memory.max` change closes an observation epoch.
