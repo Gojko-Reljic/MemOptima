@@ -65,6 +65,7 @@ add_library(memoptima_cli_support STATIC
     cli/monitor_runner.cpp
     cli/processes_formatter.cpp
     cli/status_formatter.cpp
+    cli/trends_formatter.cpp
 )
 
 target_include_directories(memoptima_cli_support
