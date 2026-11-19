@@ -18,6 +18,7 @@ evidence without modifying the system automatically.
 - `memoptima sample containers --count <COUNT> --interval <DURATION> --output <NEW_FILE>` creates a bounded local JSONL evidence artifact from repeated Docker cgroup snapshots.
 - `memoptima inspect evidence <FILE>` validates and summarizes a local evidence artifact.
 - `memoptima forecast evidence <FILE>` estimates a cgroup `memory.max` crossing only from sufficient validated evidence.
+- `memoptima trends analyze <MANIFEST>` analyzes validated memory-current trends across explicitly selected local evidence sessions.
 
 ## Documentation
 
@@ -29,7 +30,9 @@ evidence without modifying the system automatically.
 - [0.4.0 Scope](docs/0.4.0-scope.md) defines the bounded sampling and retained-evidence release.
 - [0.5.0 Scope](docs/0.5.0-scope.md) defines local evidence inspection and validation.
 - [0.6.0 Scope](docs/0.6.0-scope.md) defines conservative evidence-based forecasting.
+- [0.7.0 Scope](docs/0.7.0-scope.md) defines read-only cross-session memory trend analysis.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
+- [Trend Manifest Format](docs/trend-manifest-format.md) defines the versioned JSON manifest that selects local evidence artifacts.
 
 ## Requirements
 
