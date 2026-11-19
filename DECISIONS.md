@@ -506,6 +506,13 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   IDs in one result. A cgroup path distinguishes strict identities that share a Docker ID. Epoch
   indices are local to a strict identity rather than globally unique. The table remains an
   operational summary rather than a full identity-inspection view.
+- **Table layout:** The table columns, in order, are `CONTAINER ID`, `CGROUP PATH`, `EPOCH`,
+  `SAMPLES`, `WINDOW`, `QUALITY`, `RATE`, `TIME TO LIMIT`, and `STATUS`. Container identity,
+  quality, and status columns are left-aligned. Epoch, sample, duration, rate, and time-to-limit
+  columns are right-aligned. Each column width is at least the width of its header and otherwise
+  expands to the longest value in the result. Columns are separated by exactly two spaces; `STATUS`
+  is the final column and has no trailing padding before the newline. The formatter preserves the
+  deterministic epoch order supplied by `TrendAnalysis`.
 - **Availability presentation:** A valid analysis with ineligible epochs is successful. Unavailable
   rate or time-to-limit values are represented by explicit status text and a non-numeric table
   value, not by a fabricated zero or an omitted row. Evidence quality and result availability stay
@@ -553,7 +560,8 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   exit-code classes, including every public trend-service error category, failed table output,
   empty analysis output, and every operational duration boundary and rounding transition. Any later
   JSON schema requires a separate approved decision. Formatter tests cover every quality and status
-  label, dynamic rate units, negative-zero normalization, unavailable values, and column alignment.
+  label, dynamic rate units, negative-zero normalization, unavailable values, column alignment,
+  dynamic column widths, and absent trailing padding.
 
 ## Pending decisions
 
