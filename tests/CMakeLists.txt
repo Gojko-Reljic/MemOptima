@@ -18,6 +18,7 @@ add_executable(memoptima_core_tests
     cli/monitor_runner_test.cpp
     cli/processes_formatter_test.cpp
     cli/status_formatter_test.cpp
+    cli/trends_formatter_test.cpp
     linux/cgroup_v2/mountinfo_parser_test.cpp
     linux/cgroup_v2/cgroup_memory_parser_test.cpp
     linux/cgroup_v2/cgroup_memory_reader_test.cpp
