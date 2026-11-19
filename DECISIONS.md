@@ -510,6 +510,19 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   rate or time-to-limit values are represented by explicit status text and a non-numeric table
   value, not by a fabricated zero or an omitted row. Evidence quality and result availability stay
   distinct so that sparse or incomplete evidence remains visible.
+- **Quality presentation:** `QUALITY` is one of `continuous`, `sparse`,
+  `continuous (incomplete)`, or `sparse (incomplete)`. Incomplete evidence is therefore visible
+  without changing the independently reported time-to-limit status.
+- **Rate presentation:** An available rate uses dynamic IEC units, two decimal places, and an
+  explicit sign, for example `+1.25 MiB/s` or `-512.00 KiB/s`. The `RATE` column is right-aligned.
+  A value that rounds to zero in its displayed unit is normalized to a positive sign, so output
+  never presents `-0.00 B/s`. An unavailable rate is `N/A`.
+- **Status presentation:** `STATUS` is `available`, `insufficient observations`,
+  `insufficient observation window`, `sparse evidence`, `non-positive growth`,
+  `unlimited memory.max`, `unavailable memory.max`, `at or above memory.max`, or
+  `estimate out of range`. The first two unavailable statuses derive from rate eligibility; the
+  remaining statuses derive from time-to-limit eligibility. An unavailable `TIME TO LIMIT` is
+  `N/A`.
 - **Empty analysis presentation:** A successful analysis with no container observation epochs
   writes `No container observation epochs found in manifest.` followed by a newline, without a
   table header, and returns `0`.
@@ -539,7 +552,8 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   unavailable results, same-Docker-ID distinct-cgroup identities, diagnostics, and all three
   exit-code classes, including every public trend-service error category, failed table output,
   empty analysis output, and every operational duration boundary and rounding transition. Any later
-  JSON schema requires a separate approved decision.
+  JSON schema requires a separate approved decision. Formatter tests cover every quality and status
+  label, dynamic rate units, negative-zero normalization, unavailable values, and column alignment.
 
 ## Pending decisions
 
