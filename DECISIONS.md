@@ -528,8 +528,8 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Consequence:** The CLI remains a presentation layer over the public trends service. The
   implementation requires formatter and command integration tests for successful analyses,
   unavailable results, same-Docker-ID distinct-cgroup identities, diagnostics, and all three
-  exit-code classes, including every public trend-service error category. Any later JSON schema
-  requires a separate approved decision.
+  exit-code classes, including every public trend-service error category and failed table output.
+  Any later JSON schema requires a separate approved decision.
 
 ## Pending decisions
 
