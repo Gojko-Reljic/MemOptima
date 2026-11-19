@@ -14,7 +14,7 @@ One row represents one observation epoch. The columns are emitted in this order:
 ```text
 CONTAINER ID  CGROUP PATH           EPOCH  SAMPLES  WINDOW  QUALITY                      RATE  TIME TO LIMIT  STATUS
 a1b2c3d4e5f6  /docker/a1b2c3d4e5f6      1       12  1m 00s  continuous            +1.25 MiB/s        14m 20s  available
-b7c8d9e0f1a2  /docker/b7c8d9e0f1a2      1        2     10s  sparse (incomplete)           N/A            N/A  insufficient observations
+b7c8d9e0f1a2  /docker/b7c8d9e0f1a2      1        2     10s  sparse (incomplete)           N/A            N/A  sparse evidence
 ```
 
 `CONTAINER ID`, `CGROUP PATH`, `QUALITY`, and `STATUS` are left-aligned. `EPOCH`, `SAMPLES`,
