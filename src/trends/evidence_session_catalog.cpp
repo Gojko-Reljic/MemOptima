@@ -118,6 +118,7 @@ load_trend_evidence_catalog(const TrendManifest &manifest) {
         catalog.sessions.push_back(std::move(*session));
     }
 
+    // A path tie-breaker makes catalog and replay order reproducible when sessions start together.
     std::ranges::sort(catalog.sessions,
                       [](const TrendEvidenceSession &left, const TrendEvidenceSession &right) {
                           if (left.started_at_utc != right.started_at_utc) {
@@ -126,6 +127,7 @@ load_trend_evidence_catalog(const TrendManifest &manifest) {
                           return left.artifact_path.native() < right.artifact_path.native();
                       });
 
+    // Overlapping windows would make one logical timeline ambiguous, so reject them before replay.
     std::map<TrendContainerIdentity, std::string> observed_through;
     for (const auto &session : catalog.sessions) {
         for (const auto &window : session.container_windows) {
