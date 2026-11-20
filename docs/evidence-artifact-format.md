@@ -1,8 +1,8 @@
 # MemOptima Evidence Artifact Format
 
-MemOptima 0.4.0 writes one local JSON Lines (`.jsonl`) evidence artifact for one explicit sampling
-session. JSON Lines means that every physical line is one complete JSON object. Earlier complete
-lines remain readable if a later interruption prevents a final line.
+MemOptima writes one local JSON Lines (`.jsonl`) evidence artifact for one explicit sampling session.
+JSON Lines means that every physical line is one complete JSON object. Earlier complete lines remain
+readable if a later interruption prevents a final line.
 
 Every record has `record_type` and `schema_version`. The current schema version is `1`.
 Record keys have a stable writer order, but consumers must select fields by key name.
@@ -84,3 +84,11 @@ capture time, one continuously observed container, strictly increasing timestamp
 `memory.current`, and a stable finite `memory.max`. A literal `"max"` is a normal unlimited limit
 and makes the memory-limit forecast not applicable. Missing or inconsistent metrics produce an
 explicit unavailable reason rather than a best-effort estimate.
+
+## Reader limits
+
+Every evidence consumer accepts only a regular non-symbolic-link file. The reader limits both one
+physical line and the artifact's aggregate physical input to 512 MiB. Newline bytes count toward the
+aggregate limit; an artifact exactly at the limit is accepted. The bound prevents a malformed or
+untrusted local artifact from causing unbounded memory or disk input work. It does not alter the
+schema-v1 format or the sampler's separate 512 MiB output limit.
