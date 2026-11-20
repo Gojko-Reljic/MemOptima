@@ -1,0 +1,71 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+
+      - name: Configure the Debug build
+        run: cmake --preset debug
+
+      - name: Check C++ formatting
+        run: cmake --build --preset debug --target memoptima_format_check
+
+  debug:
+    name: Debug and sanitizers
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+
+      - name: Configure the Debug build
+        run: cmake --preset debug
+
+      - name: Build the Debug configuration
+        run: cmake --build --preset debug
+
+      - name: Run Debug tests with sanitizers
+        run: ctest --preset debug --output-on-failure
+
+  release:
+    name: Release and installation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+
+      - name: Configure the Release build
+        run: cmake --preset release
+
+      - name: Build the Release configuration
+        run: cmake --build --preset release
+
+      - name: Run Release and installation tests
+        run: ctest --preset release --output-on-failure
