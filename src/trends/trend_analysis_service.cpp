@@ -151,8 +151,8 @@ replay_session(const TrendEvidenceSession &session, TrendAnalyzer &analyzer) {
                              traversal.error().detail);
     }
 
-    // Cataloging and replay are separate streaming passes. Require their selection metadata to
-    // agree so an artifact changed between passes cannot silently alter the analysis.
+    // Cataloging and replay are separate streaming passes. Reject changed selection metadata
+    // between passes; this check intentionally does not compare individual sample values.
     const auto replay_metadata = std::move(sink).finish(traversal->incomplete);
     if (const auto mismatch = detail::replay_metadata_mismatch(session, replay_metadata)) {
         return service_error(TrendAnalysisErrorCode::evidence_replay_failed, session.artifact_path,
