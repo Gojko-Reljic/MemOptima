@@ -113,9 +113,11 @@ forecast_evidence_artifact(const std::filesystem::path &path) {
         const auto forecast = state.accumulator.finish();
         if (state.status == EvidenceForecastStatus::available)
             state.status = map_status(forecast.availability);
-        result.containers.push_back({id, state.observed, state.status,
-                                     forecast.growth_bytes_per_second,
-                                     forecast.estimated_time_to_memory_max});
+        const bool is_available = state.status == EvidenceForecastStatus::available;
+        result.containers.push_back(
+            {id, state.observed, state.status,
+             is_available ? forecast.growth_bytes_per_second : std::nullopt,
+             is_available ? forecast.estimated_time_to_memory_max : std::nullopt});
     }
     return result;
 }

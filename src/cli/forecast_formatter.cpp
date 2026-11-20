@@ -51,13 +51,15 @@ std::string format_evidence_forecast(const forecast::EvidenceForecastSummary &su
     for (const auto &container : summary.containers) {
         output << std::left << std::setw(66) << container.container_id << std::setw(10)
                << container.observed_sample_count;
-        if (container.growth_bytes_per_second.has_value()) {
+        if (container.status == forecast::EvidenceForecastStatus::available &&
+            container.growth_bytes_per_second.has_value()) {
             output << std::setw(22)
                    << (std::to_string(*container.growth_bytes_per_second) + " B/s");
         } else
             output << std::setw(22) << "N/A";
         output << status_name(container.status);
-        if (container.estimated_time_to_memory_max.has_value())
+        if (container.status == forecast::EvidenceForecastStatus::available &&
+            container.estimated_time_to_memory_max.has_value())
             output << "; estimate: "
                    << format_duration(static_cast<std::uint64_t>(
                                           container.estimated_time_to_memory_max->count()) *
