@@ -2,6 +2,10 @@ if(NOT DEFINED MEMOPTIMA_EXECUTABLE)
     message(FATAL_ERROR "MEMOPTIMA_EXECUTABLE must be provided.")
 endif()
 
+if(NOT DEFINED MEMOPTIMA_EXPECTED_VERSION)
+    message(FATAL_ERROR "MEMOPTIMA_EXPECTED_VERSION must be provided.")
+endif()
+
 function(assert_version_command)
     execute_process(
         COMMAND "${MEMOPTIMA_EXECUTABLE}" ${ARGN}
@@ -18,9 +22,9 @@ function(assert_version_command)
         message(FATAL_ERROR "Version command wrote to standard error: ${command_error}")
     endif()
 
-    string(FIND "${command_output}" "memoptima " match_position)
-    if(NOT match_position EQUAL 0)
-        message(FATAL_ERROR "Version output must begin with 'memoptima ': ${command_output}")
+    set(expected_output "memoptima ${MEMOPTIMA_EXPECTED_VERSION}\n")
+    if(NOT command_output STREQUAL expected_output)
+        message(FATAL_ERROR "Unexpected version output: ${command_output}")
     endif()
 endfunction()
 
