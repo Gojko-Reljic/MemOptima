@@ -110,6 +110,8 @@ class TypedRecordAdapter final : public EvidenceArtifactRecordSink {
 
     std::expected<void, EvidenceArtifactTraversalError>
     consume(const EvidenceArtifactRecord &record) override {
+        // The traversal layer has already validated this canonical JSON, so this adapter can
+        // project only the trend fields without duplicating the full schema validator.
         const Json value = Json::parse(record.canonical_json);
         if (record.type == EvidenceRecordType::session_start) {
             const auto started_at =

@@ -25,6 +25,7 @@ class RejectingOutputBuffer final : public std::streambuf {
 
 class DeferredFailureOutputBuffer final : public std::stringbuf {
   protected:
+    // Accept writes but fail synchronization to model a buffered standard-output failure.
     int sync() override { return -1; }
 };
 

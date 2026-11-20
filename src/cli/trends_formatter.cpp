@@ -44,6 +44,7 @@ container_identifier_widths(const std::vector<trends::TrendEpochResult> &epochs)
         const auto &identifier = epoch.identity.container_id;
         std::size_t width = std::min<std::size_t>(12U, identifier.size());
 
+        // One character beyond every shared prefix keeps each displayed ID unambiguous.
         for (const auto &other_epoch : epochs) {
             const auto &other_identifier = other_epoch.identity.container_id;
             if (identifier == other_identifier)
@@ -135,6 +136,8 @@ void append_row(std::ostringstream &output, const Row &row,
                 const std::array<std::size_t, kColumnCount> &widths) {
     for (std::size_t index{}; index < kColumnCount; ++index) {
         if (index + 1U == kColumnCount) {
+            // The final column has no right padding, preserving the no-trailing-whitespace
+            // contract.
             output << row[index] << '\n';
             return;
         }

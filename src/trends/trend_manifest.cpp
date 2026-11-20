@@ -261,6 +261,7 @@ load_trend_manifest(const std::filesystem::path &manifest_path) {
         return load_error(TrendManifestLoadErrorCode::parse_failed,
                           parsed.error().json_path + ": " + parsed.error().detail);
     }
+    // Lexical checks reject explicit traversal; canonical containment also rejects symlink escapes.
     const auto containment = validate_artifact_containment(*parsed);
     if (!containment.has_value()) {
         return std::unexpected(containment.error());

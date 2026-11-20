@@ -93,6 +93,7 @@ read_cgroup_memory_snapshot_from_root(const std::filesystem::path &cgroup_root,
     }
 
     const std::filesystem::path directory = cgroup_root / relative_cgroup_path;
+    // Read each independent cgroup file so one unavailable metric does not discard usable evidence.
     const auto current_text = read_file(directory / "memory.current", "memory.current");
     const auto high_text = read_file(directory / "memory.high", "memory.high");
     const auto maximum_text = read_file(directory / "memory.max", "memory.max");
@@ -148,6 +149,8 @@ read_cgroup_memory_snapshot_from_root(const std::filesystem::path &cgroup_root,
     } else {
         const auto pressure = parse_memory_pressure(*pressure_text);
         if (!pressure.has_value()) {
+            // PSI is one coupled record: a malformed record cannot safely provide either pressure
+            // line.
             const CgroupMetricReadError error = map_psi_error(pressure.error());
             pressure_metrics = {
                 .some = unavailable_metric<CgroupPressureLine>(error),

@@ -77,6 +77,8 @@ traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRe
             return error("Line " + std::to_string(line_number) + ": invalid record order.");
         }
 
+        // Sinks receive only canonical JSON that the closed-schema validator has already accepted;
+        // they never parse an untrusted raw line themselves.
         const Json value = Json::parse(parsed->canonical_json);
         if (parsed->type == EvidenceRecordType::session_start) {
             saw_start = true;
@@ -106,6 +108,7 @@ traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRe
             }
         }
 
+        // Enforce the shared artifact lifecycle once so every consumer inherits the same contract.
         const auto consumed = sink.consume(EvidenceArtifactRecord{
             .line_number = line_number,
             .type = parsed->type,

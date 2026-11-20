@@ -105,6 +105,7 @@ make_size_limit_terminal_record(std::uint32_t completed_sample_count,
 std::expected<SamplingSessionResult, SamplingSessionRunError>
 run_sampling_session(const SamplingSessionConfiguration &configuration,
                      const SamplingSessionDependencies &dependencies) {
+    // Do not create an empty artifact when the host cannot satisfy collection prerequisites.
     const auto preflight = dependencies.preflight();
     if (!preflight.has_value()) {
         return std::unexpected(
