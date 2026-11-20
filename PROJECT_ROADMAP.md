@@ -17,20 +17,21 @@ version of the executable.
 - Keep observation and advice local and read-only until a separately approved action design exists.
 - Preserve compatible CLI behavior and evidence schema contracts.
 
-## Current baseline: v0.6
+## Current baseline: v0.7
 
-v0.6 collects Linux and Docker cgroup v2 memory evidence, validates local schema-v1 JSON Lines
-artifacts, and produces a conservative estimate of a finite `memory.max` crossing from one
-continuous evidence session. It does not predict OOM events, confirm memory leaks, or modify the
-host or containers.
+v0.7 collects Linux and Docker cgroup v2 memory evidence, validates bounded local schema-v1 JSON
+Lines artifacts, produces a conservative estimate of a finite `memory.max` crossing from one
+continuous evidence session, and analyzes `memory.current` trends across explicitly selected local
+evidence sessions. It does not predict OOM events, confirm memory leaks, or modify the host or
+containers.
 
-## v0.7: historical trend foundation
+## Completed: v0.7 historical trend foundation
 
 ### Approved direction
 
-v0.7 adds a local, read-only cross-session trend capability. It will analyze a manifest that
-explicitly names a selected set of evidence artifacts rather than introduce a daemon, a database
-service, or automatic actions.
+v0.7 adds a local, read-only cross-session trend capability. It analyzes a manifest that explicitly
+names a selected set of evidence artifacts rather than introducing a daemon, a database service, or
+automatic actions.
 
 The manifest is one versioned JSON document with a closed schema and an explicit artifact list.
 Artifact paths are relative to the manifest directory and cannot escape its directory tree.
@@ -57,7 +58,7 @@ Overlapping evidence sessions for the same strict container identity are rejecte
 An absent container becomes an explicit observation gap, not a silently continuous period or a new
 identity.
 
-### Planned outcomes
+### Delivered outcomes
 
 - Typed internal evidence traversal that preserves schema-v1 compatibility.
 - Explicit domain, adapter, application, and presentation boundaries.

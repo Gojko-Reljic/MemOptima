@@ -244,10 +244,11 @@ See [Evidence Artifact Format](evidence-artifact-format.md) for the complete ver
 ./build/debug/src/memoptima inspect evidence evidence.jsonl
 ```
 
-The reader accepts only an existing regular file that is not a symbolic link. It validates the
-schema version and record lifecycle, then prints a human-readable session and container summary.
-An artifact without `session_end` remains readable but is clearly marked `Incomplete`; it does not
-claim a trend, forecast, diagnosis, health result, recommendation, or action.
+The reader accepts only an existing regular file that is not a symbolic link. It limits both one
+physical line and the aggregate physical input to 512 MiB, validates the schema version and record
+lifecycle, then prints a human-readable session and container summary. An artifact without
+`session_end` remains readable but is clearly marked `Incomplete`; it does not claim a trend,
+forecast, diagnosis, health result, recommendation, or action.
 
 ### Forecast a retained artifact
 
@@ -284,9 +285,10 @@ Run the analysis with:
 ```
 
 The command validates every selected artifact, then reports a separate `memory.current` trend for
-each compatible container observation epoch. It is read-only and does not scan directories,
-diagnose a memory leak, predict an OOM event, or change a host, container, or cgroup. A valid
-analysis with no container epochs is still successful and prints a clear empty-result message.
+each compatible container observation epoch. Artifact paths are opened beneath the manifest directory
+without following symbolic links. It is read-only and does not scan directories, diagnose a memory
+leak, predict an OOM event, or change a host, container, or cgroup. A valid analysis with no
+container epochs is still successful and prints a clear empty-result message.
 
 See [Trend Manifest Format](trend-manifest-format.md) for the input contract and
 [Trend Report Format](trend-report-format.md) for the table, statuses, and limitations.

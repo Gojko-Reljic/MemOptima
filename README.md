@@ -88,6 +88,7 @@ definite or indirect leaks.
 ./build/debug/src/memoptima sample containers --count 3 --interval 5s --output evidence.jsonl
 ./build/debug/src/memoptima inspect evidence evidence.jsonl
 ./build/debug/src/memoptima forecast evidence evidence.jsonl
+./build/debug/src/memoptima trends analyze manifest.json
 ```
 
 ## Docker container memory

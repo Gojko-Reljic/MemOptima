@@ -2,8 +2,8 @@
 
 ## Authority and scope
 
-This document is the canonical architecture reference for MemOptima. It describes the current v0.6
-baseline and the approved direction toward v0.7. Product scope is defined in
+This document is the canonical architecture reference for MemOptima. It describes the current v0.7
+baseline and the approved direction toward v0.8. Product scope is defined in
 [`PROJECT_ROADMAP.md`](PROJECT_ROADMAP.md); approved architectural choices are recorded in
 [`DECISIONS.md`](DECISIONS.md).
 
@@ -33,9 +33,9 @@ CLI presentation
 | snapshot models | Typed measurements and individual metric availability | Filesystem, JSON, or terminal APIs |
 | `analysis/` | Pure point-in-time pressure and cgroup assessment | Docker discovery, file I/O, JSON, or CLI |
 | `sampling/` | Bounded collection orchestration and evidence serialization | CLI formatting |
-| evidence validation | Safe input opening, schema and lifecycle validation | Forecast or recommendation policy |
+| evidence validation | Bounded safe input opening, schema and lifecycle validation | Forecast or recommendation policy |
 | `forecast/` | Pure eligibility and forecasting calculations | Filesystem, Docker, JSON, or CLI |
-| future `trends/` | Cross-session comparability, epochs, and trend calculations | Filesystem, JSON, or CLI |
+| `trends/` | Cross-session comparability, epochs, and trend calculations | Filesystem, JSON, or CLI |
 | application use cases | Wire validated inputs, domain services, and stable result contracts | Terminal presentation details |
 | `cli/` | Argument parsing, dependency wiring, and presentation | Domain implementation details |
 
@@ -61,8 +61,13 @@ Schema-v1 JSON Lines artifacts remain a stable external contract. A valid artifa
 automatically eligible for a forecast or a cross-session trend. Consumers must report the distinction
 between invalid evidence, valid-but-ineligible evidence, and an available result.
 
-v0.7 will introduce typed internal start, sample, and end records behind the existing validators.
-The migration must preserve schema-v1 acceptance, safe input handling, and existing CLI behavior.
+v0.7 introduced typed internal start, sample, and end records behind the existing validators. This
+preserves schema-v1 acceptance, safe input handling, and existing CLI behavior.
+
+Evidence input is bounded by a 512 MiB aggregate physical-byte limit, including newline bytes. Trend
+artifact paths are opened relative to the manifest directory through directory descriptors with
+`O_NOFOLLOW` applied at every path component. This rejects symbolic links and prevents a later
+filesystem replacement from escaping the manifest directory tree.
 
 ## Cross-session trend policy
 
@@ -104,10 +109,10 @@ The trend command returns exit code `0` for every valid report, including a repo
 has an available rate or time-to-limit estimate. It returns `1` for input or runtime failures and `2`
 for command-usage failures.
 
-The detailed timestamp, limit-change, counter-reset, and manifest-path rules remain pending owner
-approval and must be recorded in `DECISIONS.md` before implementation. v0.7 processing streams its
-inputs and is limited to 128 manifest artifacts and 4,096 active container observation epochs. It
-must return a clear resource-limit result rather than silently truncate a trend.
+The detailed timestamp, limit-change, counter-reset, and manifest-path rules are recorded in
+`DECISIONS.md`. v0.7 processing streams its inputs and is limited to 128 manifest artifacts and
+4,096 active container observation epochs. It returns a clear resource-limit result rather than
+silently truncating a trend.
 
 The manifest is a single versioned JSON document with a closed schema and an explicit artifact list.
 Artifact paths are relative to the manifest directory and cannot escape its directory tree. Detailed
