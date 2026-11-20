@@ -80,6 +80,7 @@ parse_artifact_path(std::string_view text, const std::filesystem::path &director
     case EvidenceInputErrorCode::input_read_failed:
         return TrendManifestLoadErrorCode::input_read_failed;
     case EvidenceInputErrorCode::line_too_long:
+    case EvidenceInputErrorCode::input_too_large:
         return TrendManifestLoadErrorCode::input_too_large;
     }
     return TrendManifestLoadErrorCode::input_read_failed;
@@ -213,7 +214,8 @@ parse_trend_manifest(std::string_view text, const std::filesystem::path &directo
 
 std::expected<TrendManifest, TrendManifestLoadError>
 load_trend_manifest(const std::filesystem::path &manifest_path) {
-    auto input = EvidenceInputReader::open(manifest_path, kTrendManifestMaximumBytes);
+    auto input = EvidenceInputReader::open(manifest_path, kTrendManifestMaximumBytes,
+                                           kTrendManifestMaximumBytes);
     if (!input.has_value()) {
         return load_error(load_error_code(input.error().code), input.error().detail);
     }

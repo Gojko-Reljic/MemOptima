@@ -106,5 +106,53 @@ TEST_F(EvidenceInputReaderTest, StopsBeforeAcceptingALineBeyondItsConfiguredLimi
     EXPECT_EQ(line.error().code, EvidenceInputErrorCode::line_too_long);
 }
 
+TEST_F(EvidenceInputReaderTest, AcceptsInputAtTheExactAggregateLimit) {
+    const std::filesystem::path input = path("exact-limit.jsonl");
+    write_file(input, "ab\nc");
+
+    auto reader = EvidenceInputReader::open(input, 3, 4);
+    ASSERT_TRUE(reader.has_value());
+    const auto first = reader->next_line();
+    const auto second = reader->next_line();
+    const auto end = reader->next_line();
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    ASSERT_TRUE(end.has_value());
+    EXPECT_EQ(*first, "ab");
+    EXPECT_EQ(*second, "c");
+    EXPECT_FALSE(end->has_value());
+}
+
+TEST_F(EvidenceInputReaderTest, RejectsArtifactOneByteAboveTheAggregateLimitBeforeReading) {
+    const std::filesystem::path input = path("over-limit.jsonl");
+    write_file(input, "abcde");
+
+    const auto reader = EvidenceInputReader::open(input, 5, 4);
+
+    ASSERT_FALSE(reader.has_value());
+    EXPECT_EQ(reader.error().code, EvidenceInputErrorCode::input_too_large);
+}
+
+TEST_F(EvidenceInputReaderTest, RejectsAggregateInputBeyondTheConfiguredLimit) {
+    const std::filesystem::path input = path("aggregate-limit.jsonl");
+    write_file(input, "ab\n");
+
+    auto reader = EvidenceInputReader::open(input, 3, 5);
+    ASSERT_TRUE(reader.has_value());
+    {
+        std::ofstream output{input, std::ios::binary | std::ios::app};
+        ASSERT_TRUE(output.is_open());
+        output << "cd\n";
+        ASSERT_TRUE(output.good());
+    }
+    const auto first = reader->next_line();
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(*first, "ab");
+    const auto second = reader->next_line();
+
+    ASSERT_FALSE(second.has_value());
+    EXPECT_EQ(second.error().code, EvidenceInputErrorCode::input_too_large);
+}
+
 } // namespace
 } // namespace memoptima

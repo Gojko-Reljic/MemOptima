@@ -24,10 +24,15 @@ namespace {
 } // namespace
 
 std::expected<EvidenceInputReader, EvidenceInputError>
-EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maximum_line_bytes) {
+EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maximum_line_bytes,
+                          std::uint64_t maximum_total_bytes) {
     if (maximum_line_bytes > std::numeric_limits<std::size_t>::max()) {
         return std::unexpected(error(EvidenceInputErrorCode::line_too_long,
                                      "The configured line limit cannot be represented."));
+    }
+    if (maximum_total_bytes > std::numeric_limits<std::size_t>::max()) {
+        return std::unexpected(error(EvidenceInputErrorCode::input_too_large,
+                                     "The configured total input limit cannot be represented."));
     }
 
     // Do not follow links or block on special files before fstat confirms a regular artifact.
@@ -51,15 +56,24 @@ EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maxim
                                      "The input path must name a regular file."));
     }
 
-    return EvidenceInputReader{descriptor, static_cast<std::size_t>(maximum_line_bytes)};
+    const auto total_limit = static_cast<std::size_t>(maximum_total_bytes);
+    if (status.st_size < 0 || static_cast<std::uintmax_t>(status.st_size) > total_limit) {
+        (void)::close(descriptor);
+        return std::unexpected(error(EvidenceInputErrorCode::input_too_large,
+                                     "The evidence artifact exceeds the configured size limit."));
+    }
+
+    return EvidenceInputReader{descriptor, static_cast<std::size_t>(maximum_line_bytes),
+                               total_limit};
 }
 
 EvidenceInputReader::EvidenceInputReader(EvidenceInputReader &&other) noexcept
     : descriptor_{std::exchange(other.descriptor_, -1)},
-      maximum_line_bytes_{other.maximum_line_bytes_}, buffer_{other.buffer_},
-      buffer_position_{other.buffer_position_}, buffer_size_{other.buffer_size_},
-      reached_eof_{other.reached_eof_}, last_line_was_terminated_{other.last_line_was_terminated_} {
-}
+      maximum_line_bytes_{other.maximum_line_bytes_},
+      maximum_total_bytes_{other.maximum_total_bytes_}, total_bytes_read_{other.total_bytes_read_},
+      buffer_{other.buffer_}, buffer_position_{other.buffer_position_},
+      buffer_size_{other.buffer_size_}, reached_eof_{other.reached_eof_},
+      last_line_was_terminated_{other.last_line_was_terminated_} {}
 
 EvidenceInputReader &EvidenceInputReader::operator=(EvidenceInputReader &&other) noexcept {
     if (this != &other) {
@@ -68,6 +82,8 @@ EvidenceInputReader &EvidenceInputReader::operator=(EvidenceInputReader &&other)
         }
         descriptor_ = std::exchange(other.descriptor_, -1);
         maximum_line_bytes_ = other.maximum_line_bytes_;
+        maximum_total_bytes_ = other.maximum_total_bytes_;
+        total_bytes_read_ = other.total_bytes_read_;
         buffer_ = other.buffer_;
         buffer_position_ = other.buffer_position_;
         buffer_size_ = other.buffer_size_;
@@ -84,13 +100,20 @@ EvidenceInputReader::~EvidenceInputReader() {
 }
 
 std::expected<void, EvidenceInputError>
-EvidenceInputReader::append_segment(std::string &line, const char *begin, std::size_t length) {
+EvidenceInputReader::append_segment(std::string &line, const char *begin, std::size_t length,
+                                    std::size_t delimiter_bytes) {
     // Subtract before appending so an oversized untrusted record cannot wrap the size calculation.
     if (length > maximum_line_bytes_ - line.size()) {
         return std::unexpected(error(EvidenceInputErrorCode::line_too_long,
                                      "A JSON Lines record exceeds the configured size limit."));
     }
+    const std::size_t physical_bytes = length + delimiter_bytes;
+    if (physical_bytes > maximum_total_bytes_ - total_bytes_read_) {
+        return std::unexpected(error(EvidenceInputErrorCode::input_too_large,
+                                     "The evidence artifact exceeds the configured size limit."));
+    }
     line.append(begin, length);
+    total_bytes_read_ += physical_bytes;
     return {};
 }
 
@@ -104,7 +127,8 @@ std::expected<std::optional<std::string>, EvidenceInputError> EvidenceInputReade
             const std::size_t segment_length =
                 newline == nullptr ? buffer_size_ - buffer_position_
                                    : static_cast<const char *>(newline) - segment_begin;
-            const auto append_result = append_segment(line, segment_begin, segment_length);
+            const auto append_result =
+                append_segment(line, segment_begin, segment_length, newline == nullptr ? 0U : 1U);
             if (!append_result.has_value()) {
                 return std::unexpected(append_result.error());
             }
