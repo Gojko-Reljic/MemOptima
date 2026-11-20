@@ -128,6 +128,7 @@ std::expected<std::optional<std::string>, EvidenceInputError> EvidenceInputReade
         const ssize_t bytes_read = ::read(descriptor_, buffer_.data(), buffer_.size());
         if (bytes_read == -1) {
             if (errno == EINTR) {
+                // A signal interrupted the syscall before it produced input; retry the same read.
                 continue;
             }
             return std::unexpected(error(EvidenceInputErrorCode::input_read_failed,
