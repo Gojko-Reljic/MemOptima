@@ -1,11 +1,14 @@
 #include <memoptima/evidence_input_reader.hpp>
 
+#include "evidence_input_reader_internal.hpp"
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -23,16 +26,116 @@ namespace {
 
 } // namespace
 
+namespace detail {
+
+struct EvidenceInputReaderAccess {
+    [[nodiscard]] static std::expected<std::pair<std::size_t, std::size_t>, EvidenceInputError>
+    validate_limits(std::uint64_t maximum_line_bytes, std::uint64_t maximum_total_bytes) {
+        if (maximum_line_bytes > std::numeric_limits<std::size_t>::max()) {
+            return std::unexpected(error(EvidenceInputErrorCode::line_too_long,
+                                         "The configured line limit cannot be represented."));
+        }
+        if (maximum_total_bytes > std::numeric_limits<std::size_t>::max()) {
+            return std::unexpected(
+                error(EvidenceInputErrorCode::input_too_large,
+                      "The configured total input limit cannot be represented."));
+        }
+        return std::pair{static_cast<std::size_t>(maximum_line_bytes),
+                         static_cast<std::size_t>(maximum_total_bytes)};
+    }
+
+    [[nodiscard]] static std::expected<EvidenceInputReader, EvidenceInputError>
+    make_reader(int descriptor, const std::filesystem::path &display_path,
+                std::size_t maximum_line_bytes, std::size_t maximum_total_bytes) {
+        struct stat status{};
+        if (::fstat(descriptor, &status) == -1) {
+            const std::string detail = errno_detail(display_path);
+            (void)::close(descriptor);
+            return std::unexpected(error(EvidenceInputErrorCode::input_open_failed, detail));
+        }
+        if (!S_ISREG(status.st_mode)) {
+            (void)::close(descriptor);
+            return std::unexpected(error(EvidenceInputErrorCode::input_not_regular_file,
+                                         "The input path must name a regular file."));
+        }
+        if (status.st_size < 0 ||
+            static_cast<std::uintmax_t>(status.st_size) > maximum_total_bytes) {
+            (void)::close(descriptor);
+            return std::unexpected(
+                error(EvidenceInputErrorCode::input_too_large,
+                      "The evidence artifact exceeds the configured size limit."));
+        }
+        return EvidenceInputReader{descriptor, maximum_line_bytes, maximum_total_bytes};
+    }
+};
+
+std::expected<EvidenceInputReader, EvidenceInputError>
+open_evidence_input_beneath(const std::filesystem::path &root,
+                            const std::filesystem::path &relative_path,
+                            std::uint64_t maximum_line_bytes, std::uint64_t maximum_total_bytes) {
+    const auto limits =
+        EvidenceInputReaderAccess::validate_limits(maximum_line_bytes, maximum_total_bytes);
+    if (!limits.has_value()) {
+        return std::unexpected(limits.error());
+    }
+    if (relative_path.empty() || relative_path.is_absolute()) {
+        return std::unexpected(error(EvidenceInputErrorCode::input_open_failed,
+                                     "The artifact path must be non-empty and relative."));
+    }
+
+    std::vector<std::string> components;
+    for (const auto &component : relative_path) {
+        const std::string text = component.string();
+        if (text.empty() || text == "." || text == "..") {
+            return std::unexpected(error(EvidenceInputErrorCode::input_open_failed,
+                                         "The artifact path contains an unsafe component."));
+        }
+        components.push_back(text);
+    }
+    if (components.empty()) {
+        return std::unexpected(error(EvidenceInputErrorCode::input_open_failed,
+                                     "The artifact path must name a file."));
+    }
+
+    int descriptor = ::open(root.c_str(), O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+    if (descriptor == -1) {
+        const EvidenceInputErrorCode code = errno == ELOOP
+                                                ? EvidenceInputErrorCode::input_is_symbolic_link
+                                                : EvidenceInputErrorCode::input_open_failed;
+        return std::unexpected(error(code, errno_detail(root)));
+    }
+
+    for (std::size_t index{}; index < components.size(); ++index) {
+        const bool final_component = index + 1U == components.size();
+        const int flags = final_component ? O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK
+                                          : O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW;
+        const int next_descriptor = ::openat(descriptor, components[index].c_str(), flags);
+        const std::filesystem::path attempted_path = root / relative_path;
+        if (next_descriptor == -1) {
+            const EvidenceInputErrorCode code = errno == ELOOP
+                                                    ? EvidenceInputErrorCode::input_is_symbolic_link
+                                                    : EvidenceInputErrorCode::input_open_failed;
+            const std::string detail = errno_detail(attempted_path);
+            (void)::close(descriptor);
+            return std::unexpected(error(code, detail));
+        }
+        (void)::close(descriptor);
+        descriptor = next_descriptor;
+    }
+
+    return EvidenceInputReaderAccess::make_reader(descriptor, root / relative_path, limits->first,
+                                                  limits->second);
+}
+
+} // namespace detail
+
 std::expected<EvidenceInputReader, EvidenceInputError>
 EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maximum_line_bytes,
                           std::uint64_t maximum_total_bytes) {
-    if (maximum_line_bytes > std::numeric_limits<std::size_t>::max()) {
-        return std::unexpected(error(EvidenceInputErrorCode::line_too_long,
-                                     "The configured line limit cannot be represented."));
-    }
-    if (maximum_total_bytes > std::numeric_limits<std::size_t>::max()) {
-        return std::unexpected(error(EvidenceInputErrorCode::input_too_large,
-                                     "The configured total input limit cannot be represented."));
+    const auto limits =
+        detail::EvidenceInputReaderAccess::validate_limits(maximum_line_bytes, maximum_total_bytes);
+    if (!limits.has_value()) {
+        return std::unexpected(limits.error());
     }
 
     // Do not follow links or block on special files before fstat confirms a regular artifact.
@@ -44,27 +147,8 @@ EvidenceInputReader::open(const std::filesystem::path &path, std::uint64_t maxim
         return std::unexpected(error(code, errno_detail(path)));
     }
 
-    struct stat status{};
-    if (::fstat(descriptor, &status) == -1) {
-        const std::string detail = errno_detail(path);
-        (void)::close(descriptor);
-        return std::unexpected(error(EvidenceInputErrorCode::input_open_failed, detail));
-    }
-    if (!S_ISREG(status.st_mode)) {
-        (void)::close(descriptor);
-        return std::unexpected(error(EvidenceInputErrorCode::input_not_regular_file,
-                                     "The input path must name a regular file."));
-    }
-
-    const auto total_limit = static_cast<std::size_t>(maximum_total_bytes);
-    if (status.st_size < 0 || static_cast<std::uintmax_t>(status.st_size) > total_limit) {
-        (void)::close(descriptor);
-        return std::unexpected(error(EvidenceInputErrorCode::input_too_large,
-                                     "The evidence artifact exceeds the configured size limit."));
-    }
-
-    return EvidenceInputReader{descriptor, static_cast<std::size_t>(maximum_line_bytes),
-                               total_limit};
+    return detail::EvidenceInputReaderAccess::make_reader(descriptor, path, limits->first,
+                                                          limits->second);
 }
 
 EvidenceInputReader::EvidenceInputReader(EvidenceInputReader &&other) noexcept

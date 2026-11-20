@@ -177,6 +177,36 @@ TEST_F(TrendAnalysisServiceTest, MapsInvalidCatalogArtifactToCatalogFailure) {
     EXPECT_EQ(analysis.error().artifact_path, invalid);
 }
 
+TEST_F(TrendAnalysisServiceTest, RejectsAnIntermediateDirectoryReplacedBeforeReplay) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto original_directory = directory_ / "original";
+    const auto replacement_directory = directory_ / "replacement";
+    ASSERT_TRUE(std::filesystem::create_directory(original_directory));
+    ASSERT_TRUE(std::filesystem::create_directory(replacement_directory));
+    const auto artifact =
+        write_artifact("original/evidence.jsonl", std::chrono::seconds{0},
+                       {{snapshot(std::string{id}, "/docker/original", 100)}}, false);
+    write_artifact("replacement/evidence.jsonl", std::chrono::seconds{0},
+                   {{snapshot(std::string{id}, "/docker/replacement", 200)}}, false);
+
+    const TrendManifest manifest{.directory = directory_, .artifact_paths = {artifact}};
+    const auto catalog = load_trend_evidence_catalog(manifest);
+    ASSERT_TRUE(catalog.has_value());
+    ASSERT_EQ(catalog->sessions.size(), 1U);
+
+    std::filesystem::rename(original_directory, directory_ / "original-held");
+    std::filesystem::create_directory_symlink(replacement_directory, original_directory);
+
+    TrendAnalyzer analyzer;
+    const auto replayed =
+        detail::replay_trend_evidence_session(directory_, catalog->sessions[0], analyzer);
+
+    ASSERT_FALSE(replayed.has_value());
+    EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::evidence_replay_failed);
+    EXPECT_EQ(replayed.error().artifact_path, artifact);
+}
+
 TEST_F(TrendAnalysisServiceTest, MapsAnOversizedDirectManifestToCatalogFailure) {
     TrendManifest manifest{.directory = directory_, .artifact_paths = {}};
     manifest.artifact_paths.resize(kTrendManifestMaximumArtifacts + 1U,
@@ -203,7 +233,7 @@ TEST_F(TrendAnalysisServiceTest, MapsCatalogReplayMismatchToReplayFailure) {
         .container_windows = {},
     };
 
-    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+    const auto replayed = detail::replay_trend_evidence_session(directory_, cataloged, analyzer);
 
     ASSERT_FALSE(replayed.has_value());
     EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::evidence_replay_failed);
@@ -248,7 +278,7 @@ TEST_F(TrendAnalysisServiceTest, MapsAnalyzerResourceLimitToAnalyzerFailure) {
                                .maximum_captured_at_utc = "1970-01-01T00:00:10.000Z"}},
     };
 
-    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+    const auto replayed = detail::replay_trend_evidence_session(directory_, cataloged, analyzer);
 
     ASSERT_FALSE(replayed.has_value());
     EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::analyzer_failed);
@@ -272,7 +302,7 @@ TEST_F(TrendAnalysisServiceTest, BoundsNewReplayIdentityWindowsBeforeAllocation)
         .container_windows = {},
     };
 
-    const auto replayed = detail::replay_trend_evidence_session(cataloged, analyzer);
+    const auto replayed = detail::replay_trend_evidence_session(directory_, cataloged, analyzer);
 
     ASSERT_FALSE(replayed.has_value());
     EXPECT_EQ(replayed.error().code, TrendAnalysisErrorCode::evidence_replay_failed);

@@ -138,10 +138,17 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
 };
 
 [[nodiscard]] std::expected<void, TrendAnalysisError>
-replay_session(const TrendEvidenceSession &session, TrendAnalyzer &analyzer) {
+replay_session(const std::filesystem::path &manifest_directory, const TrendEvidenceSession &session,
+               TrendAnalyzer &analyzer) {
+    const std::filesystem::path relative_path =
+        session.artifact_path.lexically_relative(manifest_directory);
+    if (relative_path.empty() || relative_path.is_absolute() || *relative_path.begin() == "..") {
+        return service_error(TrendAnalysisErrorCode::evidence_replay_failed, session.artifact_path,
+                             "The artifact path is outside the manifest directory.");
+    }
     ReplaySink sink{analyzer};
-    const auto traversal =
-        memoptima::detail::traverse_typed_evidence_artifact(session.artifact_path, sink);
+    const auto traversal = memoptima::detail::traverse_typed_evidence_artifact_beneath(
+        manifest_directory, relative_path, sink);
     if (sink.analyzer_error().has_value()) {
         return service_error(TrendAnalysisErrorCode::analyzer_failed, session.artifact_path,
                              sink.analyzer_error()->detail);
@@ -209,8 +216,9 @@ replay_metadata_mismatch(const TrendEvidenceSession &catalog_session,
 }
 
 std::expected<void, TrendAnalysisError>
-replay_trend_evidence_session(const TrendEvidenceSession &session, TrendAnalyzer &analyzer) {
-    return replay_session(session, analyzer);
+replay_trend_evidence_session(const std::filesystem::path &manifest_directory,
+                              const TrendEvidenceSession &session, TrendAnalyzer &analyzer) {
+    return replay_session(manifest_directory, session, analyzer);
 }
 
 } // namespace detail
@@ -225,7 +233,8 @@ analyze_trend_manifest(const TrendManifest &manifest) {
 
     TrendAnalyzer analyzer;
     for (const auto &session : catalog->sessions) {
-        const auto replayed = detail::replay_trend_evidence_session(session, analyzer);
+        const auto replayed =
+            detail::replay_trend_evidence_session(manifest.directory, session, analyzer);
         if (!replayed.has_value()) {
             return std::unexpected(replayed.error());
         }

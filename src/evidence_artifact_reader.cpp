@@ -1,4 +1,5 @@
 #include "evidence_artifact_reader.hpp"
+#include "evidence_input_reader_internal.hpp"
 
 #include <memoptima/evidence_input_reader.hpp>
 
@@ -31,15 +32,8 @@ format_validation_errors(const std::vector<EvidenceValidationError> &errors) {
     return std::unexpected(EvidenceArtifactTraversalError{.detail = std::move(detail)});
 }
 
-} // namespace
-
-std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
-traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRecordSink &sink) {
-    auto input = EvidenceInputReader::open(path);
-    if (!input.has_value()) {
-        return error(input.error().detail);
-    }
-
+[[nodiscard]] std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
+traverse(EvidenceInputReader &input, EvidenceArtifactRecordSink &sink) {
     bool saw_start{};
     bool saw_end{};
     std::uint32_t requested_sample_count{};
@@ -48,7 +42,7 @@ traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRe
     std::uint64_t line_number{};
     std::vector<EvidenceValidationError> validation_errors;
     while (true) {
-        const auto line = input->next_line();
+        const auto line = input.next_line();
         if (!line.has_value()) {
             return error(line.error().detail);
         }
@@ -126,6 +120,31 @@ traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRe
         return error("The artifact has no session_start record.");
     }
     return EvidenceArtifactTraversalResult{.incomplete = !saw_end};
+}
+
+} // namespace
+
+std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
+traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRecordSink &sink) {
+    auto input = EvidenceInputReader::open(path);
+    if (!input.has_value()) {
+        return error(input.error().detail);
+    }
+
+    return traverse(*input, sink);
+}
+
+std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
+traverse_evidence_artifact_beneath(const std::filesystem::path &root,
+                                   const std::filesystem::path &relative_path,
+                                   EvidenceArtifactRecordSink &sink) {
+    auto input =
+        open_evidence_input_beneath(root, relative_path, sampling::kSamplingOutputMaximumBytes,
+                                    sampling::kSamplingOutputMaximumBytes);
+    if (!input.has_value()) {
+        return error(input.error().detail);
+    }
+    return traverse(*input, sink);
 }
 
 } // namespace memoptima::detail

@@ -10,6 +10,10 @@
 #include <optional>
 #include <string>
 
+namespace memoptima::detail {
+struct EvidenceInputReaderAccess;
+}
+
 namespace memoptima {
 
 enum class EvidenceInputErrorCode {
@@ -48,6 +52,8 @@ class EvidenceInputReader {
     }
 
   private:
+    friend struct detail::EvidenceInputReaderAccess;
+
     EvidenceInputReader(int descriptor, std::size_t maximum_line_bytes,
                         std::size_t maximum_total_bytes) noexcept
         : descriptor_{descriptor}, maximum_line_bytes_{maximum_line_bytes},

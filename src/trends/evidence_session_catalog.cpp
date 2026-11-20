@@ -86,9 +86,17 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
 };
 
 [[nodiscard]] std::expected<TrendEvidenceSession, TrendEvidenceCatalogError>
-load_session(const std::filesystem::path &artifact_path) {
+load_session(const std::filesystem::path &manifest_directory,
+             const std::filesystem::path &artifact_path) {
+    const std::filesystem::path relative_path =
+        artifact_path.lexically_relative(manifest_directory);
+    if (relative_path.empty() || relative_path.is_absolute() || *relative_path.begin() == "..") {
+        return catalog_error(TrendEvidenceCatalogErrorCode::artifact_validation_failed,
+                             artifact_path, "The artifact path is outside the manifest directory.");
+    }
     CatalogSink sink{artifact_path};
-    const auto traversal = detail::traverse_typed_evidence_artifact(artifact_path, sink);
+    const auto traversal =
+        detail::traverse_typed_evidence_artifact_beneath(manifest_directory, relative_path, sink);
     if (!traversal.has_value()) {
         const auto code =
             traversal.error().detail.find("container-window limit") != std::string::npos
@@ -111,7 +119,7 @@ load_trend_evidence_catalog(const TrendManifest &manifest) {
     TrendEvidenceCatalog catalog;
     catalog.sessions.reserve(manifest.artifact_paths.size());
     for (const auto &artifact_path : manifest.artifact_paths) {
-        auto session = load_session(artifact_path);
+        auto session = load_session(manifest.directory, artifact_path);
         if (!session.has_value()) {
             return std::unexpected(session.error());
         }
