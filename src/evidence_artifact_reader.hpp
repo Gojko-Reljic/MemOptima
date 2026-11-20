@@ -36,4 +36,10 @@ class EvidenceArtifactRecordSink {
 [[nodiscard]] std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
 traverse_evidence_artifact(const std::filesystem::path &path, EvidenceArtifactRecordSink &sink);
 
+// Streams an artifact selected by a manifest without following symbolic links below its root.
+[[nodiscard]] std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
+traverse_evidence_artifact_beneath(const std::filesystem::path &root,
+                                   const std::filesystem::path &relative_path,
+                                   EvidenceArtifactRecordSink &sink);
+
 } // namespace memoptima::detail

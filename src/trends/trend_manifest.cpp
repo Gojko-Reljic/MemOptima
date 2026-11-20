@@ -124,7 +124,6 @@ validate_artifact_containment(TrendManifest &manifest) {
                                   "].path: The artifact path resolves outside the manifest "
                                   "directory.");
         }
-        manifest.artifact_paths[index] = resolved;
     }
     return {};
 }

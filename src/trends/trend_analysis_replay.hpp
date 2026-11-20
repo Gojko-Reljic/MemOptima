@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <expected>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@ replay_metadata_mismatch(const TrendEvidenceSession &catalog_session,
 
 // Replays one cataloged artifact without exposing typed evidence internals publicly.
 [[nodiscard]] std::expected<void, TrendAnalysisError>
-replay_trend_evidence_session(const TrendEvidenceSession &session, TrendAnalyzer &analyzer);
+replay_trend_evidence_session(const std::filesystem::path &manifest_directory,
+                              const TrendEvidenceSession &session, TrendAnalyzer &analyzer);
 
 } // namespace memoptima::trends::detail

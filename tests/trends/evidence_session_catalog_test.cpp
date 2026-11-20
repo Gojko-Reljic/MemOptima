@@ -331,5 +331,22 @@ TEST_F(TrendEvidenceSessionCatalogTest, RejectsAnArtifactThatFailsEvidenceValida
     EXPECT_EQ(catalog.error().artifact_path.filename(), "invalid.jsonl");
 }
 
+TEST_F(TrendEvidenceSessionCatalogTest, RejectsAnArtifactPathThroughAnIntermediateSymbolicLink) {
+    constexpr std::string_view id{
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+    const auto actual_directory = directory_ / "actual";
+    ASSERT_TRUE(std::filesystem::create_directory(actual_directory));
+    write_artifact("actual/evidence.jsonl", std::chrono::seconds{0},
+                   {{snapshot(std::string{id}, "/docker/symlink")}}, false);
+    std::filesystem::create_directory_symlink(actual_directory, directory_ / "alias");
+
+    const auto catalog = load_trend_evidence_catalog(
+        manifest(R"({"manifest_version":1,"artifacts":[{"path":"alias/evidence.jsonl"}]})"));
+
+    ASSERT_FALSE(catalog.has_value());
+    EXPECT_EQ(catalog.error().code, TrendEvidenceCatalogErrorCode::artifact_validation_failed);
+    EXPECT_EQ(catalog.error().artifact_path, directory_ / "alias/evidence.jsonl");
+}
+
 } // namespace
 } // namespace memoptima::trends

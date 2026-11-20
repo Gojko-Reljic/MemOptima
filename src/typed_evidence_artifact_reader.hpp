@@ -69,4 +69,9 @@ class TypedEvidenceArtifactSink {
 traverse_typed_evidence_artifact(const std::filesystem::path &path,
                                  TypedEvidenceArtifactSink &sink);
 
+[[nodiscard]] std::expected<EvidenceArtifactTraversalResult, EvidenceArtifactTraversalError>
+traverse_typed_evidence_artifact_beneath(const std::filesystem::path &root,
+                                         const std::filesystem::path &relative_path,
+                                         TypedEvidenceArtifactSink &sink);
+
 } // namespace memoptima::detail
