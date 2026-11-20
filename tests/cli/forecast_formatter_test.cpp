@@ -53,5 +53,23 @@ TEST(ForecastFormatter, MarksIncompleteArtifactsWithoutChangingContainerStatus) 
     EXPECT_NE(output.find("Unavailable: fewer than 3 samples"), std::string::npos);
 }
 
+TEST(ForecastFormatter, OmitsNumbersForAnUnavailableResult) {
+    const forecast::EvidenceForecastSummary summary{
+        .artifact_path = "/tmp/unavailable.jsonl",
+        .incomplete = false,
+        .sample_count = 4,
+        .containers = {{.container_id = "dddddddd",
+                        .observed_sample_count = 4,
+                        .status = forecast::EvidenceForecastStatus::unavailable_current_memory,
+                        .growth_bytes_per_second = 10.0,
+                        .estimated_time_to_memory_max = std::chrono::seconds{10}}}};
+
+    const std::string output = format_evidence_forecast(summary);
+
+    EXPECT_NE(output.find("Unavailable: memory.current"), std::string::npos);
+    EXPECT_EQ(output.find("10.000000 B/s"), std::string::npos);
+    EXPECT_EQ(output.find("estimate:"), std::string::npos);
+}
+
 } // namespace
 } // namespace memoptima::cli

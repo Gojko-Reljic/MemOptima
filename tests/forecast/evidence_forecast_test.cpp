@@ -137,5 +137,31 @@ TEST(EvidenceForecast, ReportsInsufficientObservationCountAndWindow) {
     std::filesystem::remove(insufficient_window);
 }
 
+TEST(EvidenceForecast, ClearsEstimatesWhenALaterMetricBecomesUnavailable) {
+    const auto unavailable_current = write_artifact(
+        {snapshot(100, 400), snapshot(200, 400), snapshot(300, 400), snapshot(300, 400, false)});
+    const auto unavailable_maximum =
+        write_artifact({snapshot(100, 400), snapshot(200, 400), snapshot(300, 400),
+                        snapshot(300, 400, true, false)});
+
+    const auto current_result = forecast_evidence_artifact(unavailable_current);
+    ASSERT_TRUE(current_result.has_value());
+    ASSERT_EQ(current_result->containers.size(), 1U);
+    EXPECT_EQ(current_result->containers[0].status,
+              EvidenceForecastStatus::unavailable_current_memory);
+    EXPECT_FALSE(current_result->containers[0].growth_bytes_per_second.has_value());
+    EXPECT_FALSE(current_result->containers[0].estimated_time_to_memory_max.has_value());
+
+    const auto maximum_result = forecast_evidence_artifact(unavailable_maximum);
+    ASSERT_TRUE(maximum_result.has_value());
+    ASSERT_EQ(maximum_result->containers.size(), 1U);
+    EXPECT_EQ(maximum_result->containers[0].status, EvidenceForecastStatus::unavailable_memory_max);
+    EXPECT_FALSE(maximum_result->containers[0].growth_bytes_per_second.has_value());
+    EXPECT_FALSE(maximum_result->containers[0].estimated_time_to_memory_max.has_value());
+
+    std::filesystem::remove(unavailable_current);
+    std::filesystem::remove(unavailable_maximum);
+}
+
 } // namespace
 } // namespace memoptima::forecast
