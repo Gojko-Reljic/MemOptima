@@ -580,6 +580,29 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   in a v0.7.0 verification document. Existing schema-v1 artifacts remain valid; new sampling
   artifacts report application version `0.7.0` without changing their schema.
 
+## ADR-039: Preserve evidence availability, bounded consumption, and path containment
+
+- **Status:** Approved
+- **Decision:** A forecast result may expose a numeric growth rate and estimated time to
+  `memory.max` only when its final status is `available`. If any later observation makes the
+  container unavailable, the result retains the explicit unavailable status and clears both numeric
+  values. Evidence readers accept at most 512 MiB in total, matching the existing maximum size of
+  an artifact MemOptima can produce. Trend artifact paths remain relative to and contained within
+  the manifest directory, but are opened descriptor-relative one path component at a time with
+  `openat` and `O_NOFOLLOW`; containment is therefore enforced at open time rather than only by a
+  prior pathname check.
+- **Alternatives considered:** Retain calculated forecast values beside an unavailable final
+  status; impose a smaller reader-only evidence limit; retain canonical-path validation followed by
+  ordinary pathname opening.
+- **Reason:** A stale estimate beside unavailable evidence can mislead an operator. Matching the
+  reader limit to the output limit preserves round-trip compatibility while bounding resource use.
+  Descriptor-relative traversal removes the race in which an intermediate directory changes after
+  validation but before a selected artifact is opened.
+- **Consequence:** The forecast table output never presents an estimate for an unavailable result.
+  Validation tracks aggregate physical input bytes as well as individual record size. Trend input
+  requires Linux descriptor-based traversal and receives regression tests for late metric loss,
+  aggregate input limits, and intermediate-path replacement.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
