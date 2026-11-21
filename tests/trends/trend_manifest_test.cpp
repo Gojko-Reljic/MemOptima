@@ -139,6 +139,68 @@ TEST(TrendManifest, LoaderRejectsAManifestDirectoryPathContainingASymbolicLink) 
     EXPECT_FALSE(cleanup_error) << cleanup_error.message();
 }
 
+TEST(TrendManifest, LoaderAcceptsBareAndExplicitRelativeManifestPaths) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    {
+        std::ofstream output{directory / "manifest.json"};
+        ASSERT_TRUE(output.is_open());
+        output << R"({"manifest_version":1,"artifacts":[{"path":"artifact.jsonl"}]})";
+    }
+    {
+        std::ofstream output{directory / "artifact.jsonl"};
+        ASSERT_TRUE(output.is_open());
+        output << "{}\n";
+    }
+
+    const std::filesystem::path original_directory = std::filesystem::current_path();
+    std::filesystem::current_path(directory);
+    const auto bare = load_trend_manifest("manifest.json");
+    const auto explicit_relative = load_trend_manifest("./manifest.json");
+    std::filesystem::current_path(original_directory);
+
+    ASSERT_TRUE(bare.has_value());
+    ASSERT_TRUE(explicit_relative.has_value());
+    EXPECT_EQ(bare->directory, directory);
+    EXPECT_EQ(explicit_relative->directory, directory);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
+TEST(TrendManifest, LoaderRejectsASymbolicDirectoryBeforeParentTraversalNormalizesIt) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto actual_directory = directory / "actual";
+    const auto alias_directory = directory / "alias";
+    ASSERT_TRUE(std::filesystem::create_directories(actual_directory));
+    std::filesystem::create_directory_symlink(actual_directory, alias_directory);
+    const auto manifest_path = actual_directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << R"({"manifest_version":1,"artifacts":[{"path":"artifact.jsonl"}]})";
+    }
+    {
+        std::ofstream output{actual_directory / "artifact.jsonl"};
+        ASSERT_TRUE(output.is_open());
+        output << "{}\n";
+    }
+
+    const auto result = load_trend_manifest(alias_directory / ".." / "actual" / "manifest.json");
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::input_is_symbolic_link);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
 TEST(TrendManifest, LoaderBoundsTheAggregateManifestSize) {
     const auto directory =
         std::filesystem::temp_directory_path() /
