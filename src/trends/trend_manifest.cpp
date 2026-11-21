@@ -102,21 +102,42 @@ canonical_manifest_directory(const std::filesystem::path &manifest_path) {
                                                        ? std::filesystem::path{"."}
                                                        : manifest_path.parent_path();
     std::error_code error;
-    const std::filesystem::path lexical_directory =
-        std::filesystem::absolute(source_directory, error).lexically_normal();
+    const std::filesystem::path absolute_directory =
+        std::filesystem::absolute(source_directory, error);
     if (error) {
         return load_error(TrendManifestLoadErrorCode::input_open_failed,
                           "Unable to resolve the manifest directory: " + error.message());
     }
+
+    // Inspect the original component sequence so a symbolic link remains visible before a later
+    // parent component could remove it through lexical normalization.
+    std::filesystem::path inspected_directory = absolute_directory.root_path();
+    for (const auto &component : absolute_directory.relative_path()) {
+        if (component.empty() || component == ".") {
+            continue;
+        }
+        if (component == "..") {
+            inspected_directory = inspected_directory.parent_path();
+            continue;
+        }
+        inspected_directory /= component;
+        const std::filesystem::file_status status =
+            std::filesystem::symlink_status(inspected_directory, error);
+        if (error) {
+            return load_error(TrendManifestLoadErrorCode::input_open_failed,
+                              "Unable to inspect the manifest directory: " + error.message());
+        }
+        if (std::filesystem::is_symlink(status)) {
+            return load_error(TrendManifestLoadErrorCode::input_is_symbolic_link,
+                              "The manifest directory path must not contain a symbolic link.");
+        }
+    }
+
     const std::filesystem::path directory =
         std::filesystem::weakly_canonical(source_directory, error);
     if (error) {
         return load_error(TrendManifestLoadErrorCode::input_open_failed,
                           "Unable to resolve the manifest directory: " + error.message());
-    }
-    if (lexical_directory != directory) {
-        return load_error(TrendManifestLoadErrorCode::input_is_symbolic_link,
-                          "The manifest directory path must not contain a symbolic link.");
     }
     return directory;
 }
