@@ -98,14 +98,25 @@ parse_artifact_path(std::string_view text, const std::filesystem::path &director
 
 [[nodiscard]] std::expected<std::filesystem::path, TrendManifestLoadError>
 canonical_manifest_directory(const std::filesystem::path &manifest_path) {
+    const std::filesystem::path source_directory = manifest_path.parent_path().empty()
+                                                       ? std::filesystem::path{"."}
+                                                       : manifest_path.parent_path();
     std::error_code error;
-    const std::filesystem::path directory = std::filesystem::weakly_canonical(
-        manifest_path.parent_path().empty() ? std::filesystem::path{"."}
-                                            : manifest_path.parent_path(),
-        error);
+    const std::filesystem::path lexical_directory =
+        std::filesystem::absolute(source_directory, error).lexically_normal();
     if (error) {
         return load_error(TrendManifestLoadErrorCode::input_open_failed,
                           "Unable to resolve the manifest directory: " + error.message());
+    }
+    const std::filesystem::path directory =
+        std::filesystem::weakly_canonical(source_directory, error);
+    if (error) {
+        return load_error(TrendManifestLoadErrorCode::input_open_failed,
+                          "Unable to resolve the manifest directory: " + error.message());
+    }
+    if (lexical_directory != directory) {
+        return load_error(TrendManifestLoadErrorCode::input_is_symbolic_link,
+                          "The manifest directory path must not contain a symbolic link.");
     }
     return directory;
 }
