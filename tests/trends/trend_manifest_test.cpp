@@ -56,6 +56,17 @@ TEST(TrendManifest, RejectsUnsafeOrDuplicatePaths) {
     EXPECT_EQ(duplicate.error().code, TrendManifestParseErrorCode::duplicate_artifact_path);
 }
 
+TEST(TrendManifest, RejectsArtifactPathsContainingNulBytes) {
+    const auto manifest = parse_trend_manifest(
+        R"({"manifest_version":1,"artifacts":[{"path":"safe\u0000/../../outside.jsonl"}]})",
+        "/tmp");
+
+    ASSERT_FALSE(manifest.has_value());
+    EXPECT_EQ(manifest.error().code, TrendManifestParseErrorCode::invalid_artifact_path);
+    EXPECT_EQ(manifest.error().json_path, "$.artifacts[0].path");
+    EXPECT_EQ(manifest.error().detail, "The artifact path must not contain a NUL byte.");
+}
+
 TEST(TrendManifest, EnforcesArtifactCountLimit) {
     std::string text = R"({"manifest_version":1,"artifacts":[)";
     for (std::size_t index{}; index <= kTrendManifestMaximumArtifacts; ++index) {
