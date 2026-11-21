@@ -1,5 +1,7 @@
 #include <memoptima/evidence_input_reader.hpp>
 
+#include "evidence_input_reader_internal.hpp"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -152,6 +154,19 @@ TEST_F(EvidenceInputReaderTest, RejectsAggregateInputBeyondTheConfiguredLimit) {
 
     ASSERT_FALSE(second.has_value());
     EXPECT_EQ(second.error().code, EvidenceInputErrorCode::input_too_large);
+}
+
+TEST_F(EvidenceInputReaderTest, RejectsANulByteInADescriptorRelativePathComponent) {
+    std::string unsafe_component{"evidence.jsonl"};
+    unsafe_component += '\0';
+    unsafe_component += "/../outside.jsonl";
+
+    const auto reader = detail::open_evidence_input_beneath(
+        path(""), std::filesystem::path{unsafe_component}, 1024U, 1024U);
+
+    ASSERT_FALSE(reader.has_value());
+    EXPECT_EQ(reader.error().code, EvidenceInputErrorCode::input_open_failed);
+    EXPECT_EQ(reader.error().detail, "The artifact path contains an unsafe component.");
 }
 
 } // namespace

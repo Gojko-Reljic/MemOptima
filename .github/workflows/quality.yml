@@ -19,11 +19,15 @@ jobs:
 
       - name: Install build tools
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo gpg --dearmor --yes --output /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" |
+            sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
           sudo apt-get update
-          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+          sudo apt-get install --yes cmake g++ ninja-build clang-format-22 valgrind
 
       - name: Configure the Debug build
-        run: cmake --preset debug
+        run: cmake --preset debug -DMEMOPTIMA_CLANG_FORMAT_EXECUTABLE=/usr/bin/clang-format-22
 
       - name: Check C++ formatting
         run: cmake --build --preset debug --target memoptima_format_check
@@ -37,11 +41,15 @@ jobs:
 
       - name: Install build tools
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo gpg --dearmor --yes --output /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" |
+            sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
           sudo apt-get update
-          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+          sudo apt-get install --yes cmake g++ ninja-build clang-format-22 valgrind
 
       - name: Configure the Debug build
-        run: cmake --preset debug
+        run: cmake --preset debug -DMEMOPTIMA_CLANG_FORMAT_EXECUTABLE=/usr/bin/clang-format-22
 
       - name: Build the Debug configuration
         run: cmake --build --preset debug
@@ -58,11 +66,15 @@ jobs:
 
       - name: Install build tools
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo gpg --dearmor --yes --output /usr/share/keyrings/llvm-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" |
+            sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
           sudo apt-get update
-          sudo apt-get install --yes cmake g++ ninja-build clang-format valgrind
+          sudo apt-get install --yes cmake g++ ninja-build clang-format-22 valgrind
 
       - name: Configure the Release build
-        run: cmake --preset release
+        run: cmake --preset release -DMEMOPTIMA_CLANG_FORMAT_EXECUTABLE=/usr/bin/clang-format-22
 
       - name: Build the Release configuration
         run: cmake --build --preset release

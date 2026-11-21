@@ -603,6 +603,21 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   requires Linux descriptor-based traversal and receives regression tests for late metric loss,
   aggregate input limits, and intermediate-path replacement.
 
+## ADR-040: Reject NUL bytes in trend artifact paths
+
+- **Status:** Approved
+- **Decision:** Manifest version 1 rejects an artifact `path` containing a NUL byte. The internal
+  descriptor-relative evidence opener independently rejects a NUL byte in every path component
+  before calling a filesystem API.
+- **Alternatives considered:** Rely only on lexical manifest validation; rely only on the internal
+  opener; permit NUL bytes and rely on platform pathname behavior.
+- **Reason:** JSON strings can represent a NUL byte, while POSIX path APIs interpret NUL as a
+  terminator. Rejecting it at the public input boundary and again immediately before `openat`
+  ensures validation and filesystem traversal operate on the same path representation.
+- **Consequence:** A manifest with `\u0000` in an artifact path is invalid. Regression tests cover
+  both manifest parsing and the internal descriptor-relative boundary. The evidence schema and
+  valid manifest paths remain unchanged.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

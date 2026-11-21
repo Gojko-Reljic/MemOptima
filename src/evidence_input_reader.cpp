@@ -86,7 +86,7 @@ open_evidence_input_beneath(const std::filesystem::path &root,
     std::vector<std::string> components;
     for (const auto &component : relative_path) {
         const std::string text = component.string();
-        if (text.empty() || text == "." || text == "..") {
+        if (text.empty() || text.find('\0') != std::string::npos || text == "." || text == "..") {
             return std::unexpected(error(EvidenceInputErrorCode::input_open_failed,
                                          "The artifact path contains an unsafe component."));
         }

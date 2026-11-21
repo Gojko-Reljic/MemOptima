@@ -48,6 +48,10 @@ parse_artifact_path(std::string_view text, const std::filesystem::path &director
         return parse_error(TrendManifestParseErrorCode::invalid_artifact_path, json_path,
                            "The artifact path must not be empty.");
     }
+    if (text.find('\0') != std::string_view::npos) {
+        return parse_error(TrendManifestParseErrorCode::invalid_artifact_path, json_path,
+                           "The artifact path must not contain a NUL byte.");
+    }
 
     const std::filesystem::path raw{text};
     if (raw.is_absolute()) {

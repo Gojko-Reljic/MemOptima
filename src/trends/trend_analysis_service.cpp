@@ -1,6 +1,7 @@
 #include <memoptima/trends/trend_analysis_service.hpp>
 
 #include "trend_analysis_replay.hpp"
+#include "trend_artifact_path.hpp"
 #include "typed_evidence_artifact_reader.hpp"
 #include "utc_timestamp_parser.hpp"
 
@@ -140,15 +141,15 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
 [[nodiscard]] std::expected<void, TrendAnalysisError>
 replay_session(const std::filesystem::path &manifest_directory, const TrendEvidenceSession &session,
                TrendAnalyzer &analyzer) {
-    const std::filesystem::path relative_path =
-        session.artifact_path.lexically_relative(manifest_directory);
-    if (relative_path.empty() || relative_path.is_absolute() || *relative_path.begin() == "..") {
+    const auto relative_path =
+        trend_path::relative_artifact_path(manifest_directory, session.artifact_path);
+    if (!relative_path.has_value()) {
         return service_error(TrendAnalysisErrorCode::evidence_replay_failed, session.artifact_path,
                              "The artifact path is outside the manifest directory.");
     }
     ReplaySink sink{analyzer};
     const auto traversal = memoptima::detail::traverse_typed_evidence_artifact_beneath(
-        manifest_directory, relative_path, sink);
+        manifest_directory, *relative_path, sink);
     if (sink.analyzer_error().has_value()) {
         return service_error(TrendAnalysisErrorCode::analyzer_failed, session.artifact_path,
                              sink.analyzer_error()->detail);
