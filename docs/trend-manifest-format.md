@@ -35,9 +35,10 @@ Unknown fields are validation errors. A path cannot be an array, object, number,
 
 ## Path rules
 
-Paths are interpreted relative to the manifest directory. A path cannot be absolute, contain a NUL
-byte, or escape the manifest directory tree through parent traversal or lexical normalization. The
-same normalized relative path may occur only once; duplicates are validation errors.
+Paths are interpreted relative to the manifest directory. The manifest directory path itself must
+not contain a symbolic-link component. An artifact path cannot be absolute, contain a NUL byte, or
+escape the manifest directory tree through parent traversal or lexical normalization. The same
+normalized relative path may occur only once; duplicates are validation errors.
 
 During analysis, MemOptima opens the manifest directory and traverses every artifact path relative
 to that directory through file descriptors. It applies `O_NOFOLLOW` to every path component, so an

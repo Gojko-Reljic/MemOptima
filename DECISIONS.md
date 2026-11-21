@@ -618,6 +618,21 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   both manifest parsing and the internal descriptor-relative boundary. The evidence schema and
   valid manifest paths remain unchanged.
 
+## ADR-041: Require a non-symbolic manifest directory path
+
+- **Status:** Approved
+- **Decision:** `load_trend_manifest` rejects a manifest path whose directory contains a symbolic
+  link component. `parse_trend_manifest` remains a pure parser and retains no filesystem resolution
+  responsibility.
+- **Alternatives considered:** Resolve the supplied directory in the parser; accept a symbolic
+  directory path in the loader and resolve it before descriptor-relative artifact traversal.
+- **Reason:** The parser is intentionally independent of filesystem state under ADR-030. Allowing
+  the loader to resolve a symbolic directory while a directly parsed manifest later fails the
+  descriptor-relative traversal produces inconsistent behavior for one manifest location.
+- **Consequence:** Operators must invoke the trend command through a physical, non-symbolic path to
+  the manifest directory. Artifact traversal continues to reject symbolic links at every component,
+  and the parser remains independently testable without filesystem I/O.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

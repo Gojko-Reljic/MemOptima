@@ -107,6 +107,38 @@ TEST(TrendManifest, LoaderRejectsSymbolicLinks) {
     EXPECT_FALSE(cleanup_error) << cleanup_error.message();
 }
 
+TEST(TrendManifest, LoaderRejectsAManifestDirectoryPathContainingASymbolicLink) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto actual_directory = directory / "actual";
+    const auto alias_directory = directory / "alias";
+    ASSERT_TRUE(std::filesystem::create_directories(actual_directory));
+    std::filesystem::create_directory_symlink(actual_directory, alias_directory);
+    const auto manifest_path = actual_directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << R"({"manifest_version":1,"artifacts":[{"path":"artifact.jsonl"}]})";
+    }
+    {
+        std::ofstream output{actual_directory / "artifact.jsonl"};
+        ASSERT_TRUE(output.is_open());
+        output << "{}\n";
+    }
+
+    const auto result = load_trend_manifest(alias_directory / "manifest.json");
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::input_is_symbolic_link);
+    EXPECT_EQ(result.error().detail,
+              "The manifest directory path must not contain a symbolic link.");
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
+}
+
 TEST(TrendManifest, LoaderBoundsTheAggregateManifestSize) {
     const auto directory =
         std::filesystem::temp_directory_path() /

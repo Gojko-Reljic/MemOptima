@@ -55,6 +55,8 @@ jobs:
         run: cmake --build --preset debug
 
       - name: Run Debug tests with sanitizers
+        env:
+          UBSAN_OPTIONS: halt_on_error=1
         run: ctest --preset debug --output-on-failure
 
   release:
