@@ -1,8 +1,8 @@
+#include <memoptima/evidence/evidence_artifact_stream.hpp>
 #include <memoptima/trends/trend_analysis_service.hpp>
 
 #include "trend_analysis_replay.hpp"
 #include "trend_artifact_path.hpp"
-#include "typed_evidence_artifact_reader.hpp"
 #include "utc_timestamp_parser.hpp"
 
 #include <algorithm>
@@ -23,9 +23,8 @@ service_error(TrendAnalysisErrorCode code, std::optional<std::filesystem::path> 
     });
 }
 
-[[nodiscard]] TrendMemoryMaximum
-to_trend_maximum(const memoptima::detail::TypedEvidenceMemoryMaximum &maximum) {
-    using SourceKind = memoptima::detail::TypedEvidenceMemoryMaximumKind;
+[[nodiscard]] TrendMemoryMaximum to_trend_maximum(const evidence::ArtifactMemoryMaximum &maximum) {
+    using SourceKind = evidence::ArtifactMemoryMaximumKind;
     using TargetKind = TrendMemoryMaximumKind;
     switch (maximum.kind) {
     case SourceKind::finite:
@@ -38,12 +37,12 @@ to_trend_maximum(const memoptima::detail::TypedEvidenceMemoryMaximum &maximum) {
     return {.kind = TargetKind::unavailable};
 }
 
-class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
+class ReplaySink final : public evidence::ArtifactSink {
   public:
     explicit ReplaySink(TrendAnalyzer &analyzer) : analyzer_{analyzer} {}
 
-    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
-    consume(const memoptima::detail::TypedEvidenceSessionStart &start) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSessionStart &start) override {
         metadata_.started_at_utc =
             memoptima::detail::format_canonical_utc_timestamp(start.started_at);
         metadata_.requested_interval_ms = start.requested_interval_ms;
@@ -52,8 +51,8 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
                                      .requested_interval_ms = start.requested_interval_ms}));
     }
 
-    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
-    consume(const memoptima::detail::TypedEvidenceSample &sample) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSample &sample) override {
         const auto begin = forward(analyzer_.begin_sample({.captured_at = sample.captured_at}));
         if (!begin.has_value()) {
             return begin;
@@ -63,8 +62,8 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
             memoptima::detail::format_canonical_utc_timestamp(sample.captured_at);
         for (const auto &container : sample.containers) {
             const TrendContainerIdentity identity{
-                .container_id = container.container_id.value(),
-                .cgroup_path = container.cgroup_path.string(),
+                .container_id = container.container_id,
+                .cgroup_path = container.cgroup_path,
             };
             const auto window = update_window(identity, captured_at);
             if (!window.has_value()) {
@@ -81,8 +80,8 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
         return forward(analyzer_.end_sample());
     }
 
-    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
-    consume(const memoptima::detail::TypedEvidenceSessionEnd &) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSessionEnd &) override {
         return {};
     }
 
@@ -100,22 +99,22 @@ class ReplaySink final : public memoptima::detail::TypedEvidenceArtifactSink {
     }
 
   private:
-    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
+    std::expected<void, evidence::ArtifactTraversalError>
     forward(std::expected<void, TrendAnalyzerError> result) {
         if (result.has_value()) {
             return {};
         }
         analyzer_error_ = result.error();
-        return std::unexpected(memoptima::detail::EvidenceArtifactTraversalError{
+        return std::unexpected(evidence::ArtifactTraversalError{
             .detail = result.error().detail,
         });
     }
 
-    std::expected<void, memoptima::detail::EvidenceArtifactTraversalError>
+    std::expected<void, evidence::ArtifactTraversalError>
     update_window(const TrendContainerIdentity &identity, const std::string &captured_at) {
         if (!windows_.contains(identity) &&
             windows_.size() >= kTrendEvidenceCatalogMaximumContainerWindows) {
-            return std::unexpected(memoptima::detail::EvidenceArtifactTraversalError{
+            return std::unexpected(evidence::ArtifactTraversalError{
                 .detail = "The replayed artifact exceeds the configured container-window limit.",
             });
         }
@@ -148,8 +147,8 @@ replay_session(const std::filesystem::path &manifest_directory, const TrendEvide
                              "The artifact path is outside the manifest directory.");
     }
     ReplaySink sink{analyzer};
-    const auto traversal = memoptima::detail::traverse_typed_evidence_artifact_beneath(
-        manifest_directory, *relative_path, sink);
+    const auto traversal =
+        evidence::traverse_artifact_beneath(manifest_directory, *relative_path, sink);
     if (sink.analyzer_error().has_value()) {
         return service_error(TrendAnalysisErrorCode::analyzer_failed, session.artifact_path,
                              sink.analyzer_error()->detail);

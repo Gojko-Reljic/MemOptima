@@ -9,6 +9,7 @@ add_executable(memoptima_core_tests
     cli/assessments_formatter_test.cpp
     docker_container_assessment_test.cpp
     docker_container_memory_snapshot_test.cpp
+    evidence_artifact_stream_test.cpp
     evidence_input_reader_test.cpp
     evidence_inspector_test.cpp
     evidence_record_parser_test.cpp

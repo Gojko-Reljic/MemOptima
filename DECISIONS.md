@@ -696,6 +696,32 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   deterministic fixtures for available and unavailable cases, a human-first CLI formatter, and
   documentation that distinguishes forecast evaluation from OOM prediction and leak diagnosis.
 
+## ADR-043: Expose validated evidence streaming as a lower-level module
+
+- **Status:** Approved
+- **Decision:** The public `memoptima::evidence` module exposes a typed, read-only schema-v1
+  artifact stream through `ArtifactSink` and `traverse_artifact_beneath(root, relative_path, sink)`.
+  The stream projects validated session-start, sample, and session-end records; container
+  observations retain a full Docker ID, cgroup path, optional `memory.current`, and memory-maximum
+  context. It exposes neutral evidence outcome and traversal-error types rather than public
+  dependencies on sampling implementation types.
+- **Safety boundary:** The public traversal intentionally accepts only a trusted root and a relative
+  artifact path. It retains existing descriptor-relative traversal, `O_NOFOLLOW`, schema and
+  lifecycle validation, and reader resource limits. It does not expose a public arbitrary-path
+  traversal operation.
+- **Dependency direction:** `trends` and `forecast_evaluation` consume this public lower-level
+  interface. They must not include private typed-reader, JSON, or filesystem implementation
+  headers. The existing private reader remains the implementation behind the public projection.
+- **Alternatives considered:** Let forecast evaluation include the private typed reader; duplicate
+  evidence parsing for evaluation; expose an unrestricted arbitrary-path reader; make evidence
+  depend publicly on sampling outcome types.
+- **Reason:** One validated streaming contract avoids duplicating safety-sensitive evidence parsing
+  while preserving the project's requirement that modules depend only on public lower-level
+  interfaces.
+- **Consequence:** The existing trend catalog and replay use the public evidence stream without a
+  behavior change. Public-contract regression tests cover valid projection and existing trend tests
+  continue to cover cataloging, replay, and symbolic-link protections.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

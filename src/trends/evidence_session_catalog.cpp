@@ -1,7 +1,7 @@
+#include <memoptima/evidence/evidence_artifact_stream.hpp>
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
 #include "trend_artifact_path.hpp"
-#include "typed_evidence_artifact_reader.hpp"
 #include "utc_timestamp_parser.hpp"
 
 #include <algorithm>
@@ -22,26 +22,26 @@ catalog_error(TrendEvidenceCatalogErrorCode code, const std::filesystem::path &a
     });
 }
 
-class CatalogSink final : public detail::TypedEvidenceArtifactSink {
+class CatalogSink final : public evidence::ArtifactSink {
   public:
     explicit CatalogSink(const std::filesystem::path &artifact_path)
         : artifact_path_{artifact_path} {}
 
-    std::expected<void, detail::EvidenceArtifactTraversalError>
-    consume(const detail::TypedEvidenceSessionStart &start) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSessionStart &start) override {
         session_.artifact_path = artifact_path_;
         session_.started_at_utc = detail::format_canonical_utc_timestamp(start.started_at);
         session_.requested_interval_ms = start.requested_interval_ms;
         return {};
     }
 
-    std::expected<void, detail::EvidenceArtifactTraversalError>
-    consume(const detail::TypedEvidenceSample &sample) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSample &sample) override {
         const std::string captured_at = detail::format_canonical_utc_timestamp(sample.captured_at);
         for (const auto &container : sample.containers) {
             TrendContainerIdentity identity{
-                .container_id = container.container_id.value(),
-                .cgroup_path = container.cgroup_path.string(),
+                .container_id = container.container_id,
+                .cgroup_path = container.cgroup_path,
             };
             auto [position, inserted] = windows_.try_emplace(
                 std::move(identity),
@@ -57,7 +57,7 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
                     std::max(position->second.maximum_captured_at_utc, captured_at);
             }
             if (windows_.size() > kTrendEvidenceCatalogMaximumContainerWindows) {
-                return std::unexpected(detail::EvidenceArtifactTraversalError{
+                return std::unexpected(evidence::ArtifactTraversalError{
                     .detail = "Line " + std::to_string(sample.line_number) +
                               ": the artifact exceeds the configured container-window limit.",
                 });
@@ -66,8 +66,8 @@ class CatalogSink final : public detail::TypedEvidenceArtifactSink {
         return {};
     }
 
-    std::expected<void, detail::EvidenceArtifactTraversalError>
-    consume(const detail::TypedEvidenceSessionEnd &) override {
+    std::expected<void, evidence::ArtifactTraversalError>
+    consume(const evidence::ArtifactSessionEnd &) override {
         return {};
     }
 
@@ -97,7 +97,7 @@ load_session(const std::filesystem::path &manifest_directory,
     }
     CatalogSink sink{artifact_path};
     const auto traversal =
-        detail::traverse_typed_evidence_artifact_beneath(manifest_directory, *relative_path, sink);
+        evidence::traverse_artifact_beneath(manifest_directory, *relative_path, sink);
     if (!traversal.has_value()) {
         const auto code =
             traversal.error().detail.find("container-window limit") != std::string::npos
