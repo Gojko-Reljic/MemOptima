@@ -167,6 +167,11 @@ The forecast-evaluation application service consumes the public trend catalog an
 rechecks catalog-defining replay metadata, and returns either one complete report or a categorized
 catalog, replay, or analyzer failure. CLI presentation is not part of this service.
 
+Forecast-evaluation CLI presentation is human-first in v0.8: a metric summary precedes an
+audit-oriented per-epoch table. It uses canonical UTC timestamps, full cgroup paths, explicit `N/A`
+values, signed row error, and stable status text. A versioned machine-readable output remains a
+separate future decision.
+
 Each trend result represents one container observation epoch. Global summaries count result statuses
 but never merge separate epochs into a single apparent trend.
 

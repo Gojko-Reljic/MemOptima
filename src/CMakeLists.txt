@@ -63,6 +63,7 @@ set_target_properties(memoptima_core PROPERTIES
 add_library(memoptima_cli_support STATIC
     cli/assessments_formatter.cpp
     cli/containers_formatter.cpp
+    cli/forecast_evaluation_formatter.cpp
     cli/forecast_formatter.cpp
     cli/formatting.cpp
     cli/monitor_runner.cpp

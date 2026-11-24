@@ -695,6 +695,16 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   root-relative evidence stream into one evaluator. It compares replay metadata against the catalog
   before closing each evaluator session and returns either one complete report or one categorized
   error: `catalog_failed`, `evidence_replay_failed`, or `analyzer_failed`.
+- **Human-readable output:** v0.8 presents an evaluation through a summary followed by one
+  dynamically sized table. The summary shows eligible forecasts, evaluated forecasts, coverage,
+  MAE, bias, incomplete exclusions, and nonzero status counts. The table columns are `CONTAINER ID`,
+  `CGROUP PATH`, `EPOCH`, `HISTORY`, `WINDOW`, `FORECAST AT`, `HOLDOUT AT`, `PREDICTED`, `ACTUAL`,
+  `ERROR`, and `STATUS`. Full cgroup paths and canonical UTC timestamps preserve local auditability.
+  Numeric byte values use IEC units and two decimal places; row error is signed
+  (`predicted - actual`), while MAE remains an absolute summary metric. Values unavailable for a row
+  are `N/A`. Numeric and duration columns are right-aligned, identity, timestamp, and status columns
+  are left-aligned, and the final column has no trailing padding. A valid evaluation with no rows
+  writes `No forecast evaluation epochs found in manifest.` and succeeds without a table or summary.
 - **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
   memory leak, classify an anomaly as a defect, or make an automatic change.
 - **Alternatives considered:** Evaluate every possible forecast point; include future observations
