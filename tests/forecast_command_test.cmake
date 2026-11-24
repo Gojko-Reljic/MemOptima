@@ -29,7 +29,7 @@ execute_process(COMMAND "${MEMOPTIMA_EXECUTABLE}" forecast
 if(NOT usage_result EQUAL 2 OR NOT usage_output STREQUAL "")
     message(FATAL_ERROR "Forecast usage error contract failed.")
 endif()
-string(FIND "${usage_error}" "'forecast' requires 'evidence <FILE>'" usage_position)
+string(FIND "${usage_error}" "'forecast' requires 'evidence <FILE>' or 'evaluate <MANIFEST>'" usage_position)
 if(usage_position EQUAL -1)
     message(FATAL_ERROR "Forecast usage error is unclear: ${usage_error}")
 endif()

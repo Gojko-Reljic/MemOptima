@@ -18,7 +18,7 @@ function(assert_help_command)
         message(FATAL_ERROR "Help command wrote to standard error: ${command_error}")
     endif()
 
-    foreach(expected_text "Usage:" "monitor" "processes" "status" "trends")
+    foreach(expected_text "Usage:" "forecast evaluate <MANIFEST>" "monitor" "processes" "status" "trends")
         string(FIND "${command_output}" "${expected_text}" match_position)
         if(match_position EQUAL -1)
             message(FATAL_ERROR "Help output is missing: ${expected_text}")

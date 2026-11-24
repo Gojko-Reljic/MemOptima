@@ -144,6 +144,13 @@ add_test(
 )
 
 add_test(
+    NAME MemOptimaCli.ForecastEvaluation
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/forecast_evaluation_command_test.cmake"
+)
+
+add_test(
     NAME MemOptimaCli.Trends
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"

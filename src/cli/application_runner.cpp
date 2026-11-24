@@ -6,6 +6,7 @@
 #include <memoptima/docker_container_assessment.hpp>
 #include <memoptima/evidence_inspector.hpp>
 #include <memoptima/forecast/evidence_forecast.hpp>
+#include <memoptima/forecast_evaluation/forecast_evaluation_service.hpp>
 #include <memoptima/linux/cgroup_v2_capability_checker.hpp>
 #include <memoptima/linux/docker_container_scanner.hpp>
 #include <memoptima/linux/memory_reader.hpp>
@@ -17,6 +18,7 @@
 
 #include "assessments_formatter.hpp"
 #include "containers_formatter.hpp"
+#include "forecast_evaluation_formatter.hpp"
 #include "forecast_formatter.hpp"
 #include "monitor_runner.hpp"
 #include "processes_formatter.hpp"
@@ -68,6 +70,7 @@ void print_help(std::ostream &output) {
            << "  memoptima assess container <FULL_ID>\n"
            << "  memoptima inspect evidence <FILE>\n"
            << "  memoptima forecast evidence <FILE>\n"
+           << "  memoptima forecast evaluate <MANIFEST>\n"
            << "  memoptima trends analyze <MANIFEST>\n"
            << "  memoptima sample containers --count <COUNT> --interval <DURATION> --output "
               "<NEW_FILE>\n\n"
@@ -341,20 +344,52 @@ int run_inspect_command(CommandArguments arguments) {
     return report_expected_at_most_one_option();
 }
 
-int run_forecast_command(CommandArguments arguments) {
-    if (arguments.size() != 2 || arguments.front() != "evidence") {
-        std::cerr << "Error: 'forecast' requires 'evidence <FILE>'.\n\n";
-        print_help(std::cerr);
-        return kExitUsageError;
+int run_forecast_evaluate_command(std::string_view path_text) {
+    const auto manifest = trends::load_trend_manifest(std::filesystem::path{path_text});
+    if (!manifest.has_value()) {
+        std::cerr << "Error: unable to load forecast evaluation manifest: "
+                  << manifest.error().detail << '\n';
+        return kExitRuntimeError;
     }
-    const auto summary = forecast::forecast_evidence_artifact(std::filesystem::path{arguments[1]});
-    if (!summary.has_value()) {
-        std::cerr << "Error: unable to forecast evidence artifact: " << summary.error().detail
+    const auto report = forecast_evaluation::evaluate_forecast_manifest(*manifest);
+    if (!report.has_value()) {
+        std::cerr << "Error: unable to evaluate forecast manifest: " << report.error().detail
                   << '\n';
         return kExitRuntimeError;
     }
-    std::cout << format_evidence_forecast(*summary);
+    std::cout << format_forecast_evaluation(*report);
+    // A buffered stream can report a write failure only when it is flushed.
+    std::cout.flush();
+    if (!std::cout) {
+        std::cerr << "Error: unable to write forecast evaluation report to standard output.\n";
+        return kExitRuntimeError;
+    }
     return kExitSuccess;
+}
+
+int run_forecast_command(CommandArguments arguments) {
+    if (arguments.size() != 2U) {
+        std::cerr << "Error: 'forecast' requires 'evidence <FILE>' or 'evaluate <MANIFEST>'.\n\n";
+        print_help(std::cerr);
+        return kExitUsageError;
+    }
+    if (arguments.front() == "evaluate") {
+        return run_forecast_evaluate_command(arguments[1]);
+    }
+    if (arguments.front() == "evidence") {
+        const auto summary =
+            forecast::forecast_evidence_artifact(std::filesystem::path{arguments[1]});
+        if (!summary.has_value()) {
+            std::cerr << "Error: unable to forecast evidence artifact: " << summary.error().detail
+                      << '\n';
+            return kExitRuntimeError;
+        }
+        std::cout << format_evidence_forecast(*summary);
+        return kExitSuccess;
+    }
+    std::cerr << "Error: 'forecast' requires 'evidence <FILE>' or 'evaluate <MANIFEST>'.\n\n";
+    print_help(std::cerr);
+    return kExitUsageError;
 }
 
 int run_trends_command(CommandArguments arguments) {
