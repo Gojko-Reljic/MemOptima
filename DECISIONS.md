@@ -656,6 +656,12 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   A non-applicable, unavailable, or changing `memory.max` must remain visible where relevant but
   must not discard an otherwise valid usage evaluation. Non-positive growth is valid for usage
   evaluation and is not an unavailable condition.
+- **Holdout selection:** Each usage epoch produces at most one row. The evaluator selects the first
+  instant at which the historical observations satisfy eligibility, then uses the immediately next
+  observation as its holdout. If that next observation is unavailable or absent because the epoch
+  ends, the row remains eligible with `holdout_observation_unavailable`. The evaluator does not
+  select the final available observation as a holdout by default, because that would make coverage
+  trivially approach 100 percent and hide trace-ending limitations.
 - **Usage continuity:** Evaluation uses its own usage-continuity policy rather than the trend
   module's time-to-limit continuity policy. A strict identity, available `memory.current`, and
   strictly increasing timestamps are required. A `memory.max` change, unavailable maximum, or
@@ -686,9 +692,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
   memory leak, classify an anomaly as a defect, or make an automatic change.
 - **Alternatives considered:** Evaluate every possible forecast point; include future observations
-  in fitting; require a stable finite `memory.max`; require positive growth; retain negative linear
-  projections; include incomplete sessions in aggregate metrics; publish JSON output together with
-  the first evaluation command; evaluate time-to-limit accuracy in the same release.
+  in fitting; select the final eligible forecast in an epoch; require a stable finite `memory.max`;
+  require positive growth; retain negative linear projections; include incomplete sessions in
+  aggregate metrics; publish JSON output together with the first evaluation command; evaluate
+  time-to-limit accuracy in the same release.
 - **Reason:** A bounded temporal holdout measures the forecast under the same information boundary
   that applies in operation. It supplies auditable accuracy evidence before higher-level advisory
   features rely on forecast results, while preserving the existing evidence and CLI contracts.
