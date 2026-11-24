@@ -18,6 +18,7 @@ add_executable(memoptima_core_tests
     forecast_evaluation/forecast_evaluation_service_test.cpp
     forecast/memory_limit_forecast_test.cpp
     cli/containers_formatter_test.cpp
+    cli/forecast_evaluation_formatter_test.cpp
     cli/forecast_formatter_test.cpp
     cli/formatting_test.cpp
     cli/monitor_runner_test.cpp
