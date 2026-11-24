@@ -170,7 +170,9 @@ catalog, replay, or analyzer failure. CLI presentation is not part of this servi
 Forecast-evaluation CLI presentation is human-first in v0.8: a metric summary precedes an
 audit-oriented per-epoch table. It uses canonical UTC timestamps, full cgroup paths, explicit `N/A`
 values, signed row error, and stable status text. A versioned machine-readable output remains a
-separate future decision.
+separate future decision. `memoptima forecast evaluate <MANIFEST>` follows the established CLI
+exit contract: valid reports return `0`, runtime or write failures return `1`, and usage failures
+return `2`.
 
 Each trend result represents one container observation epoch. Global summaries count result statuses
 but never merge separate epochs into a single apparent trend.

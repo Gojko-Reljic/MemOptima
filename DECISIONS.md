@@ -705,6 +705,12 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   are `N/A`. Numeric and duration columns are right-aligned, identity, timestamp, and status columns
   are left-aligned, and the final column has no trailing padding. A valid evaluation with no rows
   writes `No forecast evaluation epochs found in manifest.` and succeeds without a table or summary.
+- **CLI and exit contract:** The public command is `memoptima forecast evaluate <MANIFEST>`.
+  Existing `memoptima forecast evidence <FILE>` behavior remains unchanged. Successful evaluation,
+  including an empty valid result, returns `0` and writes only to standard output. Manifest loading,
+  cataloging, replay, analyzer, formatting, or standard-output write failures return `1` and write
+  diagnostics only to standard error. Invalid command syntax returns `2`, with usage output on
+  standard error.
 - **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
   memory leak, classify an anomaly as a defect, or make an automatic change.
 - **Alternatives considered:** Evaluate every possible forecast point; include future observations
