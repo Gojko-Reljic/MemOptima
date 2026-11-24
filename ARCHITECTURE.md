@@ -137,12 +137,13 @@ identity composed of the full Docker ID and cgroup path. It fits only observatio
 the holdout and compares the resulting predicted `memory.current` with the next eligible actual
 observation. It never uses future observations while fitting a forecast.
 
-The evaluator reports eligible and evaluated counts, coverage, MAE, bias, unavailable-reason counts,
-and rows for evaluated or ineligible epochs. A row needs continuous historical observations, a
-strictly increasing time series, available `memory.current`, the existing rate minimums, and a later
-actual `memory.current`. `memory.max` is not required because this is usage evaluation rather than
-time-to-limit evaluation. Incomplete-session rows remain visible but are excluded from aggregate
-quality metrics.
+The evaluator reports eligible and evaluated counts, coverage, MAE, bias, status counts, and rows
+for evaluated or ineligible epochs. Eligibility requires continuous historical observations, a
+strictly increasing time series, available `memory.current`, and the existing rate minimums;
+evaluation additionally requires a later actual `memory.current`. `memory.max` is not required
+because this is usage evaluation rather than time-to-limit evaluation. Incomplete-session rows
+remain visible but are excluded from aggregate quality metrics. Negative linear projections are
+clamped to `0 B` before the evaluator reports them or calculates error.
 
 Evaluation inherits the manifest, artifact-reader, and bounded streaming safeguards. It has no more
 than 4,096 result rows and fails without a partial report when a resource boundary is exceeded.

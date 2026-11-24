@@ -85,7 +85,8 @@ identity.
 
 - Replay and temporal-holdout backtesting of `memory.current` forecasts using retained evidence
   traces.
-- Documented eligible and evaluated counts, coverage, MAE, bias, and unavailable reasons.
+- Documented eligible and evaluated counts, coverage, MAE, bias, stable row statuses, and explicit
+  incomplete-evidence exclusions.
 - A human-readable `memoptima forecast evaluate <MANIFEST>` report with per-epoch outcomes and
   aggregate metrics.
 - Explainable advisory reports connecting assessments, trends, and safe operator investigation steps.
