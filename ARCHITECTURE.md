@@ -151,6 +151,11 @@ because this is usage evaluation rather than time-to-limit evaluation. Incomplet
 remain visible but are excluded from aggregate quality metrics. Negative linear projections are
 clamped to `0 B` before the evaluator reports them or calculates error.
 
+Each usage epoch selects only its first eligible forecast attempt and uses the immediately following
+observation as the holdout. If no such holdout exists, the eligible row remains unavailable for
+error metrics. This keeps one stable row per epoch while making coverage meaningful instead of
+selecting the final known observation and mechanically inflating it.
+
 Evaluation inherits the manifest, artifact-reader, and bounded streaming safeguards. It has no more
 than 4,096 result rows and fails without a partial report when a resource boundary is exceeded.
 Version 0.8 initially exposes a human-readable table only. It does not make an OOM prediction,
