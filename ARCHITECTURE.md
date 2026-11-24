@@ -33,7 +33,7 @@ CLI presentation
 | snapshot models | Typed measurements and individual metric availability | Filesystem, JSON, or terminal APIs |
 | `analysis/` | Pure point-in-time pressure and cgroup assessment | Docker discovery, file I/O, JSON, or CLI |
 | `sampling/` | Bounded collection orchestration and evidence serialization | CLI formatting |
-| evidence validation | Bounded safe input opening, schema and lifecycle validation | Forecast or recommendation policy |
+| `evidence/` | Bounded safe input opening, schema/lifecycle validation, and typed artifact streaming | Forecast or recommendation policy |
 | `forecast/` | Pure eligibility and forecasting calculations | Filesystem, Docker, JSON, or CLI |
 | `trends/` | Cross-session comparability, epochs, and trend calculations | Filesystem, JSON, or CLI |
 | forecast evaluation | Bounded temporal holdout and aggregate accuracy metrics | CLI presentation or raw filesystem input |
@@ -69,6 +69,12 @@ Evidence input is bounded by a 512 MiB aggregate physical-byte limit, including 
 artifact paths are opened relative to the manifest directory through directory descriptors with
 `O_NOFOLLOW` applied at every path component. This rejects symbolic links and prevents a later
 filesystem replacement from escaping the manifest directory tree.
+
+The public `evidence/` module is the only reusable typed streaming boundary for validated schema-v1
+artifacts. It accepts a trusted root and a relative artifact path, retains descriptor-relative safe
+opening, and projects typed session, sample, and terminal events. It does not expose raw JSON or an
+arbitrary-path reader. Higher-level consumers such as trends and forecast evaluation use this public
+contract rather than private parser or filesystem implementation headers.
 
 ## Cross-session trend policy
 

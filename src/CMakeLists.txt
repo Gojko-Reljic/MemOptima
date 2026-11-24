@@ -7,6 +7,7 @@ add_library(memoptima_core STATIC
     docker_container_assessment.cpp
     docker_container_memory_snapshot.cpp
     evidence_artifact_reader.cpp
+    evidence_artifact_stream.cpp
     evidence_input_reader.cpp
     evidence_inspector.cpp
     evidence_record_parser.cpp
