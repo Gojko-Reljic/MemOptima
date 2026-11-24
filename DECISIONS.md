@@ -689,6 +689,12 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   evaluation state. A resource-limit failure returns no partial report. v0.8 provides a stable
   human-readable table only; a machine-readable, versioned report is deferred to a later approved
   decision.
+- **Application service:** The public
+  `evaluate_forecast_manifest(const trends::TrendManifest &)` service first creates the existing
+  validated trend evidence catalog, then replays every cataloged artifact through the public
+  root-relative evidence stream into one evaluator. It compares replay metadata against the catalog
+  before closing each evaluator session and returns either one complete report or one categorized
+  error: `catalog_failed`, `evidence_replay_failed`, or `analyzer_failed`.
 - **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
   memory leak, classify an anomaly as a defect, or make an automatic change.
 - **Alternatives considered:** Evaluate every possible forecast point; include future observations
@@ -700,8 +706,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   that applies in operation. It supplies auditable accuracy evidence before higher-level advisory
   features rely on forecast results, while preserving the existing evidence and CLI contracts.
 - **Consequence:** The first v0.8 implementation introduces a public evaluation-result contract,
-  deterministic fixtures for available and unavailable cases, a human-first CLI formatter, and
-  documentation that distinguishes forecast evaluation from OOM prediction and leak diagnosis.
+  an atomic manifest application service, deterministic fixtures for available and unavailable
+  cases, a human-first CLI formatter, and documentation that distinguishes forecast evaluation from
+  OOM prediction and leak diagnosis.
 
 ## ADR-043: Expose validated evidence streaming as a lower-level module
 
@@ -710,8 +717,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   artifact stream through `ArtifactSink` and `traverse_artifact_beneath(root, relative_path, sink)`.
   The stream projects validated session-start, sample, and session-end records; container
   observations retain a full Docker ID, cgroup path, optional `memory.current`, and memory-maximum
-  context. It exposes neutral evidence outcome and traversal-error types rather than public
-  dependencies on sampling implementation types.
+  context. Session-start and sample events retain both typed timestamps and their canonical schema-v1
+  UTC strings, so higher layers can validate a replay without depending on private timestamp
+  formatting. The module exposes neutral evidence outcome and traversal-error types rather than
+  public dependencies on sampling implementation types.
 - **Safety boundary:** The public traversal intentionally accepts only a trusted root and a relative
   artifact path. It retains existing descriptor-relative traversal, `O_NOFOLLOW`, schema and
   lifecycle validation, and reader resource limits. It does not expose a public arbitrary-path

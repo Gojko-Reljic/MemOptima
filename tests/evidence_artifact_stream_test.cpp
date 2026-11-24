@@ -90,8 +90,10 @@ TEST_F(EvidenceArtifactStreamTest, StreamsValidatedEvidenceThroughThePublicContr
     ASSERT_TRUE(traversal.has_value()) << traversal.error().detail;
     EXPECT_FALSE(traversal->incomplete);
     ASSERT_EQ(sink.starts.size(), 1U);
+    EXPECT_EQ(sink.starts[0].started_at_utc, "1970-01-01T00:00:00.000Z");
     EXPECT_EQ(sink.starts[0].requested_interval_ms, 10'000U);
     ASSERT_EQ(sink.samples.size(), 1U);
+    EXPECT_EQ(sink.samples[0].captured_at_utc, "1970-01-01T00:00:00.000Z");
     ASSERT_EQ(sink.samples[0].containers.size(), 1U);
     const auto &container = sink.samples[0].containers[0];
     EXPECT_EQ(container.container_id,

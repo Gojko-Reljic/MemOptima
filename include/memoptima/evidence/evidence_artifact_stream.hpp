@@ -13,6 +13,7 @@ namespace memoptima::evidence {
 struct ArtifactSessionStart {
     std::uint64_t line_number;
     std::chrono::sys_time<std::chrono::milliseconds> started_at;
+    std::string started_at_utc;
     std::uint32_t requested_sample_count;
     std::uint64_t requested_interval_ms;
 };
@@ -38,6 +39,7 @@ struct ArtifactContainerObservation {
 struct ArtifactSample {
     std::uint64_t line_number;
     std::chrono::sys_time<std::chrono::milliseconds> captured_at;
+    std::string captured_at_utc;
     std::vector<ArtifactContainerObservation> containers;
 };
 
