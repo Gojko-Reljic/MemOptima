@@ -266,6 +266,8 @@ ForecastEvaluationAnalyzer::observe(const Observation &observation) {
         }
         if (epoch.candidate_ready) {
             emit_evaluated_epoch(epoch, *observation.current_memory_bytes);
+            // Preserve timestamp continuity after freezing the first eligible forecast result.
+            epoch.latest_time = sample_time_;
             return {};
         }
         append_history(epoch, *observation.current_memory_bytes);

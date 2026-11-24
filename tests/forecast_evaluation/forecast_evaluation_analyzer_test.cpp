@@ -208,6 +208,29 @@ TEST(ForecastEvaluationAnalyzerTest, ReportsContinuityAndTimestampBreaksExplicit
               ForecastEvaluationStatus::non_increasing_timestamps);
 }
 
+TEST(ForecastEvaluationAnalyzerTest, StartsANewEpochWhenTimeMovesBackwardAfterEvaluation) {
+    ForecastEvaluationAnalyzer analyzer;
+    ASSERT_TRUE(analyzer.begin_session().has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    accept_sample(analyzer, start, {observation(100U)});
+    accept_sample(analyzer, start + 5s, {observation(110U)});
+    accept_sample(analyzer, start + 10s, {observation(120U)});
+    accept_sample(analyzer, start + 20s, {observation(140U)});
+    accept_sample(analyzer, start + 15s, {observation(130U)});
+    accept_sample(analyzer, start + 20s, {observation(140U)});
+    accept_sample(analyzer, start + 25s, {observation(150U)});
+    accept_sample(analyzer, start + 30s, {observation(160U)});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 2U);
+    EXPECT_EQ(report->rows[0].status, ForecastEvaluationStatus::evaluated);
+    EXPECT_EQ(report->rows[0].epoch_index, 1U);
+    EXPECT_EQ(report->rows[1].status, ForecastEvaluationStatus::evaluated);
+    EXPECT_EQ(report->rows[1].epoch_index, 2U);
+}
+
 TEST(ForecastEvaluationAnalyzerTest, RepresentsUnavailableInitialCurrentMemory) {
     ForecastEvaluationAnalyzer analyzer;
     ASSERT_TRUE(analyzer.begin_session().has_value());

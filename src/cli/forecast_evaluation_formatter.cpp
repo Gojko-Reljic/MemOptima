@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <format>
 #include <iomanip>
+#include <map>
 #include <sstream>
 #include <string_view>
 #include <vector>
@@ -42,18 +43,30 @@ using Row = std::array<std::string, kColumnCount>;
 
 [[nodiscard]] std::vector<std::size_t>
 container_identifier_widths(const std::vector<ForecastEvaluationRow> &evaluation_rows) {
+    std::vector<std::string_view> identifiers;
+    identifiers.reserve(evaluation_rows.size());
+    for (const auto &row : evaluation_rows) {
+        identifiers.push_back(row.identity.container_id);
+    }
+    std::ranges::sort(identifiers);
+    const auto unique_end = std::ranges::unique(identifiers).begin();
+    identifiers.erase(unique_end, identifiers.end());
+
+    std::map<std::string_view, std::size_t> widths_by_identifier;
+    for (std::size_t index{}; index < identifiers.size(); ++index) {
+        const auto identifier = identifiers[index];
+        std::size_t width = std::min<std::size_t>(12U, identifier.size());
+        if (index > 0U)
+            width = std::max(width, common_prefix_length(identifier, identifiers[index - 1U]) + 1U);
+        if (index + 1U < identifiers.size())
+            width = std::max(width, common_prefix_length(identifier, identifiers[index + 1U]) + 1U);
+        widths_by_identifier.emplace(identifier, std::min(width, identifier.size()));
+    }
+
     std::vector<std::size_t> widths;
     widths.reserve(evaluation_rows.size());
-    for (const auto &row : evaluation_rows) {
-        const auto &identifier = row.identity.container_id;
-        std::size_t width = std::min<std::size_t>(12U, identifier.size());
-        for (const auto &other_row : evaluation_rows) {
-            const auto &other_identifier = other_row.identity.container_id;
-            if (identifier != other_identifier)
-                width = std::max(width, common_prefix_length(identifier, other_identifier) + 1U);
-        }
-        widths.push_back(std::min(width, identifier.size()));
-    }
+    for (const auto &row : evaluation_rows)
+        widths.push_back(widths_by_identifier.at(row.identity.container_id));
     return widths;
 }
 
