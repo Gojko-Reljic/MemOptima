@@ -17,13 +17,13 @@ version of the executable.
 - Keep observation and advice local and read-only until a separately approved action design exists.
 - Preserve compatible CLI behavior and evidence schema contracts.
 
-## Current baseline: v0.7
+## Current baseline: v0.8
 
-v0.7 collects Linux and Docker cgroup v2 memory evidence, validates bounded local schema-v1 JSON
-Lines artifacts, produces a conservative estimate of a finite `memory.max` crossing from one
-continuous evidence session, and analyzes `memory.current` trends across explicitly selected local
-evidence sessions. It does not predict OOM events, confirm memory leaks, or modify the host or
-containers.
+v0.8 collects Linux and Docker cgroup v2 memory evidence, validates bounded local schema-v1 JSON
+Lines artifacts, produces conservative memory-limit forecasts, analyzes `memory.current` trends
+across explicitly selected local evidence sessions, and evaluates the first eligible forecast against
+its immediately following holdout observation. It does not predict OOM events, confirm memory leaks,
+or modify the host or containers.
 
 ## Completed: v0.7 historical trend foundation
 
@@ -39,7 +39,7 @@ MemOptima orders the selected artifacts by validated session start time and reje
 It fails closed when any artifact is unavailable, unsafe, malformed, or lifecycle-invalid.
 Manifest version 1 is closed and contains only `manifest_version`, `artifacts`, and artifact `path`.
 The public command is `memoptima trends analyze <MANIFEST>`, with one human-readable table on
-standard output. A machine-readable, versioned JSON trend report is deferred to v0.8.
+standard output. A machine-readable, versioned JSON trend report is deferred to a later release.
 Each result represents one container observation epoch; global summaries do not merge separate epochs.
 Version 0.7 trends `memory.current`; `memory.max` provides only limit context and eligibility.
 Time gaps remain visible quality signals: they mark a trend as sparse and prohibit a time-to-limit
@@ -69,7 +69,7 @@ identity.
 - Stable result codes for invalid artifacts, valid-but-ineligible data, and available trends.
 - Streaming analysis limited to 128 manifest artifacts and 4,096 active container observation epochs.
 - A human-readable table for local operational analysis; a versioned JSON result format is deferred
-  to v0.8.
+  to a later release.
 - Deterministic fixtures covering gaps, interrupted sessions, limit changes, unavailable metrics, and
   container identity changes.
 

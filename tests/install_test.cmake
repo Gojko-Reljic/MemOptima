@@ -48,9 +48,11 @@ foreach(required_file
     "${installed_document_directory}/0.5.0-scope.md"
     "${installed_document_directory}/0.6.0-scope.md"
     "${installed_document_directory}/0.7.0-scope.md"
+    "${installed_document_directory}/0.8.0-scope.md"
     "${installed_document_directory}/evidence-artifact-format.md"
     "${installed_document_directory}/trend-manifest-format.md"
-    "${installed_document_directory}/trend-report-format.md")
+    "${installed_document_directory}/trend-report-format.md"
+    "${installed_document_directory}/forecast-evaluation-report-format.md")
     if(NOT EXISTS "${required_file}")
         message(FATAL_ERROR "Expected installed file is missing: ${required_file}")
     endif()

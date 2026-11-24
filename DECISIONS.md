@@ -754,6 +754,24 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   behavior change. Public-contract regression tests cover valid projection and existing trend tests
   continue to cover cataloging, replay, and symbolic-link protections.
 
+## ADR-044: Release forecast evaluation as version 0.8.0
+
+- **Status:** Approved
+- **Decision:** MemOptima's next public release is version `0.8.0`. The CMake project version
+  remains the single source of truth and therefore changes the generated application version used by
+  `memoptima --version` and by newly written evidence artifacts. The evidence schema version remains
+  `1` and existing schema-version-1 artifacts remain valid.
+- **Alternatives considered:** Keep the public version at `0.7.0` until advisory intelligence is
+  added; publish forecast evaluation as a patch release; introduce a separate version source for
+  evidence artifacts.
+- **Reason:** `memoptima forecast evaluate <MANIFEST>` is an additive, backward-compatible public
+  capability with a documented report contract and new evidence-based accuracy metrics. A minor
+  version communicates that product expansion while retaining one auditable build-version source.
+- **Consequence:** Release preparation changes the CMake version to `0.8.0`, installs the v0.8 scope
+  and forecast-evaluation report documentation, and verifies the exact executable and installed
+  version through the existing version and installation tests. New sampling artifacts report
+  application version `0.8.0` without changing their schema.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

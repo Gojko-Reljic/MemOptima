@@ -111,8 +111,8 @@ Version 0.7 reports a numeric rate and evidence quality. It does not classify a 
 rising, falling, anomalous, or risky before v0.8 evaluation establishes defensible thresholds.
 
 Human-readable terminal tables retain the complete cgroup path and use an unambiguous Docker ID
-prefix for each strict identity. A versioned JSON report is deferred to v0.8, after PSI, swap,
-cache, and intelligence-layer requirements define the complete reporting model.
+prefix for each strict identity. A versioned JSON report is deferred to a later approved release,
+after PSI, swap, cache, and intelligence-layer requirements define the complete reporting model.
 
 The trend command returns exit code `0` for every valid report, including a report in which no epoch
 has an available rate or time-to-limit estimate. It returns `1` for input or runtime failures and `2`
@@ -185,8 +185,8 @@ cache remain retained evidence for later, separately modeled intelligence capabi
 
 The trend command presents one human-readable table. It represents successful available and
 valid-but-ineligible results without claiming an OOM prediction or confirmed memory leak. A
-versioned JSON result format for automation and the future dashboard is deferred to v0.8 and requires
-a separately approved public schema before implementation.
+versioned JSON result format for automation and the future dashboard is deferred to a later release
+and requires a separately approved public schema before implementation.
 
 A successful analysis with no observation epochs writes an explicit message without a table header.
 Trend windows and available time-to-limit results use an operational duration presentation in whole
