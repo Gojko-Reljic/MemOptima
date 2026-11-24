@@ -94,5 +94,27 @@ TEST(ForecastEvaluationFormatter, MarksUnavailableValuesAndStatuses) {
     EXPECT_NE(output.find("holdout observation unavailable"), std::string::npos);
 }
 
+TEST(ForecastEvaluationFormatter, UsesSharedUnambiguousPrefixesForRepeatedContainerIdentifiers) {
+    auto report = report_with_row(ForecastEvaluationStatus::evaluated);
+    auto first_identifier = std::string(64U, 'a');
+    first_identifier[12] = 'b';
+    auto second_identifier = std::string(64U, 'a');
+    second_identifier[12] = 'c';
+
+    report.rows[0].identity.container_id = first_identifier;
+    auto repeated_row = report.rows[0];
+    repeated_row.epoch_index = 2U;
+    auto second_row = report.rows[0];
+    second_row.identity.container_id = second_identifier;
+    second_row.epoch_index = 1U;
+    report.rows.push_back(std::move(repeated_row));
+    report.rows.push_back(std::move(second_row));
+
+    const auto output = format_forecast_evaluation(report);
+
+    EXPECT_NE(output.find(first_identifier.substr(0U, 13U)), std::string::npos);
+    EXPECT_NE(output.find(second_identifier.substr(0U, 13U)), std::string::npos);
+}
+
 } // namespace
 } // namespace memoptima::cli
