@@ -645,14 +645,36 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   Existing `memoptima forecast evidence <FILE>` behavior remains unchanged.
 - **Metrics:** The human-readable report provides eligible and evaluated forecast counts, coverage
   (`evaluated / eligible`), mean absolute error (MAE), mean signed error (bias), and explicit
-  unavailable-reason counts. It also provides one row per evaluated or ineligible container epoch.
-  MAE and bias include only evaluated rows. v0.8 does not make percentage error a primary metric.
-- **Eligibility:** A row requires a continuous historical epoch, available `memory.current` values,
-  strictly increasing timestamps, the existing minimum observation and duration requirements, and a
-  later observation of the same strict identity with available `memory.current`. `memory.max` is
-  not an eligibility requirement because the evaluation measures predicted memory usage, not time
-  to a memory limit. A non-applicable, unavailable, or changing `memory.max` must remain visible
-  where relevant but must not discard an otherwise valid usage evaluation.
+  status counts. It also provides one row per evaluated or ineligible container epoch. MAE and bias
+  include only evaluated rows. v0.8 does not make percentage error a primary metric.
+- **Eligibility:** An eligible row has a continuous historical usage epoch, available
+  `memory.current` values, strictly increasing timestamps, and the existing minimum observation and
+  duration requirements. A row is evaluated only when that eligible history has a later observation
+  of the same strict identity with available `memory.current`. Therefore coverage can honestly
+  report an eligible forecast that lacks a usable holdout. `memory.max` is not an eligibility
+  requirement because the evaluation measures predicted memory usage, not time to a memory limit.
+  A non-applicable, unavailable, or changing `memory.max` must remain visible where relevant but
+  must not discard an otherwise valid usage evaluation. Non-positive growth is valid for usage
+  evaluation and is not an unavailable condition.
+- **Usage continuity:** Evaluation uses its own usage-continuity policy rather than the trend
+  module's time-to-limit continuity policy. A strict identity, available `memory.current`, and
+  strictly increasing timestamps are required. A `memory.max` change, unavailable maximum, or
+  unlimited maximum does not break usage continuity. A required missing container observation or
+  unavailable historical `memory.current` does break it.
+- **Result contract:** Each row exposes the strict identity, local usage-epoch index, historical
+  start and end timestamps, optional holdout timestamp, historical observation count and window,
+  stable status, and—only when evaluated—predicted and actual current-memory values plus signed and
+  absolute error. The report summary exposes row, eligible, evaluated, and incomplete-exclusion
+  counts; per-status counts; optional coverage; optional MAE; optional bias; and the rows. Numeric
+  calculations retain `double` precision; presentation performs rounding. A negative linear
+  projection is clamped to `0 B` before it becomes a predicted value or contributes to an error
+  metric.
+- **Row statuses:** The stable row statuses are `evaluated`, `excluded_incomplete_session`,
+  `insufficient_observations`, `insufficient_observation_window`,
+  `container_not_observed_continuously`, `historical_current_memory_unavailable`,
+  `non_increasing_timestamps`, `holdout_observation_unavailable`, and
+  `numeric_result_unavailable`. Only `evaluated` rows contribute to MAE and bias. Eligible rows
+  exclude incomplete-session rows, even when their history would otherwise be sufficient.
 - **Incomplete evidence:** A row affected by an incomplete sampling session remains visible with an
   explicit status, but is excluded from eligible and evaluated counts, coverage, MAE, and bias.
 - **Resource and output contract:** Evaluation reuses the validated manifest and evidence-reader
@@ -664,9 +686,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
   memory leak, classify an anomaly as a defect, or make an automatic change.
 - **Alternatives considered:** Evaluate every possible forecast point; include future observations
-  in fitting; require a stable finite `memory.max`; include incomplete sessions in aggregate metrics;
-  publish JSON output together with the first evaluation command; evaluate time-to-limit accuracy in
-  the same release.
+  in fitting; require a stable finite `memory.max`; require positive growth; retain negative linear
+  projections; include incomplete sessions in aggregate metrics; publish JSON output together with
+  the first evaluation command; evaluate time-to-limit accuracy in the same release.
 - **Reason:** A bounded temporal holdout measures the forecast under the same information boundary
   that applies in operation. It supplies auditable accuracy evidence before higher-level advisory
   features rely on forecast results, while preserving the existing evidence and CLI contracts.
