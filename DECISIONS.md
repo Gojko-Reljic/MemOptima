@@ -634,6 +634,46 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   remain valid. Artifact traversal continues to reject symbolic links at every component, and the
   parser remains independently testable without filesystem I/O.
 
+## ADR-042: Evaluate forecast accuracy with bounded temporal holdouts in v0.8
+
+- **Status:** Approved
+- **Decision:** v0.8 adds the public command
+  `memoptima forecast evaluate <MANIFEST>`. It evaluates forecasted `memory.current` against a
+  later, actually observed `memory.current` for each strict container identity
+  (`container_id`, `cgroup_path`). The evaluator uses a temporal holdout: it computes a forecast
+  from observations available before a selected later observation, never from future observations.
+  Existing `memoptima forecast evidence <FILE>` behavior remains unchanged.
+- **Metrics:** The human-readable report provides eligible and evaluated forecast counts, coverage
+  (`evaluated / eligible`), mean absolute error (MAE), mean signed error (bias), and explicit
+  unavailable-reason counts. It also provides one row per evaluated or ineligible container epoch.
+  MAE and bias include only evaluated rows. v0.8 does not make percentage error a primary metric.
+- **Eligibility:** A row requires a continuous historical epoch, available `memory.current` values,
+  strictly increasing timestamps, the existing minimum observation and duration requirements, and a
+  later observation of the same strict identity with available `memory.current`. `memory.max` is
+  not an eligibility requirement because the evaluation measures predicted memory usage, not time
+  to a memory limit. A non-applicable, unavailable, or changing `memory.max` must remain visible
+  where relevant but must not discard an otherwise valid usage evaluation.
+- **Incomplete evidence:** A row affected by an incomplete sampling session remains visible with an
+  explicit status, but is excluded from eligible and evaluated counts, coverage, MAE, and bias.
+- **Resource and output contract:** Evaluation reuses the validated manifest and evidence-reader
+  boundaries: no more than 128 artifacts, aggregate bounded evidence input, safe descriptor-relative
+  opening, and at most 4,096 result rows. It streams evidence and retains only bounded per-identity
+  evaluation state. A resource-limit failure returns no partial report. v0.8 provides a stable
+  human-readable table only; a machine-readable, versioned report is deferred to a later approved
+  decision.
+- **Non-goals:** v0.8 does not evaluate time-to-limit accuracy, predict OOM, diagnose a confirmed
+  memory leak, classify an anomaly as a defect, or make an automatic change.
+- **Alternatives considered:** Evaluate every possible forecast point; include future observations
+  in fitting; require a stable finite `memory.max`; include incomplete sessions in aggregate metrics;
+  publish JSON output together with the first evaluation command; evaluate time-to-limit accuracy in
+  the same release.
+- **Reason:** A bounded temporal holdout measures the forecast under the same information boundary
+  that applies in operation. It supplies auditable accuracy evidence before higher-level advisory
+  features rely on forecast results, while preserving the existing evidence and CLI contracts.
+- **Consequence:** The first v0.8 implementation introduces a public evaluation-result contract,
+  deterministic fixtures for available and unavailable cases, a human-first CLI formatter, and
+  documentation that distinguishes forecast evaluation from OOM prediction and leak diagnosis.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

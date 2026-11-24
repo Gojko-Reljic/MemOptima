@@ -83,8 +83,11 @@ identity.
 
 ### Planned outcomes
 
-- Replay and backtesting of forecast methods using retained evidence traces.
-- Documented coverage, error, and failure measures relative to simple baselines.
+- Replay and temporal-holdout backtesting of `memory.current` forecasts using retained evidence
+  traces.
+- Documented eligible and evaluated counts, coverage, MAE, bias, and unavailable reasons.
+- A human-readable `memoptima forecast evaluate <MANIFEST>` report with per-epoch outcomes and
+  aggregate metrics.
 - Explainable advisory reports connecting assessments, trends, and safe operator investigation steps.
 - Conservative indicators for anomalous behavior and suspected persistent memory growth.
 - Provenance for the evidence, rules, and model inputs behind every advisory result.
@@ -93,6 +96,8 @@ identity.
 
 - No claim that an anomaly or persistent growth indicator proves a defect or memory leak.
 - No automatic remediation, resource-limit changes, or rollback implementation.
+- No v0.8 evaluation claim about time-to-limit accuracy or OOM prediction.
+- No machine-readable evaluation-report contract until a separately approved versioned schema.
 
 ## Beyond v0.8
 

@@ -36,6 +36,7 @@ CLI presentation
 | evidence validation | Bounded safe input opening, schema and lifecycle validation | Forecast or recommendation policy |
 | `forecast/` | Pure eligibility and forecasting calculations | Filesystem, Docker, JSON, or CLI |
 | `trends/` | Cross-session comparability, epochs, and trend calculations | Filesystem, JSON, or CLI |
+| forecast evaluation | Bounded temporal holdout and aggregate accuracy metrics | CLI presentation or raw filesystem input |
 | application use cases | Wire validated inputs, domain services, and stable result contracts | Terminal presentation details |
 | `cli/` | Argument parsing, dependency wiring, and presentation | Domain implementation details |
 
@@ -127,6 +128,26 @@ depend on the typed model and do not own manifest validation rules.
 
 The public cross-session command is `memoptima trends analyze <MANIFEST>`. It writes one
 human-readable table to standard output and provides no JSON output in v0.7.
+
+## v0.8 forecast evaluation policy
+
+The first v0.8 capability evaluates forecast accuracy from the same validated, manifest-selected
+evidence model used for trends. `memoptima forecast evaluate <MANIFEST>` uses a strict container
+identity composed of the full Docker ID and cgroup path. It fits only observations that occur before
+the holdout and compares the resulting predicted `memory.current` with the next eligible actual
+observation. It never uses future observations while fitting a forecast.
+
+The evaluator reports eligible and evaluated counts, coverage, MAE, bias, unavailable-reason counts,
+and rows for evaluated or ineligible epochs. A row needs continuous historical observations, a
+strictly increasing time series, available `memory.current`, the existing rate minimums, and a later
+actual `memory.current`. `memory.max` is not required because this is usage evaluation rather than
+time-to-limit evaluation. Incomplete-session rows remain visible but are excluded from aggregate
+quality metrics.
+
+Evaluation inherits the manifest, artifact-reader, and bounded streaming safeguards. It has no more
+than 4,096 result rows and fails without a partial report when a resource boundary is exceeded.
+Version 0.8 initially exposes a human-readable table only. It does not make an OOM prediction,
+confirm a memory leak, diagnose a defect, or alter a host or container.
 
 Each trend result represents one container observation epoch. Global summaries count result statuses
 but never merge separate epochs into a single apparent trend.
