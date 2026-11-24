@@ -67,5 +67,5 @@ It writes no table header and returns exit code `0`.
 
 ## Future JSON Contract
 
-A machine-readable, versioned JSON report format is deferred to v0.8 to incorporate upcoming memory
-signals: PSI, swap, and cache.
+A machine-readable, versioned JSON report format is deferred to a later version to incorporate
+upcoming memory signals: PSI, swap, and cache.

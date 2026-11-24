@@ -19,6 +19,7 @@ evidence without modifying the system automatically.
 - `memoptima inspect evidence <FILE>` validates and summarizes a local evidence artifact.
 - `memoptima forecast evidence <FILE>` estimates a cgroup `memory.max` crossing only from sufficient validated evidence.
 - `memoptima trends analyze <MANIFEST>` analyzes validated memory-current trends across explicitly selected local evidence sessions.
+- `memoptima forecast evaluate <MANIFEST>` measures eligible historical forecasts against their immediately following observed memory samples.
 
 ## Documentation
 
@@ -31,8 +32,10 @@ evidence without modifying the system automatically.
 - [0.5.0 Scope](docs/0.5.0-scope.md) defines local evidence inspection and validation.
 - [0.6.0 Scope](docs/0.6.0-scope.md) defines conservative evidence-based forecasting.
 - [0.7.0 Scope](docs/0.7.0-scope.md) defines read-only cross-session memory trend analysis.
+- [0.8.0 Scope](docs/0.8.0-scope.md) defines read-only temporal holdout evaluation of forecast accuracy.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
 - [Trend Manifest Format](docs/trend-manifest-format.md) defines the versioned JSON manifest that selects local evidence artifacts.
+- [Forecast Evaluation Report Format](docs/forecast-evaluation-report-format.md) defines the evaluation table, metrics, and limitations.
 
 ## Requirements
 
@@ -89,6 +92,7 @@ definite or indirect leaks.
 ./build/debug/src/memoptima inspect evidence evidence.jsonl
 ./build/debug/src/memoptima forecast evidence evidence.jsonl
 ./build/debug/src/memoptima trends analyze manifest.json
+./build/debug/src/memoptima forecast evaluate manifest.json
 ```
 
 ## Docker container memory
