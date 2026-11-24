@@ -73,8 +73,10 @@ filesystem replacement from escaping the manifest directory tree.
 The public `evidence/` module is the only reusable typed streaming boundary for validated schema-v1
 artifacts. It accepts a trusted root and a relative artifact path, retains descriptor-relative safe
 opening, and projects typed session, sample, and terminal events. It does not expose raw JSON or an
-arbitrary-path reader. Higher-level consumers such as trends and forecast evaluation use this public
-contract rather than private parser or filesystem implementation headers.
+arbitrary-path reader. Timestamp events retain their canonical schema-v1 UTC text beside their typed
+value so replay validation does not require a private formatter. Higher-level consumers such as
+trends and forecast evaluation use this public contract rather than private parser or filesystem
+implementation headers.
 
 ## Cross-session trend policy
 
@@ -160,6 +162,10 @@ Evaluation inherits the manifest, artifact-reader, and bounded streaming safegua
 than 4,096 result rows and fails without a partial report when a resource boundary is exceeded.
 Version 0.8 initially exposes a human-readable table only. It does not make an OOM prediction,
 confirm a memory leak, diagnose a defect, or alter a host or container.
+
+The forecast-evaluation application service consumes the public trend catalog and evidence stream,
+rechecks catalog-defining replay metadata, and returns either one complete report or a categorized
+catalog, replay, or analyzer failure. CLI presentation is not part of this service.
 
 Each trend result represents one container observation epoch. Global summaries count result statuses
 but never merge separate epochs into a single apparent trend.

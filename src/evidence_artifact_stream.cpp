@@ -1,6 +1,7 @@
 #include <memoptima/evidence/evidence_artifact_stream.hpp>
 
 #include "typed_evidence_artifact_reader.hpp"
+#include "utc_timestamp_parser.hpp"
 
 #include <utility>
 
@@ -40,16 +41,21 @@ class PublicArtifactSinkAdapter final : public detail::TypedEvidenceArtifactSink
 
     std::expected<void, detail::EvidenceArtifactTraversalError>
     consume(const detail::TypedEvidenceSessionStart &start) override {
-        return forward(sink_.consume({.line_number = start.line_number,
-                                      .started_at = start.started_at,
-                                      .requested_sample_count = start.requested_sample_count,
-                                      .requested_interval_ms = start.requested_interval_ms}));
+        return forward(sink_.consume(
+            {.line_number = start.line_number,
+             .started_at = start.started_at,
+             .started_at_utc = detail::format_canonical_utc_timestamp(start.started_at),
+             .requested_sample_count = start.requested_sample_count,
+             .requested_interval_ms = start.requested_interval_ms}));
     }
 
     std::expected<void, detail::EvidenceArtifactTraversalError>
     consume(const detail::TypedEvidenceSample &sample) override {
-        ArtifactSample public_sample{
-            .line_number = sample.line_number, .captured_at = sample.captured_at, .containers = {}};
+        ArtifactSample public_sample{.line_number = sample.line_number,
+                                     .captured_at = sample.captured_at,
+                                     .captured_at_utc =
+                                         detail::format_canonical_utc_timestamp(sample.captured_at),
+                                     .containers = {}};
         public_sample.containers.reserve(sample.containers.size());
         for (const auto &container : sample.containers) {
             public_sample.containers.push_back(
