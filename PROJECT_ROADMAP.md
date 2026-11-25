@@ -100,6 +100,26 @@ identity.
 - No v0.8 evaluation claim about time-to-limit accuracy or OOM prediction.
 - No machine-readable evaluation-report contract until a separately approved versioned schema.
 
+## v0.9: terminal rendering and streaming-contract hardening
+
+### Planned outcomes
+
+- A shared internal CLI formatter that renders control bytes in artifact-derived cgroup paths
+  visibly and without terminal control effects.
+- Identical safe rendering in `trends analyze` and `forecast evaluate`, while preserving the
+  unmodified path for identity and analysis.
+- An explicit public `ArtifactSink` lifecycle contract that callbacks are provisional until artifact
+  traversal succeeds.
+- Regression tests for control bytes, terminal escape sequences, normal printable paths, and
+  traversal failure behavior.
+
+### Explicit non-goals
+
+- No evidence-schema change, artifact rejection rule, identity normalization, or change to ordinary
+  printable CLI output.
+- No generalized terminal-escaping migration outside the two evidence-derived table cells.
+- No new monitoring, forecasting, intelligence, recommendation, or automatic-action capability.
+
 ## Beyond v0.8
 
 Potential future work includes a bounded service mode, dashboard, alerts, external integrations, and
