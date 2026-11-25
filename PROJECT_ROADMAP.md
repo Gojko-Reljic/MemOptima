@@ -17,13 +17,14 @@ version of the executable.
 - Keep observation and advice local and read-only until a separately approved action design exists.
 - Preserve compatible CLI behavior and evidence schema contracts.
 
-## Current baseline: v0.8
+## Current baseline: v0.9
 
-v0.8 collects Linux and Docker cgroup v2 memory evidence, validates bounded local schema-v1 JSON
+v0.9 collects Linux and Docker cgroup v2 memory evidence, validates bounded local schema-v1 JSON
 Lines artifacts, produces conservative memory-limit forecasts, analyzes `memory.current` trends
 across explicitly selected local evidence sessions, and evaluates the first eligible forecast against
-its immediately following holdout observation. It does not predict OOM events, confirm memory leaks,
-or modify the host or containers.
+its immediately following holdout observation. It safely renders ASCII control bytes in
+artifact-derived cgroup paths in the trend and forecast-evaluation tables. It does not predict OOM
+events, confirm memory leaks, or modify the host or containers.
 
 ## Completed: v0.7 historical trend foundation
 
@@ -120,7 +121,38 @@ identity.
 - No generalized terminal-escaping migration outside the two evidence-derived table cells.
 - No new monitoring, forecasting, intelligence, recommendation, or automatic-action capability.
 
-## Beyond v0.8
+## v0.9.1: trust-boundary remediation
+
+### Planned outcomes
+
+- Shared safe rendering of untrusted artifact, manifest, path, and live cgroup-warning text in CLI
+  standard output and standard error.
+- Schema validation that aligns artifact container IDs with the Docker ID contract, bounds values
+  narrowed to uint32_t, and constrains application-version text to a terminal-safe grammar.
+- End-to-end terminal-safety coverage for every artifact-reading command.
+- Public release notes that identify the narrower v0.9.0 terminal-hardening boundary.
+
+### Explicit non-goals
+
+- No evidence-schema version change or public typed trust-text API.
+- No duplicate-JSON-key parser policy; that is v0.10 planning work.
+- No forecast, trend, assessment, intelligence, or automatic-action behavior change.
+
+## v0.10: forecast evaluation integrity
+
+Before Intelligence features, MemOptima must correct forecast-evaluation continuity across session
+gaps, coalesce repeated unavailable memory-current observations, preserve both exclusion and
+underlying diagnostic reasons, define the evaluated forecast-model contract, and add horizon-aware
+and baseline-relative accuracy reporting. It must also remove duplicated bounded catalog/replay
+logic and define duplicate-JSON-key handling.
+
+## v0.11: assessment signal semantics
+
+Before anomaly or suspected-growth indicators, MemOptima must validate the meaning of cumulative OOM
+counters and page-cache evidence in assess and sample. This work will define which changes are
+causal signals, which are context only, and which evidence is insufficient for a risk claim.
+
+## Beyond v0.11
 
 Potential future work includes a bounded service mode, dashboard, alerts, external integrations, and
 an explicitly approved least-privilege action executor. Each requires its own scope, security model,

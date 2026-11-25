@@ -815,6 +815,47 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   version and installation tests. Newly sampled artifacts report application version `0.9.0`
   without changing their schema.
 
+## ADR-047: Harden untrusted evidence text at validation and terminal boundaries
+
+- **Status:** Approved
+- **Decision:** Version 0.9.1 will preserve evidence schema version 1 while treating
+  artifact-derived text as untrusted at every terminal-rendering boundary. The schema validator will
+  require every container ID to contain exactly 64 hexadecimal ASCII characters, matching the Docker
+  container-ID parser, and every application version to contain from 1 through 64 printable ASCII
+  bytes (0x20 through 0x7E). Values outside those contracts will be rejected as invalid
+  schema-version-1 artifact content.
+- **Display rule:** One internal CLI display function will render untrusted bytes safely in standard
+  output and standard error. It will escape literal backslashes, C0 controls, DEL, C1 controls,
+  bidi controls (U+061C, U+200E–U+200F, U+202A–U+202E, and U+2066–U+2069), zero-width controls
+  (U+200B–U+200D, U+2060, and U+FEFF), and line or paragraph separators (U+2028 and U+2029).
+  Invalid UTF-8 bytes and unlisted C0 controls will use uppercase \xHH notation; the listed
+  decoded Unicode controls will use uppercase \u{...} notation. Newline, carriage return, tab,
+  and a literal backslash retain the unambiguous \n, \r, \t, and \\ forms. Other valid,
+  printable Unicode remains unchanged.
+- **Coverage:** The display rule applies to artifact-derived text, manifest-derived paths,
+  command-line paths repeated in output, filesystem or errno diagnostics that can contain such
+  paths, and live cgroup-directory warnings. It covers all standard-output and standard-error
+  paths used by inspect evidence, forecast evidence, trends analyze, and forecast evaluate.
+- **Compatibility:** The validation tightening intentionally rejects malformed artifacts that were
+  previously accepted. MemOptima's own writers already emit lowercase 64-character Docker IDs and
+  version values compatible with the new grammar. The patch release is justified as a
+  security-boundary correction; it does not change the evidence schema number.
+- **Verification:** One end-to-end terminal-safety test will exercise every artifact-reading command
+  with a poisoned artifact and manifest. It will prove that no listed raw control byte or decoded
+  Unicode control reaches either standard output or standard error.
+- **Alternatives considered:** Leave validation permissive and escape only individual table cells;
+  reject every non-ASCII value; introduce a public trusted-text type immediately; preserve
+  acceptance of invalid IDs; delay all validation changes to v0.10.
+- **Reason:** v0.9.0 safely renders cgroup paths in two tables but does not cover artifact-derived
+  IDs, application versions, paths, or diagnostics in other artifact-facing commands. Requiring
+  valid identifiers at the shared schema boundary and rendering text safely at the shared
+  presentation boundary prevents a future formatter from silently restoring terminal-control
+  exposure.
+- **Consequence:** v0.9.1 will have a deliberately broader output contract than v0.9.0 and requires
+  exact regression tests. Duplicate JSON-key rejection is not part of this patch because it needs a
+  separately designed parser policy; it is required planning work for v0.10 before Intelligence
+  features.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
