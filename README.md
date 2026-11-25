@@ -35,6 +35,8 @@ evidence without modifying the system automatically.
 - [0.8.0 Scope](docs/0.8.0-scope.md) defines read-only temporal holdout evaluation of forecast accuracy.
 - [0.9.0 Scope](docs/0.9.0-scope.md) defines terminal-safe rendering of artifact-derived paths and
   the public evidence-stream callback-finality contract.
+- [0.9.1 Scope](docs/0.9.1-scope.md) defines the terminal trust-boundary remediation and the
+  compatibility limits of earlier releases.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
 - [Trend Manifest Format](docs/trend-manifest-format.md) defines the versioned JSON manifest that selects local evidence artifacts.
 - [Forecast Evaluation Report Format](docs/forecast-evaluation-report-format.md) defines the evaluation table, metrics, and limitations.
