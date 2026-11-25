@@ -158,6 +158,13 @@ add_test(
 )
 
 add_test(
+    NAME MemOptimaCli.TerminalEscaping
+    COMMAND "${CMAKE_COMMAND}"
+        "-DMEMOPTIMA_EXECUTABLE=$<TARGET_FILE:memoptima>"
+        -P "${PROJECT_SOURCE_DIR}/tests/terminal_escape_command_test.cmake"
+)
+
+add_test(
     NAME MemOptimaInstall
     COMMAND "${CMAKE_COMMAND}"
         "-DMEMOPTIMA_BUILD_DIRECTORY=${PROJECT_BINARY_DIR}"
