@@ -68,4 +68,39 @@ std::string format_operational_duration(std::chrono::milliseconds duration) {
     return std::format("{}d {:02d}h", days, remaining_hours);
 }
 
+std::string escape_terminal_cell(std::string_view value) {
+    constexpr std::string_view hexadecimal_digits{"0123456789ABCDEF"};
+
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const auto character : value) {
+        switch (character) {
+        case '\\':
+            escaped += "\\\\";
+            break;
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        default: {
+            const auto byte = static_cast<unsigned char>(character);
+            if (byte <= 0x1FU || byte == 0x7FU) {
+                escaped += "\\x";
+                escaped += hexadecimal_digits[byte >> 4U];
+                escaped += hexadecimal_digits[byte & 0x0FU];
+            } else {
+                escaped += character;
+            }
+            break;
+        }
+        }
+    }
+    return escaped;
+}
+
 } // namespace memoptima::cli
