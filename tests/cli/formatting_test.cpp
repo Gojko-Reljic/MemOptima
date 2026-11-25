@@ -43,12 +43,12 @@ TEST(Formatting, FormatsOperationalDurationsAtUnitBoundaries) {
     EXPECT_EQ(format_operational_duration(3 * 24h + 4h + 59min + 999ms), "3d 04h");
 }
 
-TEST(Formatting, PreservesPrintableTerminalCellText) {
-    EXPECT_EQ(escape_terminal_cell("/docker/service-1_healthy"), "/docker/service-1_healthy");
+TEST(Formatting, PreservesPrintableTerminalText) {
+    EXPECT_EQ(escape_terminal_text("/docker/service-1_healthy"), "/docker/service-1_healthy");
 }
 
 TEST(Formatting, EscapesNamedTerminalControlsAndBackslashes) {
-    EXPECT_EQ(escape_terminal_cell("left\\right\nrow\rcolumn\tindent"),
+    EXPECT_EQ(escape_terminal_text("left\\right\nrow\rcolumn\tindent"),
               "left\\\\right\\nrow\\rcolumn\\tindent");
 }
 
@@ -63,7 +63,25 @@ TEST(Formatting, EscapesOtherAsciiControlsWithUppercaseHexadecimal) {
     input += 'm';
     input += '\x7F';
 
-    EXPECT_EQ(escape_terminal_cell(input), "\\x00\\x01\\x1B[31m\\x7F");
+    EXPECT_EQ(escape_terminal_text(input), "\\x00\\x01\\x1B[31m\\x7F");
+}
+
+TEST(Formatting, EscapesUnicodeControlsAndPreservesPrintableUnicode) {
+    const std::string input = "before" + std::string{"\xC2\x9B"} + std::string{"\xE2\x80\xAE"} +
+                              std::string{"\xE2\x80\x8B"} + std::string{"\xE2\x80\xA8"} + " café";
+
+    EXPECT_EQ(escape_terminal_text(input), "before\\u{9B}\\u{202E}\\u{200B}\\u{2028} café");
+}
+
+TEST(Formatting, EscapesEachInvalidUtf8ByteIndividually) {
+    std::string input;
+    input.push_back(static_cast<char>(0xC2U));
+    input += 'A';
+    input.push_back(static_cast<char>(0xE2U));
+    input += '(';
+    input.push_back(static_cast<char>(0xA1U));
+
+    EXPECT_EQ(escape_terminal_text(input), "\\xC2A\\xE2(\\xA1");
 }
 
 } // namespace

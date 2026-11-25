@@ -20,6 +20,7 @@
 #include "containers_formatter.hpp"
 #include "forecast_evaluation_formatter.hpp"
 #include "forecast_formatter.hpp"
+#include "formatting.hpp"
 #include "monitor_runner.hpp"
 #include "processes_formatter.hpp"
 #include "status_formatter.hpp"
@@ -88,6 +89,17 @@ void print_help(std::ostream &output) {
            << "  -v, --version    Display the application version.\n";
 }
 
+void report_runtime_error(std::string_view context, std::string_view detail) {
+    std::cerr << "Error: ";
+    if (!context.empty())
+        std::cerr << context;
+    if (!context.empty() && !detail.empty())
+        std::cerr << ": ";
+    if (!detail.empty())
+        std::cerr << escape_terminal_text(detail);
+    std::cerr << '\n';
+}
+
 int report_expected_at_most_one_option() {
     std::cerr << "Error: expected at most one option.\n\n";
     print_help(std::cerr);
@@ -125,7 +137,7 @@ int run_status_command(CommandArguments arguments) {
     const auto formatted_status = read_formatted_memory_status();
     if (!formatted_status.has_value()) {
         std::cerr << "Error: unable to read system memory information:\n"
-                  << formatted_status.error() << '\n';
+                  << escape_terminal_text(formatted_status.error()) << '\n';
         return kExitRuntimeError;
     }
     std::cout << *formatted_status;
@@ -170,8 +182,8 @@ int run_processes_command(CommandArguments arguments) {
     }
     const auto scan_result = linux::scan_process_memory();
     if (!scan_result.has_value()) {
-        std::cerr << "Error: unable to scan process memory information: "
-                  << scan_result.error().detail << '\n';
+        report_runtime_error("unable to scan process memory information",
+                             scan_result.error().detail);
         return kExitRuntimeError;
     }
     std::cout << format_process_scan_result(*scan_result);
@@ -184,8 +196,8 @@ int run_containers_command(CommandArguments arguments) {
     }
     const auto environment = linux::detect_cgroup_v2_environment();
     if (!environment.has_value()) {
-        std::cerr << "Error: Docker container observation is unavailable: "
-                  << environment.error().detail << '\n';
+        report_runtime_error("Docker container observation is unavailable",
+                             environment.error().detail);
         return kExitRuntimeError;
     }
     const DockerContainerScanResult scan_result =
@@ -206,15 +218,15 @@ int run_container_command(CommandArguments arguments) {
     }
     const auto container_id = DockerContainerId::parse(arguments.front());
     if (!container_id.has_value()) {
-        std::cerr << "Error: invalid Docker container ID: " << container_id.error().detail
-                  << "\n\n";
+        report_runtime_error("invalid Docker container ID", container_id.error().detail);
+        std::cerr << '\n';
         print_help(std::cerr);
         return kExitUsageError;
     }
     const auto environment = linux::detect_cgroup_v2_environment();
     if (!environment.has_value()) {
-        std::cerr << "Error: Docker container observation is unavailable: "
-                  << environment.error().detail << '\n';
+        report_runtime_error("Docker container observation is unavailable",
+                             environment.error().detail);
         return kExitRuntimeError;
     }
     const DockerContainerScanResult scan_result =
@@ -225,8 +237,9 @@ int run_container_command(CommandArguments arguments) {
             return item.container_id.value() == container_id->value();
         });
     if (container == scan_result.containers.end()) {
-        std::cerr << "Error: Docker container '" << container_id->value()
-                  << "' was not found in supported rootful Docker cgroup locations.\n";
+        report_runtime_error("Docker container '" + escape_terminal_text(container_id->value()) +
+                                 "' was not found in supported rootful Docker cgroup locations",
+                             {});
         return kExitRuntimeError;
     }
     std::cout << format_docker_container_detail(*container);
@@ -236,8 +249,8 @@ int run_container_command(CommandArguments arguments) {
 int run_assess_containers_command() {
     const auto environment = linux::detect_cgroup_v2_environment();
     if (!environment.has_value()) {
-        std::cerr << "Error: Docker container assessment is unavailable: "
-                  << environment.error().detail << '\n';
+        report_runtime_error("Docker container assessment is unavailable",
+                             environment.error().detail);
         return kExitRuntimeError;
     }
     const DockerContainerAssessmentScanResult assessment_result =
@@ -250,15 +263,15 @@ int run_assess_containers_command() {
 int run_assess_container_command(std::string_view container_id_text) {
     const auto container_id = DockerContainerId::parse(container_id_text);
     if (!container_id.has_value()) {
-        std::cerr << "Error: invalid Docker container ID: " << container_id.error().detail
-                  << "\n\n";
+        report_runtime_error("invalid Docker container ID", container_id.error().detail);
+        std::cerr << '\n';
         print_help(std::cerr);
         return kExitUsageError;
     }
     const auto environment = linux::detect_cgroup_v2_environment();
     if (!environment.has_value()) {
-        std::cerr << "Error: Docker container assessment is unavailable: "
-                  << environment.error().detail << '\n';
+        report_runtime_error("Docker container assessment is unavailable",
+                             environment.error().detail);
         return kExitRuntimeError;
     }
     const DockerContainerAssessmentScanResult assessment_result =
@@ -269,8 +282,9 @@ int run_assess_container_command(std::string_view container_id_text) {
             return item.container_id.value() == container_id->value();
         });
     if (container == assessment_result.containers.end()) {
-        std::cerr << "Error: Docker container '" << container_id->value()
-                  << "' was not found in supported rootful Docker cgroup locations.\n";
+        report_runtime_error("Docker container '" + escape_terminal_text(container_id->value()) +
+                                 "' was not found in supported rootful Docker cgroup locations",
+                             {});
         return kExitRuntimeError;
     }
     std::cout << format_docker_container_assessment_detail(*container);
@@ -295,14 +309,14 @@ int run_assess_command(CommandArguments arguments) {
 int run_inspect_evidence_command(std::string_view path_text) {
     const auto summary = inspect_evidence_artifact(std::filesystem::path{path_text});
     if (!summary.has_value()) {
-        std::cerr << "Error: unable to inspect evidence artifact: " << summary.error().detail
-                  << '\n';
+        report_runtime_error("unable to inspect evidence artifact", summary.error().detail);
         return kExitRuntimeError;
     }
     std::cout << "Evidence artifact\n\n"
-              << "Path: " << summary->artifact_path.string() << '\n'
+              << "Path: " << escape_terminal_text(summary->artifact_path.string()) << '\n'
               << "Schema version: " << summary->schema_version << '\n'
-              << "Application version: " << summary->application_version << '\n'
+              << "Application version: " << escape_terminal_text(summary->application_version)
+              << '\n'
               << "Requested samples: " << summary->requested_sample_count << '\n'
               << "Requested interval: " << summary->requested_interval_ms << " ms\n"
               << "Completed samples: " << summary->completed_sample_count << '\n'
@@ -321,7 +335,8 @@ int run_inspect_evidence_command(std::string_view path_text) {
         std::cout << "  None\n";
     }
     for (const auto &container : summary->containers) {
-        std::cout << "  " << container.container_id << "  samples=" << container.samples_seen
+        std::cout << "  " << escape_terminal_text(container.container_id)
+                  << "  samples=" << container.samples_seen
                   << " highest_risk=" << container.highest_risk
                   << " partial_samples=" << container.partial_coverage_samples
                   << " last=" << container.last_risk << '/' << container.last_coverage << '\n';
@@ -347,14 +362,13 @@ int run_inspect_command(CommandArguments arguments) {
 int run_forecast_evaluate_command(std::string_view path_text) {
     const auto manifest = trends::load_trend_manifest(std::filesystem::path{path_text});
     if (!manifest.has_value()) {
-        std::cerr << "Error: unable to load forecast evaluation manifest: "
-                  << manifest.error().detail << '\n';
+        report_runtime_error("unable to load forecast evaluation manifest",
+                             manifest.error().detail);
         return kExitRuntimeError;
     }
     const auto report = forecast_evaluation::evaluate_forecast_manifest(*manifest);
     if (!report.has_value()) {
-        std::cerr << "Error: unable to evaluate forecast manifest: " << report.error().detail
-                  << '\n';
+        report_runtime_error("unable to evaluate forecast manifest", report.error().detail);
         return kExitRuntimeError;
     }
     std::cout << format_forecast_evaluation(*report);
@@ -380,8 +394,7 @@ int run_forecast_command(CommandArguments arguments) {
         const auto summary =
             forecast::forecast_evidence_artifact(std::filesystem::path{arguments[1]});
         if (!summary.has_value()) {
-            std::cerr << "Error: unable to forecast evidence artifact: " << summary.error().detail
-                      << '\n';
+            report_runtime_error("unable to forecast evidence artifact", summary.error().detail);
             return kExitRuntimeError;
         }
         std::cout << format_evidence_forecast(*summary);
@@ -401,13 +414,13 @@ int run_trends_command(CommandArguments arguments) {
 
     const auto manifest = trends::load_trend_manifest(std::filesystem::path{arguments[1]});
     if (!manifest.has_value()) {
-        std::cerr << "Error: unable to load trend manifest: " << manifest.error().detail << '\n';
+        report_runtime_error("unable to load trend manifest", manifest.error().detail);
         return kExitRuntimeError;
     }
 
     const auto analysis = trends::analyze_trend_manifest(*manifest);
     if (!analysis.has_value()) {
-        std::cerr << "Error: unable to analyze trend manifest: " << analysis.error().detail << '\n';
+        report_runtime_error("unable to analyze trend manifest", analysis.error().detail);
         return kExitRuntimeError;
     }
 
@@ -481,7 +494,8 @@ parse_sample_containers_arguments(CommandArguments arguments) {
 int run_sample_containers_command(CommandArguments arguments) {
     const auto parsed_arguments = parse_sample_containers_arguments(arguments);
     if (!parsed_arguments.has_value()) {
-        std::cerr << "Error: " << parsed_arguments.error() << "\n\n";
+        report_runtime_error({}, parsed_arguments.error());
+        std::cerr << '\n';
         print_help(std::cerr);
         return kExitUsageError;
     }
@@ -518,15 +532,15 @@ int run_sample_containers_command(CommandArguments arguments) {
     // Restore the process-wide SIGINT behavior after the bounded session exits.
     std::signal(SIGINT, previous_signal_handler);
     if (!result.has_value()) {
-        std::cerr << "Error: Docker container sampling failed: " << result.error().detail << '\n';
+        report_runtime_error("Docker container sampling failed", result.error().detail);
         return kExitRuntimeError;
     }
     std::cerr << "Sampling session "
               << (result->outcome == sampling::SamplingSessionOutcome::completed     ? "completed"
                   : result->outcome == sampling::SamplingSessionOutcome::interrupted ? "interrupted"
                                                                                      : "failed")
-              << ": " << result->completed_sample_count
-              << " sample(s), artifact: " << configuration.output_path.string() << '\n';
+              << ": " << result->completed_sample_count << " sample(s), artifact: "
+              << escape_terminal_text(configuration.output_path.string()) << '\n';
     return result->outcome == sampling::SamplingSessionOutcome::failed ? kExitRuntimeError
                                                                        : kExitSuccess;
 }
@@ -591,7 +605,8 @@ int run_application(int argument_count, char *argv[]) {
     }
     const auto command = std::ranges::find(kCommands, parsed_arguments.front(), &Command::name);
     if (command == kCommands.end()) {
-        std::cerr << "Error: unknown option '" << parsed_arguments.front() << "'.\n\n";
+        std::cerr << "Error: unknown option '" << escape_terminal_text(parsed_arguments.front())
+                  << "'.\n\n";
         print_help(std::cerr);
         return kExitUsageError;
     }

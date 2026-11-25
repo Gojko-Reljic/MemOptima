@@ -113,7 +113,8 @@ std::string format_docker_container_scan_result(const DockerContainerScanResult 
 
     for (const DockerContainerMemorySnapshot &container : result.containers) {
         const CgroupMemorySnapshot &memory = container.memory;
-        output << std::left << std::setw(kContainerIdColumnWidth) << container.container_id.value()
+        output << std::left << std::setw(kContainerIdColumnWidth)
+               << escape_terminal_text(container.container_id.value())
                << std::setw(kCurrentMemoryColumnWidth) << format_byte_metric(memory.current_memory)
                << std::setw(kMemoryHighColumnWidth) << format_memory_limit(memory.limits.high)
                << std::setw(kMemoryMaxColumnWidth) << format_memory_limit(memory.limits.maximum)
@@ -131,8 +132,8 @@ std::string
 format_docker_container_scan_warnings(const std::vector<DockerContainerScanWarning> &warnings) {
     std::ostringstream output;
     for (const DockerContainerScanWarning &warning : warnings) {
-        output << "Warning: " << warning.detail << " Path: " << warning.cgroup_path.string()
-               << '\n';
+        output << "Warning: " << escape_terminal_text(warning.detail)
+               << " Path: " << escape_terminal_text(warning.cgroup_path.string()) << '\n';
     }
     return output.str();
 }
@@ -141,8 +142,10 @@ std::string format_docker_container_detail(const DockerContainerMemorySnapshot &
     const CgroupMemorySnapshot &memory = container.memory;
     std::ostringstream output;
     output << "Container\n"
-           << "  ID:                  " << container.container_id.value() << '\n'
-           << "  Cgroup path:         " << container.cgroup_path.string() << "\n\n"
+           << "  ID:                  " << escape_terminal_text(container.container_id.value())
+           << '\n'
+           << "  Cgroup path:         " << escape_terminal_text(container.cgroup_path.string())
+           << "\n\n"
            << "Memory\n"
            << "  Current:             " << format_byte_metric(memory.current_memory) << '\n'
            << "  High:                " << format_memory_limit(memory.limits.high) << '\n'
@@ -166,7 +169,8 @@ std::string format_docker_container_detail(const DockerContainerMemorySnapshot &
     if (!unavailable_data.empty()) {
         output << "\nUnavailable data\n";
         for (const UnavailableDataKey &error : unavailable_data) {
-            output << "  " << std::get<1>(error) << ": " << std::get<2>(error) << '\n';
+            output << "  " << escape_terminal_text(std::get<1>(error)) << ": "
+                   << escape_terminal_text(std::get<2>(error)) << '\n';
         }
     }
     return output.str();

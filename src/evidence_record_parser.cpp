@@ -1,10 +1,13 @@
 #include <memoptima/evidence_record_parser.hpp>
 
+#include "docker_container_id_syntax.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -49,6 +52,34 @@ bool string_field(const Json &value, std::string_view key, std::uint64_t line,
         return false;
     }
     return true;
+}
+
+bool printable_application_version(const Json &value, std::uint64_t line,
+                                   std::vector<EvidenceValidationError> &errors) {
+    if (!string_field(value, "application_version", line, errors))
+        return false;
+
+    const auto text = value.at("application_version").get<std::string>();
+    const bool valid = !text.empty() && text.size() <= 64U &&
+                       std::ranges::all_of(text, [](unsigned char character) {
+                           return character >= 0x20U && character <= 0x7EU;
+                       });
+    if (!valid)
+        add_error(errors, line, "$.application_version", EvidenceValidationErrorCode::invalid_value,
+                  "Expected 1 to 64 printable ASCII characters.");
+    return valid;
+}
+
+bool positive_uint32_field(const Json &value, std::string_view key, std::uint64_t line,
+                           std::vector<EvidenceValidationError> &errors) {
+    const auto &number = value.at(key);
+    if (number.is_number_unsigned() && number > 0U &&
+        number <= std::numeric_limits<std::uint32_t>::max())
+        return true;
+
+    add_error(errors, line, "$." + std::string{key}, EvidenceValidationErrorCode::invalid_value,
+              "Expected a positive unsigned 32-bit JSON number.");
+    return false;
 }
 
 bool decimal_string(const Json &value, std::string_view key, std::uint64_t line,
@@ -226,20 +257,17 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     "output_permissions_octal", "flush_after_each_record",
                     "host_identifiers_included"},
                    "$", line_number, errors);
-        for (const auto key : {"application_version", "output_permissions_octal"})
-            if (value.contains(key))
-                string_field(value, key, line_number, errors);
+        if (value.contains("application_version"))
+            printable_application_version(value, line_number, errors);
+        if (value.contains("output_permissions_octal"))
+            string_field(value, "output_permissions_octal", line_number, errors);
         if (value.contains("started_at_utc"))
             timestamp(value, "started_at_utc", line_number, errors);
         for (const auto key : {"requested_interval_ms", "output_max_bytes"})
             if (value.contains(key))
                 decimal_string(value, key, line_number, errors);
-        if (value.contains("requested_sample_count") &&
-            (!value.at("requested_sample_count").is_number_unsigned() ||
-             value.at("requested_sample_count") == 0))
-            add_error(errors, line_number, "$.requested_sample_count",
-                      EvidenceValidationErrorCode::invalid_value,
-                      "Expected a positive unsigned JSON number.");
+        if (value.contains("requested_sample_count"))
+            positive_uint32_field(value, "requested_sample_count", line_number, errors);
         if (value.contains("output_permissions_octal") &&
             value.at("output_permissions_octal") != "0600")
             add_error(errors, line_number, "$.output_permissions_octal",
@@ -298,11 +326,8 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     "captured_at_utc", "schedule_delay_ms", "skipped_container_count",
                     "discovery_warnings", "containers"},
                    "$", line_number, errors);
-        if (value.contains("sample_sequence") &&
-            (!value.at("sample_sequence").is_number_unsigned() || value.at("sample_sequence") == 0))
-            add_error(errors, line_number, "$.sample_sequence",
-                      EvidenceValidationErrorCode::invalid_value,
-                      "Expected a positive unsigned JSON number.");
+        if (value.contains("sample_sequence"))
+            positive_uint32_field(value, "sample_sequence", line_number, errors);
         for (const auto key : {"planned_offset_ms", "schedule_delay_ms", "skipped_container_count"})
             if (value.contains(key))
                 decimal_string(value, key, line_number, errors);
@@ -331,6 +356,13 @@ parse_evidence_record(std::string_view line, std::uint64_t line_number) {
                     if (container.contains(key) && !container.at(key).is_string())
                         add_error(errors, line_number, path + "." + std::string{key},
                                   EvidenceValidationErrorCode::wrong_type, "Expected a string.");
+                if (container.contains("container_id") &&
+                    container.at("container_id").is_string() &&
+                    !detail::is_docker_container_id_syntax(
+                        container.at("container_id").get<std::string>()))
+                    add_error(errors, line_number, path + ".container_id",
+                              EvidenceValidationErrorCode::invalid_value,
+                              "Expected exactly 64 hexadecimal characters.");
                 if (container.contains("memory") && !container.at("memory").is_object())
                     add_error(errors, line_number, path + ".memory",
                               EvidenceValidationErrorCode::wrong_type, "Expected an object.");

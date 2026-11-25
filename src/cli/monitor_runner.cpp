@@ -1,5 +1,7 @@
 #include "cli/monitor_runner.hpp"
 
+#include "cli/formatting.hpp"
+
 #include <memoptima/utc_timestamp.hpp>
 
 #include <algorithm>
@@ -47,7 +49,8 @@ void run_monitor(const MonitorDependencies &dependencies, std::ostream &standard
             // Keep measurements pipeable while reserving standard error for timestamped failures.
             standard_output << timestamp << "\n\n" << *status << '\n';
         } else {
-            standard_error << timestamp << " Error: " << status.error() << '\n';
+            standard_error << timestamp << " Error: " << escape_terminal_text(status.error())
+                           << '\n';
         }
 
         wait_until_next_measurement(dependencies);

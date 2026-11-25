@@ -99,6 +99,35 @@ TEST(EvidenceRecordParser, RejectsInvalidTimestampsOverflowAndFailureObjects) {
     EXPECT_EQ(invalid_calendar.error().front().json_path, "$.started_at_utc");
 }
 
+TEST(EvidenceRecordParser, EnforcesTrustBoundaryScalarConstraints) {
+    const auto invalid_application_version = parse_evidence_record(
+        R"({"record_type":"session_start","schema_version":1,"application_version":"0.9.0\u001b","started_at_utc":"2026-11-13T12:00:00.000Z","requested_sample_count":4294967296,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})",
+        19);
+    const auto invalid_sample_sequence = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":4294967296,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[]})",
+        20);
+    const auto invalid_container_id = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[],"containers":[{"container_id":"gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg","cgroup_path":"/docker/example","memory":{},"assessment":{}}]})",
+        21);
+
+    ASSERT_FALSE(invalid_application_version.has_value());
+    ASSERT_FALSE(invalid_sample_sequence.has_value());
+    ASSERT_FALSE(invalid_container_id.has_value());
+    EXPECT_TRUE(std::ranges::any_of(invalid_application_version.error(),
+                                    [](const EvidenceValidationError &error) {
+                                        return error.json_path == "$.application_version";
+                                    }));
+    EXPECT_TRUE(std::ranges::any_of(invalid_application_version.error(),
+                                    [](const EvidenceValidationError &error) {
+                                        return error.json_path == "$.requested_sample_count";
+                                    }));
+    EXPECT_EQ(invalid_sample_sequence.error().front().json_path, "$.sample_sequence");
+    EXPECT_TRUE(
+        std::ranges::any_of(invalid_container_id.error(), [](const EvidenceValidationError &error) {
+            return error.json_path == "$.containers[0].container_id";
+        }));
+}
+
 TEST(EvidenceRecordParser, RejectsMalformedWarningsAndFindingEvidence) {
     const auto invalid = parse_evidence_record(
         R"({"record_type":"sample","schema_version":1,"sample_sequence":1,"planned_offset_ms":"0","captured_at_utc":"2026-11-13T12:00:00.000Z","schedule_delay_ms":"0","skipped_container_count":"0","discovery_warnings":[{"code":"warning","cgroup_path":"/x","detail":1,"extra":true}],"containers":[{"container_id":"a","cgroup_path":"/cgroup/a","memory":{},"assessment":{"overall_risk":"low","coverage":"complete","findings":[{"code":"finding","risk":"high","evidence":[{"code":"metric","value":"18446744073709551616","extra":true}],"recommendation":"act"}],"unavailable_evidence":[]}}]})",
