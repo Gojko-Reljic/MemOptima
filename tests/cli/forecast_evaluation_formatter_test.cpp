@@ -94,6 +94,19 @@ TEST(ForecastEvaluationFormatter, MarksUnavailableValuesAndStatuses) {
     EXPECT_NE(output.find("holdout observation unavailable"), std::string::npos);
 }
 
+TEST(ForecastEvaluationFormatter, EscapesArtifactDerivedCgroupPathControls) {
+    auto report = report_with_row(ForecastEvaluationStatus::evaluated);
+    std::string path = "/safe\\path\nrow";
+    path += '\x1B';
+    report.rows[0].identity.cgroup_path = path;
+
+    const auto output = format_forecast_evaluation(report);
+
+    EXPECT_NE(output.find("/safe\\\\path\\nrow\\x1B"), std::string::npos);
+    EXPECT_EQ(output.find(path), std::string::npos);
+    EXPECT_EQ(lines(output).size(), 14U);
+}
+
 TEST(ForecastEvaluationFormatter, UsesSharedUnambiguousPrefixesForRepeatedContainerIdentifiers) {
     auto report = report_with_row(ForecastEvaluationStatus::evaluated);
     auto first_identifier = std::string(64U, 'a');

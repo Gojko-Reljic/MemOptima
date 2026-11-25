@@ -80,6 +80,16 @@ TEST(TrendsFormatter, FormatsAllColumnsWithoutTrailingWhitespace) {
         EXPECT_FALSE(line.ends_with(' '));
 }
 
+TEST(TrendsFormatter, EscapesArtifactDerivedCgroupPathControls) {
+    std::string path = "/safe\\path\nrow";
+    path += '\x1B';
+    const auto output = format_trend_analysis(make_analysis({make_epoch("container", path)}));
+
+    EXPECT_NE(output.find("/safe\\\\path\\nrow\\x1B"), std::string::npos);
+    EXPECT_EQ(output.find(path), std::string::npos);
+    EXPECT_EQ(lines(output).size(), 2U);
+}
+
 TEST(TrendsFormatter, PreservesEpochOrderAndExpandsDockerPrefixesForDistinctIds) {
     auto first = make_epoch("aaaaaaaaaaaa111111111111", "/first");
     first.epoch_index = 3U;
