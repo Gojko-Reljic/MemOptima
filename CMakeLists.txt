@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MemOptima VERSION 0.8.0 LANGUAGES CXX)
+project(MemOptima VERSION 0.9.0 LANGUAGES CXX)
 
 include(CTest)
 include(FetchContent)
@@ -115,6 +115,7 @@ install(
         "${PROJECT_SOURCE_DIR}/docs/0.6.0-scope.md"
         "${PROJECT_SOURCE_DIR}/docs/0.7.0-scope.md"
         "${PROJECT_SOURCE_DIR}/docs/0.8.0-scope.md"
+        "${PROJECT_SOURCE_DIR}/docs/0.9.0-scope.md"
         "${PROJECT_SOURCE_DIR}/docs/evidence-artifact-format.md"
         "${PROJECT_SOURCE_DIR}/docs/trend-manifest-format.md"
         "${PROJECT_SOURCE_DIR}/docs/trend-report-format.md"
