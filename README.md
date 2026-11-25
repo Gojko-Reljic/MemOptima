@@ -33,6 +33,8 @@ evidence without modifying the system automatically.
 - [0.6.0 Scope](docs/0.6.0-scope.md) defines conservative evidence-based forecasting.
 - [0.7.0 Scope](docs/0.7.0-scope.md) defines read-only cross-session memory trend analysis.
 - [0.8.0 Scope](docs/0.8.0-scope.md) defines read-only temporal holdout evaluation of forecast accuracy.
+- [0.9.0 Scope](docs/0.9.0-scope.md) defines terminal-safe rendering of artifact-derived paths and
+  the public evidence-stream callback-finality contract.
 - [Evidence Artifact Format](docs/evidence-artifact-format.md) defines the versioned JSON Lines schema.
 - [Trend Manifest Format](docs/trend-manifest-format.md) defines the versioned JSON manifest that selects local evidence artifacts.
 - [Forecast Evaluation Report Format](docs/forecast-evaluation-report-format.md) defines the evaluation table, metrics, and limitations.

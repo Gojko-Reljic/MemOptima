@@ -798,6 +798,23 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   header and architecture documentation state the provisional-callback rule without adding a new
   runtime API or changing the evidence schema.
 
+## ADR-046: Release terminal and stream hardening as version 0.9.0
+
+- **Status:** Approved
+- **Decision:** MemOptima's next public release is version `0.9.0`. The CMake project version
+  remains the single source of truth for `memoptima --version` and for the application version
+  written into newly sampled evidence artifacts. The evidence schema version remains `1`, and
+  existing schema-version-1 artifacts remain valid.
+- **Alternatives considered:** Keep the public version at `0.8.0` because v0.9 adds no monitoring
+  feature; publish a patch release; add a separate version source for evidence artifacts.
+- **Reason:** v0.9 changes two production contracts: terminal rendering of artifact-derived cgroup
+  paths and the documented finality of public evidence-stream callbacks. A minor release makes
+  those safety-relevant contracts visible while preserving one auditable build-version source.
+- **Consequence:** Release preparation changes the CMake version to `0.9.0`, installs the v0.9
+  scope document, and verifies the exact executable and installed version through the existing
+  version and installation tests. Newly sampled artifacts report application version `0.9.0`
+  without changing their schema.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
