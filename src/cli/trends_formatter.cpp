@@ -161,8 +161,8 @@ std::string format_trend_analysis(const trends::TrendAnalysis &analysis) {
     for (std::size_t index{}; index < analysis.epochs.size(); ++index) {
         const auto &epoch = analysis.epochs[index];
         rows.push_back({epoch.identity.container_id.substr(0U, identifier_widths[index]),
-                        epoch.identity.cgroup_path, std::to_string(epoch.epoch_index),
-                        std::to_string(epoch.observation_count),
+                        escape_terminal_cell(epoch.identity.cgroup_path),
+                        std::to_string(epoch.epoch_index), std::to_string(epoch.observation_count),
                         format_duration_milliseconds(epoch.observation_window_ms),
                         format_quality(epoch), format_rate(epoch.current_memory),
                         format_time_to_limit(epoch.time_to_limit), format_status(epoch)});

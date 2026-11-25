@@ -138,7 +138,7 @@ format_timestamp(const std::optional<forecast_evaluation::ForecastEvaluationTime
 
 [[nodiscard]] Row format_row(const ForecastEvaluationRow &row, std::size_t identifier_width) {
     return {row.identity.container_id.substr(0U, identifier_width),
-            row.identity.cgroup_path,
+            escape_terminal_cell(row.identity.cgroup_path),
             std::to_string(row.epoch_index),
             std::to_string(row.history_observation_count),
             format_window(row.history_window_ms),
