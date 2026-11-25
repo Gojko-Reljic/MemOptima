@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <string>
 
 namespace memoptima::cli {
 namespace {
@@ -40,6 +41,29 @@ TEST(Formatting, FormatsOperationalDurationsAtUnitBoundaries) {
     EXPECT_EQ(format_operational_duration(23h + 59min + 59s + 999ms), "23h 59m");
     EXPECT_EQ(format_operational_duration(24h), "1d 00h");
     EXPECT_EQ(format_operational_duration(3 * 24h + 4h + 59min + 999ms), "3d 04h");
+}
+
+TEST(Formatting, PreservesPrintableTerminalCellText) {
+    EXPECT_EQ(escape_terminal_cell("/docker/service-1_healthy"), "/docker/service-1_healthy");
+}
+
+TEST(Formatting, EscapesNamedTerminalControlsAndBackslashes) {
+    EXPECT_EQ(escape_terminal_cell("left\\right\nrow\rcolumn\tindent"),
+              "left\\\\right\\nrow\\rcolumn\\tindent");
+}
+
+TEST(Formatting, EscapesOtherAsciiControlsWithUppercaseHexadecimal) {
+    std::string input;
+    input += '\0';
+    input += '\x01';
+    input += '\x1B';
+    input += '[';
+    input += '3';
+    input += '1';
+    input += 'm';
+    input += '\x7F';
+
+    EXPECT_EQ(escape_terminal_cell(input), "\\x00\\x01\\x1B[31m\\x7F");
 }
 
 } // namespace
