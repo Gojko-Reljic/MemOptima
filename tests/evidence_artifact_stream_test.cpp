@@ -55,6 +55,22 @@ class EvidenceArtifactStreamTest : public testing::Test {
         return path;
     }
 
+    std::filesystem::path write_malformed_artifact() const {
+        const auto count = sampling::SamplingCount::create(1U);
+        const auto interval = sampling::SamplingInterval::create(std::chrono::seconds{10});
+        EXPECT_TRUE(count.has_value());
+        EXPECT_TRUE(interval.has_value());
+
+        const auto path = directory_ / "malformed.jsonl";
+        std::ofstream output{path};
+        EXPECT_TRUE(output.is_open());
+        output << *sampling::serialize_session_start(*count, *interval,
+                                                     std::chrono::system_clock::time_point{})
+               << '\n';
+        output << "not JSON\n";
+        return path;
+    }
+
     std::filesystem::path directory_;
 };
 
@@ -104,6 +120,19 @@ TEST_F(EvidenceArtifactStreamTest, StreamsValidatedEvidenceThroughThePublicContr
     EXPECT_EQ(container.maximum_memory.bytes, 400U);
     ASSERT_EQ(sink.ends.size(), 1U);
     EXPECT_EQ(sink.ends[0].outcome, ArtifactSessionOutcome::completed);
+}
+
+TEST_F(EvidenceArtifactStreamTest, DeliversProvisionalEventsBeforeALaterValidationFailure) {
+    (void)write_malformed_artifact();
+    CapturingSink sink;
+
+    const auto traversal = traverse_artifact_beneath(directory_, "malformed.jsonl", sink);
+
+    ASSERT_FALSE(traversal.has_value());
+    EXPECT_FALSE(traversal.error().detail.empty());
+    ASSERT_EQ(sink.starts.size(), 1U);
+    EXPECT_TRUE(sink.samples.empty());
+    EXPECT_TRUE(sink.ends.empty());
 }
 
 } // namespace

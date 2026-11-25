@@ -67,6 +67,8 @@ class ArtifactSink {
   public:
     virtual ~ArtifactSink() = default;
 
+    // Events are provisional until traverse_artifact_beneath returns successfully. A later
+    // validation or I/O failure does not roll back callbacks already delivered to the sink.
     virtual std::expected<void, ArtifactTraversalError>
     consume(const ArtifactSessionStart &start) = 0;
     virtual std::expected<void, ArtifactTraversalError> consume(const ArtifactSample &sample) = 0;
@@ -74,7 +76,8 @@ class ArtifactSink {
 };
 
 // Streams one schema-v1 artifact through the shared validator without following symbolic links
-// below root. Callers must supply the artifact path relative to that trusted directory.
+// below root. Callers must supply the artifact path relative to that trusted directory and commit
+// durable sink effects only after this function returns successfully.
 [[nodiscard]] std::expected<ArtifactTraversalResult, ArtifactTraversalError>
 traverse_artifact_beneath(const std::filesystem::path &root,
                           const std::filesystem::path &relative_path, ArtifactSink &sink);
