@@ -35,7 +35,7 @@ std::string format_process_scan_result(const linux::ProcessScanResult &result) {
 
     for (const ProcessMemoryInfo &process : result.processes) {
         output << std::left << std::setw(kPidColumnWidth) << process.pid()
-               << std::setw(kNameColumnWidth) << process.name()
+               << std::setw(kNameColumnWidth) << escape_terminal_text(process.name())
                << format_bytes(process.resident_memory_bytes()) << '\n';
     }
 

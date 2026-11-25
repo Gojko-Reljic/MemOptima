@@ -114,7 +114,8 @@ format_docker_container_assessment_scan_result(const DockerContainerAssessmentSc
         const std::string_view top_finding =
             assessment.findings().empty() ? std::string_view{"None"}
                                           : finding_code_name(assessment.findings().front().code);
-        output << std::left << std::setw(kContainerIdColumnWidth) << container.container_id.value()
+        output << std::left << std::setw(kContainerIdColumnWidth)
+               << escape_terminal_text(container.container_id.value())
                << std::setw(kRiskColumnWidth) << risk_level_name(assessment.overall_risk())
                << std::setw(kCoverageColumnWidth) << coverage_name(assessment.coverage())
                << std::setw(kTopFindingColumnWidth) << top_finding << assessment.findings().size()
@@ -127,8 +128,10 @@ std::string format_docker_container_assessment_detail(const DockerContainerAsses
     const analysis::CgroupMemoryAssessment &assessment = container.assessment;
     std::ostringstream output;
     output << "Container\n"
-           << "  ID:                  " << container.container_id.value() << '\n'
-           << "  Cgroup path:         " << container.cgroup_path.string() << "\n\n"
+           << "  ID:                  " << escape_terminal_text(container.container_id.value())
+           << '\n'
+           << "  Cgroup path:         " << escape_terminal_text(container.cgroup_path.string())
+           << "\n\n"
            << "Overall risk\n"
            << "  Level:               " << risk_level_name(assessment.overall_risk()) << "\n\n"
            << "Coverage\n"
@@ -156,7 +159,8 @@ std::string format_docker_container_assessment_detail(const DockerContainerAsses
     if (!assessment.unavailable_evidence().empty()) {
         output << "\nUnavailable evidence\n";
         for (const CgroupMetricReadError &error : assessment.unavailable_evidence()) {
-            output << "  " << error.source_name << ": " << error.detail << '\n';
+            output << "  " << escape_terminal_text(error.source_name) << ": "
+                   << escape_terminal_text(error.detail) << '\n';
         }
     }
     return output.str();

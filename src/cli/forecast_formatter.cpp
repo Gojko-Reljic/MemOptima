@@ -43,14 +43,14 @@ std::string status_name(forecast::EvidenceForecastStatus status) {
 
 std::string format_evidence_forecast(const forecast::EvidenceForecastSummary &summary) {
     std::ostringstream output;
-    output << "Evidence forecast\n\nPath: " << summary.artifact_path.string()
+    output << "Evidence forecast\n\nPath: " << escape_terminal_text(summary.artifact_path.string())
            << "\nSamples: " << summary.sample_count
            << "\nArtifact: " << (summary.incomplete ? "Incomplete" : "Closed") << "\n\n"
            << std::left << std::setw(66) << "CONTAINER ID" << std::setw(10) << "SAMPLES"
            << std::setw(22) << "GROWTH" << "STATUS / ESTIMATE\n";
     for (const auto &container : summary.containers) {
-        output << std::left << std::setw(66) << container.container_id << std::setw(10)
-               << container.observed_sample_count;
+        output << std::left << std::setw(66) << escape_terminal_text(container.container_id)
+               << std::setw(10) << container.observed_sample_count;
         if (container.status == forecast::EvidenceForecastStatus::available &&
             container.growth_bytes_per_second.has_value()) {
             output << std::setw(22)
