@@ -772,6 +772,32 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   version through the existing version and installation tests. New sampling artifacts report
   application version `0.8.0` without changing their schema.
 
+## ADR-045: Render artifact-derived terminal text safely and clarify stream finality
+
+- **Status:** Approved
+- **Decision:** v0.9 adds one internal CLI formatting function for artifact-derived table cells. It
+  renders a literal backslash as `\\`, newline as `\n`, carriage return as `\r`, tab as `\t`, and
+  every other ASCII control byte, including ESC and DEL, as uppercase `\xHH`. The transformation is
+  display-only: original cgroup paths remain unchanged for parsing, identity comparison, and
+  analysis. The rule applies only to `CGROUP PATH` cells emitted by `memoptima trends analyze` and
+  `memoptima forecast evaluate`; container IDs, headers, and internal statuses are not artifact text
+  requiring this transformation.
+- **ArtifactSink contract:** `consume` callbacks receive validated but provisional events. A later
+  validation or I/O failure can make traversal fail after callbacks have already run. The evidence
+  module does not roll back callback effects, so durable or external consumers must stage effects
+  until `traverse_artifact_beneath` returns successfully.
+- **Alternatives considered:** Reject every artifact containing a control byte; escape every CLI
+  table cell; expose a public generic escaping API; leave literal backslashes unescaped; promise
+  transactional callbacks or buffer every artifact before delivery.
+- **Reason:** Evidence fields are local input, not terminal commands. Visible escaping prevents an
+  artifact-controlled path from changing terminal layout or issuing terminal control sequences while
+  retaining auditability. A callback-finality contract prevents future consumers from incorrectly
+  treating a partial traversal as a committed artifact.
+- **Consequence:** Ordinary printable paths retain their existing output. The two affected
+  formatters share one internal implementation and receive regression tests. The public evidence
+  header and architecture documentation state the provisional-callback rule without adding a new
+  runtime API or changing the evidence schema.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

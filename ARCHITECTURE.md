@@ -78,6 +78,23 @@ value so replay validation does not require a private formatter. Higher-level co
 trends and forecast evaluation use this public contract rather than private parser or filesystem
 implementation headers.
 
+Artifact sink callbacks are provisional: traversal can fail after it has delivered one or more
+validated events. A successful return from `traverse_artifact_beneath` is the only completion signal
+for the complete artifact. Consumers that perform durable writes or external actions must stage them
+until that success result; the evidence module does not provide callback rollback.
+
+## Terminal rendering safety
+
+Evidence-derived cgroup paths are semantic identity values, but terminal rendering is a separate
+boundary. The CLI preserves the original value for parsing and analysis, then renders ASCII control
+bytes visibly in table cells. It uses `\\` for a literal backslash, `\n`, `\r`, and `\t` for those
+named controls, and uppercase `\xHH` for every other ASCII control byte, including escape and DEL.
+
+The v0.9 rule applies to `CGROUP PATH` cells in the trend and forecast-evaluation tables. It does
+not reinterpret, validate, or normalize the original identity, and it leaves ordinary printable
+paths unchanged. A shared internal CLI formatter owns the display-only transformation so both
+tables cannot diverge.
+
 ## Cross-session trend policy
 
 Cross-session analysis is local and opt-in. It accepts a manifest that explicitly names the evidence
