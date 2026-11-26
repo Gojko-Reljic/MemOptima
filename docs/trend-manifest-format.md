@@ -33,6 +33,25 @@ Each artifact object has exactly one field:
 
 Unknown fields are validation errors. A path cannot be an array, object, number, boolean, or `null`.
 
+## Validation and input integrity
+
+The manifest applies the I-JSON unique-member rule: every JSON object must contain each member name
+at most once. The comparison happens after JSON escape decoding, so `"path"` and `"p\u0061th"`
+are the same member name. JSON Unicode normalization is not applied. A repeated name is rejected as
+`duplicate_key` before schema or artifact-path validation.
+
+The manifest permits at most 64 simultaneously open JSON objects or arrays. A deeper value is
+rejected as `nesting_too_deep`. `invalid_json` applies only to syntactically invalid JSON. For a
+single input value, error precedence is `nesting_too_deep`, then `invalid_json`, then
+`duplicate_key`.
+
+Parse errors identify the JSON path to the repeated member when applicable. A manifest-load failure
+keeps its `parse_failed` load code while preserving that path and diagnostic text. Paths can contain
+untrusted JSON member names, so terminal consumers escape them before display.
+
+`duplicate_key` is distinct from `duplicate_artifact_path`: the former repeats one JSON member in
+one object, while the latter names the same normalized artifact file in separate artifact objects.
+
 ## Path rules
 
 Paths are interpreted relative to the manifest directory. The manifest directory path itself must
