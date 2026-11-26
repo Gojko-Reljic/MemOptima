@@ -927,6 +927,50 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   separate required v0.10 decision before implementation; this ADR does not select that parser
   policy.
 
+## ADR-049: Reject duplicate JSON object keys at every evidence boundary
+
+- **Status:** Approved
+- **Decision:** Evidence JSONL records and trend manifests reject every duplicate object key during
+  parsing. This applies the I-JSON unique-name requirement to MemOptima's evidence and manifest
+  boundaries. Key equality is evaluated after JSON escape decoding, so `"a"` and `"\u0061"` are
+  duplicates. The parser does not apply Unicode normalization: distinct decoded Unicode sequences
+  remain distinct JSON names, while schema-defined names remain ASCII.
+- **Parser boundary:** Duplicate detection occurs before the JSON DOM is accepted. A shared internal
+  parser callback maintains a stack of object-key sets and records the first duplicate, because a
+  post-DOM check cannot recover a key silently overwritten by the JSON library. The callback tracks
+  array element indexes to report an exact object path such as `$.containers[0].memory`. It does not
+  require a custom SAX DOM builder or a replacement JSON library.
+- **Diagnostics and public errors:** `EvidenceValidationErrorCode` and
+  `TrendManifestParseErrorCode` each gain `duplicate_key`. For JSONL, the validation error includes
+  the physical input line, duplicate object's JSON path, and key name. For a manifest, the parse
+  error includes the object path and key name; no synthetic physical line is reported. The parser
+  retains raw diagnostic data and the existing terminal boundary escapes it when displayed.
+- **Failure behavior:** The first duplicate key makes that JSONL record or manifest invalid. Schema
+  validation does not continue against a DOM that no longer faithfully represents the input. Existing
+  traversal behavior remains atomic: a malformed artifact or manifest produces no partial analysis
+  report.
+- **Resource boundary:** Key sets exist only while parsing one JSON value. Their memory cost is
+  bounded by the maximum nesting and object width in the current bounded JSONL record or manifest,
+  not by the number of records in an artifact. The new parser state requires focused fuzz coverage.
+- **Compatibility:** Schema version 1 remains unchanged. MemOptima's writers construct JSON objects
+  and cannot emit duplicate names, so artifacts produced by MemOptima remain valid. Rejection of
+  ambiguous third-party input is an intentional trust-boundary tightening.
+- **Verification:** Tests cover top-level and nested duplicate keys, escaped-equivalent keys,
+  duplicate unknown keys, and duplicate manifest `artifacts` keys. They also prove that distinct,
+  non-normalized Unicode sequences remain separate keys. A parser fuzz target exercises duplicate
+  tracking with untrusted input.
+- **Alternatives considered:** Reject duplicates only for schema-defined fields; retain
+  last-value-wins behavior; replace the JSON library with a stricter parser; or perform a duplicate
+  check after DOM construction.
+- **Reason:** Different tools can interpret duplicate names differently. Last-value-wins parsing can
+  make an auditor and MemOptima analyze different manifest or evidence content. Detecting every
+  duplicate during parsing has the same boundary cost as schema-specific detection and preserves an
+  auditable source of truth.
+- **Consequence:** This is a public validation-error expansion within schema version 1. Evidence and
+  manifest parsing share the internal duplicate detector, presentation continues to use the v0.9.1
+  terminal-safety boundary, and implementation must preserve all existing resource and lifecycle
+  protections.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
