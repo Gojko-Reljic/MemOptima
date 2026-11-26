@@ -940,6 +940,17 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   post-DOM check cannot recover a key silently overwritten by the JSON library. The callback tracks
   array element indexes to report an exact object path such as `$.containers[0].memory`. It does not
   require a custom SAX DOM builder or a replacement JSON library.
+- **Nesting boundary:** Evidence records and manifests permit at most 64 simultaneously open JSON
+  arrays or objects. The root object therefore has depth one, exactly 64 levels are valid, and
+  opening a 65th level returns the new public `nesting_too_deep` code in both evidence and manifest
+  error enums. A zero-allocation linear pre-scan counts brackets outside JSON strings before the DOM
+  parser runs. It handles escaped quotes and backslashes but intentionally does not validate JSON
+  syntax; the normal parser retains that responsibility. A callback-only depth check is rejected
+  because it cannot stop the underlying parser from consuming a pathological input.
+- **Error precedence:** For one input value, `nesting_too_deep` takes precedence over `invalid_json`,
+  which takes precedence over `duplicate_key`. The pre-scan stops at the first excessive opening
+  bracket, the DOM parse then decides syntactic validity, and duplicate detection is reported only
+  after a syntactically valid DOM exists.
 - **Diagnostics and public errors:** `EvidenceValidationErrorCode` and
   `TrendManifestParseErrorCode` each gain `duplicate_key`. For JSONL, the validation error includes
   the physical input line, duplicate object's JSON path, and key name. For a manifest, the parse
@@ -957,11 +968,13 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   ambiguous third-party input is an intentional trust-boundary tightening.
 - **Verification:** Tests cover top-level and nested duplicate keys, escaped-equivalent keys,
   duplicate unknown keys, and duplicate manifest `artifacts` keys. They also prove that distinct,
-  non-normalized Unicode sequences remain separate keys. A parser fuzz target exercises duplicate
-  tracking with untrusted input.
+  non-normalized Unicode sequences remain separate keys. Depth tests cover exactly 64 and 65 levels,
+  arrays and objects, brackets in strings, and escaped quotes. A parser fuzz target exercises both
+  depth and duplicate tracking with untrusted input.
 - **Alternatives considered:** Reject duplicates only for schema-defined fields; retain
   last-value-wins behavior; replace the JSON library with a stricter parser; or perform a duplicate
-  check after DOM construction.
+  check after DOM construction; map excessive nesting to `invalid_json`; omit a depth limit; enforce
+  the limit through the parser callback; or build a DOM through a custom SAX handler.
 - **Reason:** Different tools can interpret duplicate names differently. Last-value-wins parsing can
   make an auditor and MemOptima analyze different manifest or evidence content. Detecting every
   duplicate during parsing has the same boundary cost as schema-specific detection and preserves an
