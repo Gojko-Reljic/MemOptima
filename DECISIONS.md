@@ -995,9 +995,9 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   AddressSanitizer and UndefinedBehaviorSanitizer findings.
 - **Corpus:** A normal compiler-independent corpus runner executes every strict-JSON seed during
   CTest. Every minimized libFuzzer finding is added to that corpus as a permanent regression case.
-- **Scope:** The first target covers `parse_strict_json`; evidence-record and terminal-text fuzz
-  targets follow as separate changes using the same infrastructure. Fuzzing never runs as an
-  unbounded regular CI or pull-request check.
+- **Scope:** The initial changes cover `parse_strict_json` and `parse_evidence_record`; a
+  terminal-text target follows as a separate change using the same infrastructure. Fuzzing never
+  runs as an unbounded regular CI or pull-request check.
 - **Reason:** The parser is stateful and processes untrusted input. Unit tests cover chosen cases,
   while fuzzing explores unexpected byte sequences and the corpus prevents regressions after a fix.
 

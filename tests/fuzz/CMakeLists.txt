@@ -25,6 +25,24 @@ add_test(
         "${PROJECT_SOURCE_DIR}/tests/fuzz/corpus/strict_json"
 )
 
+add_executable(memoptima_evidence_record_corpus_tests
+    evidence_record_corpus_runner.cpp
+    evidence_record_invariants.cpp
+)
+target_link_libraries(memoptima_evidence_record_corpus_tests
+    PRIVATE
+        memoptima_build_options
+        memoptima_core
+)
+set_target_properties(memoptima_evidence_record_corpus_tests PROPERTIES
+    CXX_EXTENSIONS OFF
+)
+add_test(
+    NAME MemOptimaFuzzCorpus.EvidenceRecord
+    COMMAND memoptima_evidence_record_corpus_tests
+        "${PROJECT_SOURCE_DIR}/tests/fuzz/corpus/evidence_record"
+)
+
 if(MEMOPTIMA_BUILD_FUZZERS)
     file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/corpus")
 
@@ -54,6 +72,32 @@ if(MEMOPTIMA_BUILD_FUZZERS)
     )
 
     set_target_properties(memoptima_strict_json_fuzz PROPERTIES
+        CXX_EXTENSIONS OFF
+    )
+
+    add_executable(memoptima_evidence_record_fuzz
+        "${PROJECT_SOURCE_DIR}/src/evidence_record_parser.cpp"
+        "${PROJECT_SOURCE_DIR}/src/strict_json_parser.cpp"
+        evidence_record_fuzz.cpp
+        evidence_record_invariants.cpp
+    )
+    target_include_directories(memoptima_evidence_record_fuzz PRIVATE
+        "${PROJECT_SOURCE_DIR}/include"
+        "${PROJECT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(memoptima_evidence_record_fuzz
+        PRIVATE
+            memoptima_build_options
+            nlohmann_json::nlohmann_json
+    )
+    target_compile_options(memoptima_evidence_record_fuzz PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(memoptima_evidence_record_fuzz PRIVATE
+        -fsanitize=fuzzer,address,undefined
+    )
+    set_target_properties(memoptima_evidence_record_fuzz PROPERTIES
         CXX_EXTENSIONS OFF
     )
 endif()
