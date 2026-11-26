@@ -985,6 +985,22 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   terminal-safety boundary, and implementation must preserve all existing resource and lifecycle
   protections.
 
+## ADR-050: Keep strict JSON fuzzing opt-in and corpus-backed
+
+- **Status:** Approved
+- **Decision:** MemOptima provides an opt-in Clang `fuzz` preset and
+  `MEMOPTIMA_BUILD_FUZZERS=ON` option for libFuzzer targets. The initial target exercises the
+  private strict JSON parser for 60 seconds with a 65536-byte maximum input, a 512 MiB allocation
+  limit, and a JSON dictionary. It checks semantic parser invariants with traps in addition to
+  AddressSanitizer and UndefinedBehaviorSanitizer findings.
+- **Corpus:** A normal compiler-independent corpus runner executes every strict-JSON seed during
+  CTest. Every minimized libFuzzer finding is added to that corpus as a permanent regression case.
+- **Scope:** The first target covers `parse_strict_json`; evidence-record and terminal-text fuzz
+  targets follow as separate changes using the same infrastructure. Fuzzing never runs as an
+  unbounded regular CI or pull-request check.
+- **Reason:** The parser is stateful and processes untrusted input. Unit tests cover chosen cases,
+  while fuzzing explores unexpected byte sequences and the corpus prevents regressions after a fix.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

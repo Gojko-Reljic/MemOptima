@@ -67,6 +67,8 @@ set_target_properties(memoptima_core_tests PROPERTIES
     CXX_EXTENSIONS OFF
 )
 
+add_subdirectory(fuzz)
+
 include(GoogleTest)
 gtest_discover_tests(memoptima_core_tests DISCOVERY_MODE PRE_TEST)
 

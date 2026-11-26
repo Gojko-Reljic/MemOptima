@@ -11,9 +11,39 @@ set(MEMOPTIMA_DOCKER_TEST_IMAGE "alpine:3.24.4" CACHE STRING
 find_program(MEMOPTIMA_DOCKER_EXECUTABLE NAMES docker)
 
 option(MEMOPTIMA_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer." OFF)
+option(MEMOPTIMA_BUILD_FUZZERS "Build opt-in Clang libFuzzer targets." OFF)
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     message(FATAL_ERROR "MemOptima currently supports GCC and Clang only.")
+endif()
+
+if(MEMOPTIMA_BUILD_FUZZERS)
+    if(NOT BUILD_TESTING)
+        message(FATAL_ERROR "MEMOPTIMA_BUILD_FUZZERS requires BUILD_TESTING=ON.")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        message(FATAL_ERROR "MEMOPTIMA_BUILD_FUZZERS requires the Clang C++ compiler.")
+    endif()
+
+    include(CheckCXXCompilerFlag)
+    include(CheckCXXSourceCompiles)
+    set(MEMOPTIMA_PREVIOUS_TRY_COMPILE_TARGET_TYPE "${CMAKE_TRY_COMPILE_TARGET_TYPE}")
+    set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+    check_cxx_compiler_flag("-fsanitize=fuzzer-no-link,address,undefined"
+        MEMOPTIMA_FUZZER_COMPILE_FLAGS_SUPPORTED)
+    set(CMAKE_TRY_COMPILE_TARGET_TYPE "${MEMOPTIMA_PREVIOUS_TRY_COMPILE_TARGET_TYPE}")
+    unset(MEMOPTIMA_PREVIOUS_TRY_COMPILE_TARGET_TYPE)
+    set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer,address,undefined")
+    check_cxx_source_compiles(
+        "#include <cstddef>
+         #include <cstdint>
+         extern \"C\" int LLVMFuzzerTestOneInput(const std::uint8_t*, std::size_t) { return 0; }"
+        MEMOPTIMA_FUZZER_LINK_FLAGS_SUPPORTED)
+    unset(CMAKE_REQUIRED_FLAGS)
+    if(NOT MEMOPTIMA_FUZZER_COMPILE_FLAGS_SUPPORTED OR
+       NOT MEMOPTIMA_FUZZER_LINK_FLAGS_SUPPORTED)
+        message(FATAL_ERROR "The selected Clang compiler does not support the required libFuzzer flags.")
+    endif()
 endif()
 
 # Centralize the language standard and strict warnings so every project target uses the same policy.
@@ -121,6 +151,7 @@ install(
         "${PROJECT_SOURCE_DIR}/docs/trend-manifest-format.md"
         "${PROJECT_SOURCE_DIR}/docs/trend-report-format.md"
         "${PROJECT_SOURCE_DIR}/docs/forecast-evaluation-report-format.md"
+        "${PROJECT_SOURCE_DIR}/docs/fuzzing.md"
     DESTINATION "${CMAKE_INSTALL_DOCDIR}"
 )
 
