@@ -25,10 +25,11 @@ file(WRITE "${artifact_path}" [=[
 file(WRITE "${manifest_path}" "{\"manifest_version\":1,\"artifacts\":[{\"path\":\"evidence\\u001b.jsonl\"}]}")
 file(WRITE "${poisoned_artifact_path}" [=[{"record_type":"sample","schema_version":1,"\u001b\u202e\u200b":true,"\u001b\u202e\u200b":false}
 ]=])
-file(WRITE "${poisoned_manifest_path}" "{\"manifest_version\":1,\"artifacts\":[{\"path\":\"poisoned.jsonl\"}]}")
+file(WRITE "${poisoned_manifest_path}" "{\"manifest_version\":1,\"artifacts\":[{\"path\":\"poisoned.jsonl\"}],\"\\u001b\\u202e\":true,\"\\u001b\\u202e\":false}")
 
 set(expected_path [=[/docker/control\npath\x1B[31m\u{9B}\u{202E}\u{200B}]=])
 set(expected_duplicate_path [=[$["\\u001B\u{202E}\u{200B}"]]=])
+set(expected_manifest_duplicate_path [=[$["\\u001B\u{202E}"]]=])
 set(raw_path "/docker/control\npath")
 
 function(assert_safe_path_output command_name output)
@@ -113,9 +114,17 @@ assert_safe_failure("Forecast poisoned artifact" "${poisoned_forecast_result}" "
 execute_process(COMMAND "${MEMOPTIMA_EXECUTABLE}" trends analyze "${poisoned_manifest_path}"
     RESULT_VARIABLE poisoned_trends_result OUTPUT_VARIABLE poisoned_trends_output ERROR_VARIABLE poisoned_trends_error)
 assert_safe_failure("Trends poisoned artifact" "${poisoned_trends_result}" "${poisoned_trends_output}" "${poisoned_trends_error}")
+string(FIND "${poisoned_trends_error}" "${expected_manifest_duplicate_path}" trends_duplicate_path_position)
+if(trends_duplicate_path_position EQUAL -1)
+    message(FATAL_ERROR "Trends command did not render the escaped manifest duplicate-key path.")
+endif()
 
 execute_process(COMMAND "${MEMOPTIMA_EXECUTABLE}" forecast evaluate "${poisoned_manifest_path}"
     RESULT_VARIABLE poisoned_evaluation_result OUTPUT_VARIABLE poisoned_evaluation_output ERROR_VARIABLE poisoned_evaluation_error)
 assert_safe_failure("Forecast evaluation poisoned artifact" "${poisoned_evaluation_result}" "${poisoned_evaluation_output}" "${poisoned_evaluation_error}")
+string(FIND "${poisoned_evaluation_error}" "${expected_manifest_duplicate_path}" evaluation_duplicate_path_position)
+if(evaluation_duplicate_path_position EQUAL -1)
+    message(FATAL_ERROR "Forecast evaluation command did not render the escaped manifest duplicate-key path.")
+endif()
 
 file(REMOVE_RECURSE "${test_directory}")
