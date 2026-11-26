@@ -856,6 +856,77 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   separately designed parser policy; it is required planning work for v0.10 before Intelligence
   features.
 
+## ADR-048: Evaluate shared memory-current forecasts at bounded fixed horizons
+
+- **Status:** Approved
+- **Decision:** v0.10 evaluates the shared `memory.current` forecast primitive at fixed CLI
+  horizons `1m`, `5m`, `15m`, and `1h`. Internally, the evaluator receives horizons as a span of
+  millisecond durations; the CLI supplies `60000`, `300000`, `900000`, and `3600000`. A future CLI
+  horizon option can therefore reuse the methodology without changing the analyzer contract.
+- **Shared model boundary:** A lower-level public forecast interface will fit a memory-current model
+  from prior observations and project it at an explicit elapsed duration. `forecast evidence`
+  derives its memory-max crossing estimate from that primitive, `trends` derives its rate and limit
+  context from it, and forecast evaluation invokes the same primitive. The evaluator will not keep
+  a competing private regression implementation. The model uses only observations available at the
+  origin. Its projection is clamped to zero, rounded to the nearest whole byte, and rejected with
+  `numeric_result_unavailable` when it is non-finite or cannot safely be represented as an unsigned
+  64-bit byte count.
+- **Holdout selection:** A possible origin is an observation after which the session-local epoch
+  has at least three usable observations spanning at least ten seconds. The same retained origins
+  apply to every horizon. For each horizon, the evaluator chooses an observation in the same
+  session-local epoch nearest to the target time. It is eligible only when its actual elapsed time
+  differs from the horizon by at most `min(declared_sampling_interval / 2, horizon / 10)`. The
+  model projects at that actual elapsed time rather than at the nominal horizon. A horizon below
+  the declared sampling interval receives `horizon_below_sampling_interval`; a missing compatible
+  observation receives `holdout_unavailable`. Evaluation never crosses a session boundary.
+- **Bounded deterministic origins:** Each eligible epoch retains at most 256 possible origins using
+  deterministic streaming decimation. The stride begins at one. When retained origins exceed 256,
+  the evaluator removes every second retained origin and doubles the stride, also discarding the
+  pending per-horizon state for each removed origin. The first possible origin is retained because
+  its zero-based index is divisible by every stride. The selection uses no randomness and remains
+  identical for the same manifest.
+- **Per-epoch metrics:** An epoch and horizon contributes to aggregate metrics only after at least
+  three evaluated origins. It records model MAE, persistence MAE, and signed model bias. Persistence
+  predicts the `memory.current` value at the origin. Model and persistence use the same origins and
+  holdouts. Relative MAE is calculated within an epoch as
+  `sum(abs(model_bytes - actual_bytes)) / sum(max(origin_current_bytes, 1048576))`; the one MiB
+  floor prevents empty or tiny containers from dominating the metric.
+- **Aggregate metrics:** Every qualifying epoch has equal weight. Per horizon, the report presents
+  mean epoch MAE, mean epoch persistence MAE, mean epoch signed bias, and mean epoch relative MAE.
+  Forecast skill uses AvgRelMAE: `1 - exp(mean(log(model_mae / persistence_mae)))`. If persistence
+  MAE is zero, the epoch remains in byte and relative-error aggregates but is excluded from skill.
+  It is counted as `persistence_exact_model_exact` when model MAE is zero or
+  `persistence_exact_model_error` otherwise. If model MAE is zero while persistence MAE is positive,
+  the relative ratio is floored at `1e-6` before the logarithm. Skill is `N/A` when no epoch can
+  contribute to it. An epoch with fewer than three evaluated origins is counted as
+  `insufficient_origins` and is excluded from every aggregate metric.
+- **Result shape and limits:** A non-eligible epoch produces one row with horizon `N/A` and its
+  epoch-level status. An eligible epoch produces one row per fixed horizon. Rows sort by strict
+  identity, epoch index, and numeric horizon duration. The evaluator limits simultaneously active
+  epochs to 1024, total result epochs to 4096, and derives the maximum result rows as
+  `max_result_epochs * horizon_count`, currently 16384. Retained origin state is bounded by 256
+  origins per active epoch. Exceeding any limit fails the entire report atomically with an error
+  naming the exceeded limit and advising the operator to split the manifest or reduce sessions.
+- **Interpretation boundary:** MAE describes absolute error, relative MAE describes error relative
+  to memory in use at the forecast origin, and skill describes performance relative to persistence.
+  None establishes OOM risk, confirms a memory leak, or certifies that a workload is safe.
+- **Alternatives considered:** Evaluate only the first eligible forecast; evaluate time-to-limit
+  directly; configurable CLI horizons in v0.10; a separate evaluator regression; fixed origin
+  strides; selecting origins after a third traversal; forcing a final origin; pooled point-level
+  aggregates; a ratio of byte-level aggregate means; arithmetic mean of per-epoch skills; MAPE
+  against actual holdout memory; headroom-to-memory-max normalization; a wide multi-horizon terminal
+  row; 4096 report rows; and 4096 simultaneously active evaluation epochs.
+- **Reason:** Fixed-horizon current-memory evaluation produces auditable targets without censored
+  time-to-limit outcomes. Shared modeling ensures the evaluator measures the delivered forecast.
+  Session-local holdouts prevent gaps from becoming false accuracy evidence. Deterministic
+  decimation, epoch-equal aggregation, conservative numeric conversion, and named limits make the
+  result reproducible and bounded enough for later Intelligence work.
+- **Consequence:** v0.10 changes the public forecast-evaluation report contract and requires an
+  updated report-format document, unit and integration tests for every status and limit, Debug and
+  Release quality gates, and an approved CodeRabbit review. Duplicate JSON-key policy remains a
+  separate required v0.10 decision before implementation; this ADR does not select that parser
+  policy.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
