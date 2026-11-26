@@ -11,6 +11,7 @@ add_library(memoptima_core STATIC
     evidence_input_reader.cpp
     evidence_inspector.cpp
     evidence_record_parser.cpp
+    strict_json_parser.cpp
     typed_evidence_artifact_reader.cpp
     forecast_evaluation/forecast_evaluation_analyzer.cpp
     forecast_evaluation/forecast_evaluation_service.cpp
