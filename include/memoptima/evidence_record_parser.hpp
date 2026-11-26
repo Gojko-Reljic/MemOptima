@@ -16,6 +16,8 @@ enum class EvidenceRecordType {
 
 enum class EvidenceValidationErrorCode {
     invalid_json,
+    nesting_too_deep,
+    duplicate_key,
     root_not_object,
     missing_required_field,
     wrong_type,
@@ -27,6 +29,7 @@ enum class EvidenceValidationErrorCode {
 
 struct EvidenceValidationError {
     std::uint64_t line_number;
+    // This path can contain untrusted JSON member names and must be escaped before terminal output.
     std::string json_path;
     EvidenceValidationErrorCode code;
     std::string detail;

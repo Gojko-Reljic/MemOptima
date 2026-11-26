@@ -953,9 +953,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   after a syntactically valid DOM exists.
 - **Diagnostics and public errors:** `EvidenceValidationErrorCode` and
   `TrendManifestParseErrorCode` each gain `duplicate_key`. For JSONL, the validation error includes
-  the physical input line, duplicate object's JSON path, and key name. For a manifest, the parse
-  error includes the object path and key name; no synthetic physical line is reported. The parser
-  retains raw diagnostic data and the existing terminal boundary escapes it when displayed.
+  the physical input line and the JSON path to the repeated member. For a manifest, the parse error
+  includes the repeated member path; no synthetic physical line is reported. Evidence traversal
+  renders its stable error code in brackets after that path. The parser retains raw diagnostic data
+  and the existing terminal boundary escapes it when displayed.
 - **Failure behavior:** The first duplicate key makes that JSONL record or manifest invalid. Schema
   validation does not continue against a DOM that no longer faithfully represents the input. Existing
   traversal behavior remains atomic: a malformed artifact or manifest produces no partial analysis

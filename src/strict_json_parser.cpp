@@ -135,6 +135,10 @@ struct ContainerFrame {
 
 } // namespace
 
+std::string append_json_member(const std::string_view object_path, const std::string_view key) {
+    return append_property_path(object_path, key);
+}
+
 std::expected<Json, StrictJsonError> parse_strict_json(const std::string_view text) {
     if (exceeds_maximum_nesting_depth(text)) {
         return std::unexpected(StrictJsonError{.kind = StrictJsonErrorKind::nesting_too_deep,

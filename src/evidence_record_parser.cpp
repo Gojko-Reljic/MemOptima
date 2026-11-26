@@ -1,6 +1,7 @@
 #include <memoptima/evidence_record_parser.hpp>
 
 #include "docker_container_id_syntax.hpp"
+#include "strict_json_parser.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -29,7 +30,7 @@ bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys,
     // Evidence schemas are closed so a newer or misspelled field cannot be silently ignored.
     for (const auto key : keys)
         if (!value.contains(key))
-            add_error(errors, line, std::string{path} + "." + std::string{key},
+            add_error(errors, line, detail::append_json_member(path, key),
                       EvidenceValidationErrorCode::missing_required_field,
                       "The required field is missing.");
     for (const auto &item : value.items()) {
@@ -37,7 +38,7 @@ bool exact_keys(const Json &value, std::initializer_list<std::string_view> keys,
         for (const auto key : keys)
             known = known || item.key() == key;
         if (!known)
-            add_error(errors, line, std::string{path} + "." + item.key(),
+            add_error(errors, line, detail::append_json_member(path, item.key()),
                       EvidenceValidationErrorCode::unknown_field,
                       "The field is not defined by schema version 1.");
     }
@@ -206,11 +207,23 @@ error(std::uint64_t line_number, std::string path, EvidenceValidationErrorCode c
 
 std::expected<ParsedEvidenceRecord, std::vector<EvidenceValidationError>>
 parse_evidence_record(std::string_view line, std::uint64_t line_number) {
-    const Json value = Json::parse(line, nullptr, false);
-    if (value.is_discarded()) {
+    auto parsed_json = detail::parse_strict_json(line);
+    if (!parsed_json.has_value()) {
+        if (parsed_json.error().kind == detail::StrictJsonErrorKind::nesting_too_deep) {
+            return error(line_number, "$", EvidenceValidationErrorCode::nesting_too_deep,
+                         "The JSON value exceeds the maximum nesting depth of 64.");
+        }
+        if (parsed_json.error().kind == detail::StrictJsonErrorKind::duplicate_key) {
+            const auto &duplicate = *parsed_json.error().duplicate;
+            return error(line_number,
+                         detail::append_json_member(duplicate.object_path, duplicate.key),
+                         EvidenceValidationErrorCode::duplicate_key,
+                         "The key occurs more than once in this object.");
+        }
         return error(line_number, "$", EvidenceValidationErrorCode::invalid_json,
                      "The line is not valid JSON.");
     }
+    const Json value = std::move(*parsed_json);
     if (!value.is_object()) {
         return error(line_number, "$", EvidenceValidationErrorCode::root_not_object,
                      "The JSON root must be an object.");

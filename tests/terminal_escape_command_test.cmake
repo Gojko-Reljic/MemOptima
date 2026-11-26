@@ -23,11 +23,12 @@ file(WRITE "${artifact_path}" [=[
 {"record_type":"session_end","schema_version":1,"outcome":"completed","completed_sample_count":4,"ended_at_utc":"2026-01-01T00:00:30.001Z","failure":null}
 ]=])
 file(WRITE "${manifest_path}" "{\"manifest_version\":1,\"artifacts\":[{\"path\":\"evidence\\u001b.jsonl\"}]}")
-file(WRITE "${poisoned_artifact_path}" [=[{"record_type":"sample","schema_version":1,"\u001b\u202e\u200b":true}]
+file(WRITE "${poisoned_artifact_path}" [=[{"record_type":"sample","schema_version":1,"\u001b\u202e\u200b":true,"\u001b\u202e\u200b":false}
 ]=])
 file(WRITE "${poisoned_manifest_path}" "{\"manifest_version\":1,\"artifacts\":[{\"path\":\"poisoned.jsonl\"}]}")
 
 set(expected_path [=[/docker/control\npath\x1B[31m\u{9B}\u{202E}\u{200B}]=])
+set(expected_duplicate_path [=[$["\\u001B\u{202E}\u{200B}"]]=])
 set(raw_path "/docker/control\npath")
 
 function(assert_safe_path_output command_name output)
@@ -100,6 +101,10 @@ assert_safe_path_output("Forecast evaluation command" "${forecast_output}")
 execute_process(COMMAND "${MEMOPTIMA_EXECUTABLE}" inspect evidence "${poisoned_artifact_path}"
     RESULT_VARIABLE poisoned_inspect_result OUTPUT_VARIABLE poisoned_inspect_output ERROR_VARIABLE poisoned_inspect_error)
 assert_safe_failure("Inspect poisoned artifact" "${poisoned_inspect_result}" "${poisoned_inspect_output}" "${poisoned_inspect_error}")
+string(FIND "${poisoned_inspect_error}" "${expected_duplicate_path}" duplicate_path_position)
+if(duplicate_path_position EQUAL -1)
+    message(FATAL_ERROR "Inspect poisoned artifact did not render the escaped duplicate-key path.")
+endif()
 
 execute_process(COMMAND "${MEMOPTIMA_EXECUTABLE}" forecast evidence "${poisoned_artifact_path}"
     RESULT_VARIABLE poisoned_forecast_result OUTPUT_VARIABLE poisoned_forecast_output ERROR_VARIABLE poisoned_forecast_error)

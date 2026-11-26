@@ -37,6 +37,70 @@ TEST(EvidenceRecordParser, ReportsPreciseRootValidationErrors) {
     EXPECT_EQ(unknown_type.error().front().code, EvidenceValidationErrorCode::invalid_record_type);
 }
 
+TEST(EvidenceRecordParser, RejectsDuplicateKeysWithPrecisePaths) {
+    const auto top_level =
+        parse_evidence_record(R"({"record_type":"sample","record_type":"sample"})", 1);
+    const auto nested = parse_evidence_record(
+        R"({"containers":[{}, {"memory":{"current_bytes":"1","current_bytes":"2"}}]})", 2);
+    const auto escaped = parse_evidence_record(R"({"a":1,"\u0061":2})", 3);
+
+    ASSERT_FALSE(top_level.has_value());
+    ASSERT_FALSE(nested.has_value());
+    ASSERT_FALSE(escaped.has_value());
+    EXPECT_EQ(top_level.error().front().code, EvidenceValidationErrorCode::duplicate_key);
+    EXPECT_EQ(top_level.error().front().json_path, "$.record_type");
+    EXPECT_EQ(nested.error().front().code, EvidenceValidationErrorCode::duplicate_key);
+    EXPECT_EQ(nested.error().front().json_path, "$.containers[1].memory.current_bytes");
+    EXPECT_EQ(escaped.error().front().code, EvidenceValidationErrorCode::duplicate_key);
+    EXPECT_EQ(escaped.error().front().json_path, "$.a");
+}
+
+TEST(EvidenceRecordParser, DoesNotTreatKeysInSeparateContainersAsDuplicates) {
+    const auto parsed = parse_evidence_record(
+        R"({"record_type":"sample","schema_version":1,"containers":[{"unknown":1},{"unknown":2}]})",
+        1);
+
+    ASSERT_FALSE(parsed.has_value());
+    EXPECT_TRUE(std::ranges::none_of(parsed.error(), [](const auto &error) {
+        return error.code == EvidenceValidationErrorCode::duplicate_key;
+    }));
+}
+
+TEST(EvidenceRecordParser, EnforcesTheStrictJsonNestingLimit) {
+    const std::string nested_65(65U, '[');
+    const std::string closing_65(65U, ']');
+    const std::string nested_64(64U, '[');
+    const std::string closing_64(64U, ']');
+    const auto too_deep = parse_evidence_record(nested_65 + "0" + closing_65, 1);
+    const auto within_limit = parse_evidence_record(nested_64 + "0" + closing_64, 2);
+
+    ASSERT_FALSE(too_deep.has_value());
+    ASSERT_FALSE(within_limit.has_value());
+    EXPECT_EQ(too_deep.error().front().code, EvidenceValidationErrorCode::nesting_too_deep);
+    EXPECT_EQ(too_deep.error().front().json_path, "$");
+    EXPECT_EQ(within_limit.error().front().code, EvidenceValidationErrorCode::root_not_object);
+}
+
+TEST(EvidenceRecordParser, AcceptsCarriageReturnAsJsonWhitespace) {
+    const auto parsed =
+        parse_evidence_record("{\"record_type\":\"other\",\"schema_version\":1}\r", 1);
+
+    ASSERT_FALSE(parsed.has_value());
+    EXPECT_EQ(parsed.error().front().code, EvidenceValidationErrorCode::invalid_record_type);
+}
+
+TEST(EvidenceRecordParser, UsesUnambiguousPathsForUnknownMemberNames) {
+    const auto parsed =
+        parse_evidence_record(R"({"record_type":"sample","schema_version":1,"a.b":true})", 1);
+
+    ASSERT_FALSE(parsed.has_value());
+    const auto unknown = std::ranges::find_if(parsed.error(), [](const auto &error) {
+        return error.code == EvidenceValidationErrorCode::unknown_field;
+    });
+    ASSERT_NE(unknown, parsed.error().end());
+    EXPECT_EQ(unknown->json_path, R"($["a.b"])");
+}
+
 TEST(EvidenceRecordParser, ValidatesClosedSessionStartAndSessionEndRecords) {
     const auto start = parse_evidence_record(
         R"({"record_type":"session_start","schema_version":1,"application_version":"0.4.0","started_at_utc":"2026-11-13T12:00:00.000Z","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})",

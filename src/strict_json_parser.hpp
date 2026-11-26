@@ -27,6 +27,8 @@ struct StrictJsonError {
     std::optional<StrictJsonDuplicateKey> duplicate;
 };
 
+[[nodiscard]] std::string append_json_member(std::string_view object_path, std::string_view key);
+
 // Parses untrusted JSON while enforcing limits that a completed JSON DOM cannot recover.
 [[nodiscard]] std::expected<nlohmann::ordered_json, StrictJsonError>
 parse_strict_json(std::string_view text);

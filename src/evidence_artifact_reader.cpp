@@ -15,6 +15,33 @@ using Json = nlohmann::ordered_json;
 
 constexpr std::size_t kMaximumValidationErrors = 20;
 
+[[nodiscard]] std::string validation_error_code_name(const EvidenceValidationErrorCode code) {
+    switch (code) {
+    case EvidenceValidationErrorCode::invalid_json:
+        return "invalid_json";
+    case EvidenceValidationErrorCode::nesting_too_deep:
+        return "nesting_too_deep";
+    case EvidenceValidationErrorCode::duplicate_key:
+        return "duplicate_key";
+    case EvidenceValidationErrorCode::root_not_object:
+        return "root_not_object";
+    case EvidenceValidationErrorCode::missing_required_field:
+        return "missing_required_field";
+    case EvidenceValidationErrorCode::wrong_type:
+        return "wrong_type";
+    case EvidenceValidationErrorCode::unknown_field:
+        return "unknown_field";
+    case EvidenceValidationErrorCode::unsupported_schema_version:
+        return "unsupported_schema_version";
+    case EvidenceValidationErrorCode::invalid_record_type:
+        return "invalid_record_type";
+    case EvidenceValidationErrorCode::invalid_value:
+        return "invalid_value";
+    }
+
+    return "unknown_validation_error";
+}
+
 [[nodiscard]] std::string
 format_validation_errors(const std::vector<EvidenceValidationError> &errors) {
     std::string detail;
@@ -22,8 +49,8 @@ format_validation_errors(const std::vector<EvidenceValidationError> &errors) {
         if (!detail.empty()) {
             detail += '\n';
         }
-        detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path + ": " +
-                  error.detail;
+        detail += "Line " + std::to_string(error.line_number) + " at " + error.json_path + " [" +
+                  validation_error_code_name(error.code) + "]: " + error.detail;
     }
     return detail;
 }
@@ -68,6 +95,9 @@ traverse(EvidenceInputReader &input, EvidenceArtifactRecordSink &sink) {
 
         if (saw_end || (!saw_start && parsed->type != EvidenceRecordType::session_start) ||
             (saw_start && parsed->type == EvidenceRecordType::session_start)) {
+            if (!validation_errors.empty()) {
+                return error(format_validation_errors(validation_errors));
+            }
             return error("Line " + std::to_string(line_number) + ": invalid record order.");
         }
 

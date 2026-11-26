@@ -7,6 +7,21 @@ readable if a later interruption prevents a final line.
 Every record has `record_type` and `schema_version`. The current schema version is `1`.
 Record keys have a stable writer order, but consumers must select fields by key name.
 
+## Validation and input integrity
+
+Consumers apply the I-JSON unique-member rule: every JSON object in an evidence record must use
+each member name at most once. The comparison happens after JSON escape decoding, so `"a"` and
+`"\u0061"` are the same member name. JSON Unicode normalization is not applied. A record with a
+duplicate member is rejected with `duplicate_key` before schema validation.
+
+Evidence records allow at most 64 simultaneously open JSON objects or arrays. A deeper value is
+rejected with `nesting_too_deep`. The reader reports `invalid_json` only for syntactically invalid
+JSON; it does not use that code for either of these stricter input-integrity failures. Traversal
+diagnostics use stable bracketed codes, including `duplicate_key` and `nesting_too_deep`.
+
+Validation diagnostics include a physical line number and JSON path. Paths can contain untrusted
+member names, so every terminal consumer must escape them before display.
+
 ## Record lifecycle
 
 A normally completed artifact has this order:
@@ -38,6 +53,9 @@ The first record contains the application version, requested count and interval,
 limit, required `0600` permissions, the per-record flush contract, and
 `host_identifiers_included: false`.
 
+`application_version` is one through 64 printable ASCII bytes. `requested_sample_count` is a
+positive unsigned 32-bit JSON number.
+
 ## `sample`
 
 Every sample contains a one-based `sample_sequence`, `planned_offset_ms`, `captured_at_utc`, and
@@ -51,6 +69,9 @@ assessment keeps its risk, coverage, findings, evidence, recommendations, and un
 
 `discovery_warnings` remains in the matching sample. Each item has `code`, `cgroup_path`, and
 `detail`.
+
+`container_id` is exactly 64 hexadecimal characters; readers accept either ASCII letter case and
+the writer emits lowercase. `sample_sequence` is a positive unsigned 32-bit JSON number.
 
 ## `session_end`
 
