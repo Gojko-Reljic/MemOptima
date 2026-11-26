@@ -2,6 +2,8 @@
 
 #include <memoptima/evidence_input_reader.hpp>
 
+#include "strict_json_parser.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -33,6 +35,7 @@ parse_error(TrendManifestParseErrorCode code, std::string json_path, std::string
 
 [[nodiscard]] bool has_exact_keys(const Json &object,
                                   std::initializer_list<std::string_view> keys) {
+    // parse_strict_json rejects duplicate names before this count-based closed-schema check runs.
     if (object.size() != keys.size()) {
         return false;
     }
@@ -168,11 +171,22 @@ validate_artifact_containment(TrendManifest &manifest) {
 
 std::expected<TrendManifest, TrendManifestParseError>
 parse_trend_manifest(std::string_view text, const std::filesystem::path &directory) {
-    const auto parsed = Json::parse(text, nullptr, false);
-    if (parsed.is_discarded()) {
+    auto parsed_json = detail::parse_strict_json(text);
+    if (!parsed_json.has_value()) {
+        if (parsed_json.error().kind == detail::StrictJsonErrorKind::nesting_too_deep) {
+            return parse_error(TrendManifestParseErrorCode::nesting_too_deep, "$",
+                               "The JSON value exceeds the maximum nesting depth of 64.");
+        }
+        if (parsed_json.error().kind == detail::StrictJsonErrorKind::duplicate_key) {
+            const auto &duplicate = *parsed_json.error().duplicate;
+            return parse_error(TrendManifestParseErrorCode::duplicate_key,
+                               detail::append_json_member(duplicate.object_path, duplicate.key),
+                               "The key occurs more than once in this object.");
+        }
         return parse_error(TrendManifestParseErrorCode::invalid_json, "$",
                            "The manifest is not valid JSON.");
     }
+    const Json parsed = std::move(*parsed_json);
     if (!parsed.is_object()) {
         return parse_error(TrendManifestParseErrorCode::root_not_object, "$",
                            "The manifest root must be an object.");
