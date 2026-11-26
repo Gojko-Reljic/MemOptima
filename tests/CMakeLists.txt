@@ -15,6 +15,7 @@ add_executable(memoptima_core_tests
     evidence_record_parser_test.cpp
     strict_json_parser_test.cpp
     forecast/evidence_forecast_test.cpp
+    forecast/memory_current_forecast_test.cpp
     forecast_evaluation/forecast_evaluation_analyzer_test.cpp
     forecast_evaluation/forecast_evaluation_service_test.cpp
     forecast/memory_limit_forecast_test.cpp

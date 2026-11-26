@@ -1000,6 +1000,37 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Reason:** The parser is stateful and processes untrusted input. Unit tests cover chosen cases,
   while fuzzing explores unexpected byte sequences and the corpus prevents regressions after a fix.
 
+## ADR-051: Share a memory-current forecast primitive across analysis features
+
+- **Status:** Approved
+- **Decision:** MemOptima exposes the lower-level public `forecast/memory_current_forecast`
+  interface. `MemoryCurrentObservation` contains only a timestamp and `memory.current` bytes.
+  `fit_memory_current_forecast` fits the timestamped observations and returns a
+  `MemoryCurrentForecast` with an availability status and, when valid, its growth rate. The fitted
+  forecast projects a caller-supplied elapsed duration through `project_after`.
+- **Projection contract:** A projection uses only the observations supplied to fitting. It clamps a
+  negative result to zero, rounds the result to the nearest whole byte, and reports
+  `numeric_result_unavailable` if fitting or conversion cannot produce a finite representable
+  unsigned 64-bit result. `project_after` measures forward from the latest fitted observation; a
+  negative duration is not a valid operational projection. Projection does not incorporate a
+  memory limit.
+- **Layering:** `memory_limit_forecast` retains memory-max-specific policy such as unlimited,
+  unstable, and already-reached limits, but derives its growth rate and time-to-limit calculation
+  from the shared primitive. Trends use the shared fit for their rate and limit context. Forecast
+  evaluation fits at each origin and projects at the selected holdout elapsed duration. No consumer
+  keeps a competing regression implementation.
+- **Validation:** The primitive requires at least three observations spanning ten seconds with
+  strictly increasing timestamps. Its distinct availability statuses preserve the existing
+  insufficient-observation, insufficient-window, non-increasing-timestamp, and numeric-result
+  diagnostics.
+- **Alternatives considered:** A generic public linear-regression library was rejected because
+  MemOptima currently has one concrete domain and a generic numerical API would widen the public
+  contract without a second validated use. Keeping separate private regressions was rejected
+  because forecast evaluation would no longer measure the model used by operational commands.
+- **Reason:** One narrowly typed model makes the forecast methodology auditable, removes drift
+  between evaluation and delivery, and keeps memory-limit policy above the reusable
+  memory-current boundary.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
