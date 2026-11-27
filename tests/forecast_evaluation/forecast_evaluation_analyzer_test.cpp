@@ -110,5 +110,25 @@ TEST(ForecastEvaluationAnalyzerTest, AggregatesRelativeErrorAndSkillPerHorizon) 
     ASSERT_TRUE(summary.skill.has_value());
     EXPECT_GT(*summary.skill, 0.999);
 }
+
+TEST(ForecastEvaluationAnalyzerTest, NeverCarriesOriginsAcrossSessionBoundaries) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    const auto start = ForecastEvaluationTimePoint{};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    for (std::uint64_t index{}; index < 10U; ++index) {
+        sample(analyzer, start + 10s * index, 100U + 10U * index);
+    }
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    for (std::uint64_t index{}; index < 10U; ++index) {
+        sample(analyzer, start + 2h + 10s * index, 1'000U + 10U * index);
+    }
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 2U);
+    EXPECT_EQ(report->rows[0].epoch_index, 1U);
+    EXPECT_EQ(report->rows[1].epoch_index, 2U);
+}
 } // namespace
 } // namespace memoptima::forecast_evaluation

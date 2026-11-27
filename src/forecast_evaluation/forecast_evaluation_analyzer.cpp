@@ -376,11 +376,26 @@ ForecastEvaluationAnalyzer::end_session(const SessionEnd &session) {
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
             .detail = "Ending a session requires an open session with no open sample."});
     }
-    for (auto &[identity, epoch] : active_epochs_) {
-        (void)identity;
-        if (session.incomplete && epoch.observed_in_session)
-            epoch.contains_incomplete_session = true;
-        epoch.observed_in_session = false;
+    try {
+        for (auto &[identity, epoch] : active_epochs_) {
+            (void)identity;
+            if (session.incomplete) {
+                epoch.contains_incomplete_session = true;
+            }
+            const auto status =
+                epoch.observation_count < kMinimumHistoryObservations
+                    ? ForecastEvaluationStatus::insufficient_observations
+                : (!epoch.first_time || !epoch.latest_time ||
+                   elapsed(*epoch.first_time, *epoch.latest_time) < kMinimumHistoryWindow)
+                    ? ForecastEvaluationStatus::insufficient_observation_window
+                    : ForecastEvaluationStatus::evaluated;
+            close_epoch(std::move(epoch), status);
+        }
+        active_epochs_.clear();
+    } catch (const std::length_error &error) {
+        return std::unexpected(ForecastEvaluationAnalyzerError{
+            .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
+            .detail = error.what()});
     }
     state_ = State::between_sessions;
     return {};
