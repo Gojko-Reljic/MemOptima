@@ -91,5 +91,24 @@ TEST(ForecastEvaluationAnalyzerTest, DeterministicallyBoundsRetainedOrigins) {
     EXPECT_LE(report->rows[0].origin_count, 256U);
     EXPECT_EQ(report->rows[0].origin_count, 165U);
 }
+
+TEST(ForecastEvaluationAnalyzerTest, AggregatesRelativeErrorAndSkillPerHorizon) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    for (std::uint64_t index{}; index < 12U; ++index) {
+        sample(analyzer, start + 10s * index, 1'048'576U + 10U * index);
+    }
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->summary.horizons.size(), 1U);
+    const auto &summary = report->summary.horizons.front();
+    EXPECT_EQ(summary.contributing_epoch_count, 1U);
+    EXPECT_DOUBLE_EQ(*summary.mean_epoch_absolute_error_bytes, 0.0);
+    EXPECT_DOUBLE_EQ(*summary.mean_epoch_relative_absolute_error, 0.0);
+    ASSERT_TRUE(summary.skill.has_value());
+    EXPECT_GT(*summary.skill, 0.999);
+}
 } // namespace
 } // namespace memoptima::forecast_evaluation

@@ -64,12 +64,26 @@ struct ForecastEvaluationRow {
     std::optional<double> mean_absolute_error_bytes;
     std::optional<double> mean_persistence_absolute_error_bytes;
     std::optional<double> mean_signed_error_bytes;
+    std::optional<double> relative_mean_absolute_error;
+};
+
+struct ForecastEvaluationHorizonSummary {
+    std::chrono::milliseconds horizon;
+    std::uint64_t contributing_epoch_count;
+    std::uint64_t persistence_exact_model_exact_count;
+    std::uint64_t persistence_exact_model_error_count;
+    std::optional<double> mean_epoch_absolute_error_bytes;
+    std::optional<double> mean_epoch_persistence_absolute_error_bytes;
+    std::optional<double> mean_epoch_signed_error_bytes;
+    std::optional<double> mean_epoch_relative_absolute_error;
+    std::optional<double> skill;
 };
 
 struct ForecastEvaluationSummary {
     std::uint64_t row_count;
     std::uint64_t evaluated_epoch_horizon_count;
     std::map<ForecastEvaluationStatus, std::uint64_t> status_counts;
+    std::vector<ForecastEvaluationHorizonSummary> horizons;
 };
 struct ForecastEvaluationReport {
     ForecastEvaluationSummary summary;

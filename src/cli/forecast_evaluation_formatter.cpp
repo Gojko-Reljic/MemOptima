@@ -112,6 +112,29 @@ void append_summary(std::ostringstream &output,
         for (const auto &[status, count] : summary.status_counts)
             output << "  " << status_name(status) << ": " << count << '\n';
     }
+    if (!summary.horizons.empty()) {
+        output << "\nHorizon aggregates:\n";
+        for (const auto &horizon : summary.horizons) {
+            const auto relative =
+                horizon.mean_epoch_relative_absolute_error
+                    ? format_percentage(*horizon.mean_epoch_relative_absolute_error * 100.0, 2U)
+                    : std::string{"N/A"};
+            const auto skill =
+                horizon.skill ? format_percentage(*horizon.skill * 100.0, 2U) : std::string{"N/A"};
+            output << "  " << format_operational_duration(horizon.horizon)
+                   << ": epochs=" << horizon.contributing_epoch_count
+                   << ", MAE=" << format_optional_bytes(horizon.mean_epoch_absolute_error_bytes)
+                   << ", persistence MAE="
+                   << format_optional_bytes(horizon.mean_epoch_persistence_absolute_error_bytes)
+                   << ", bias="
+                   << format_optional_bytes(horizon.mean_epoch_signed_error_bytes, true)
+                   << ", relative MAE=" << relative << ", skill=" << skill
+                   << ", persistence exact/model exact="
+                   << horizon.persistence_exact_model_exact_count
+                   << ", persistence exact/model error="
+                   << horizon.persistence_exact_model_error_count << '\n';
+        }
+    }
     output << '\n';
 }
 } // namespace

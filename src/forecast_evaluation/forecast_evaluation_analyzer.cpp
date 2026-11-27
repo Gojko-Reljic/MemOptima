@@ -15,6 +15,8 @@ constexpr std::size_t kMaximumResultEpochs = 4096U;
 constexpr std::size_t kMaximumOriginsPerEpoch = 256U;
 constexpr std::uint64_t kMinimumHistoryObservations = 3U;
 constexpr auto kMinimumHistoryWindow = std::chrono::seconds{10};
+constexpr long double kRelativeErrorDenominatorFloor = 1'048'576.0L;
+constexpr long double kMinimumSkillRatio = 1e-6L;
 
 [[nodiscard]] std::chrono::milliseconds elapsed(ForecastEvaluationTimePoint from,
                                                 ForecastEvaluationTimePoint to) {
@@ -179,7 +181,8 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                                        : epoch_status,
                          .mean_absolute_error_bytes = std::nullopt,
                          .mean_persistence_absolute_error_bytes = std::nullopt,
-                         .mean_signed_error_bytes = std::nullopt});
+                         .mean_signed_error_bytes = std::nullopt,
+                         .relative_mean_absolute_error = std::nullopt});
         return;
     }
     for (std::size_t index = 0U; index < horizons_.size(); ++index) {
@@ -191,7 +194,8 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                                   .status = ForecastEvaluationStatus::evaluated,
                                   .mean_absolute_error_bytes = std::nullopt,
                                   .mean_persistence_absolute_error_bytes = std::nullopt,
-                                  .mean_signed_error_bytes = std::nullopt};
+                                  .mean_signed_error_bytes = std::nullopt,
+                                  .relative_mean_absolute_error = std::nullopt};
         if (horizon < std::chrono::milliseconds{session_interval_ms_}) {
             row.status = ForecastEvaluationStatus::horizon_below_sampling_interval;
             rows_.push_back(std::move(row));
@@ -200,6 +204,7 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
         long double absolute_error{};
         long double persistence_error{};
         long double signed_error{};
+        long double relative_denominator{};
         bool numeric_failure{};
         for (const auto &origin : epoch.origins) {
             if (!origin.holdouts[index]) {
@@ -220,6 +225,8 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
             persistence_error +=
                 std::abs(static_cast<long double>(origin.current_memory_bytes) - actual);
             signed_error += predicted - actual;
+            relative_denominator += std::max(static_cast<long double>(origin.current_memory_bytes),
+                                             kRelativeErrorDenominatorFloor);
             ++row.origin_count;
         }
         if (epoch.contains_incomplete_session) {
@@ -236,6 +243,8 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
             row.mean_persistence_absolute_error_bytes =
                 static_cast<double>(persistence_error / count);
             row.mean_signed_error_bytes = static_cast<double>(signed_error / count);
+            row.relative_mean_absolute_error =
+                static_cast<double>(absolute_error / relative_denominator);
         }
         rows_.push_back(std::move(row));
     }
@@ -384,6 +393,66 @@ void ForecastEvaluationAnalyzer::summarize(ForecastEvaluationReport &report) con
             ++report.summary.evaluated_epoch_horizon_count;
     }
     report.summary.row_count = report.rows.size();
+    for (const auto &horizon : horizons_) {
+        long double model_mae{};
+        long double persistence_mae{};
+        long double bias{};
+        long double relative_mae{};
+        long double log_relative_mae{};
+        std::uint64_t contributing_epochs{};
+        std::uint64_t skill_epochs{};
+        std::uint64_t persistence_exact_model_exact{};
+        std::uint64_t persistence_exact_model_error{};
+        for (const auto &row : report.rows) {
+            if (row.horizon != horizon.duration ||
+                row.status != ForecastEvaluationStatus::evaluated) {
+                continue;
+            }
+            ++contributing_epochs;
+            model_mae += *row.mean_absolute_error_bytes;
+            persistence_mae += *row.mean_persistence_absolute_error_bytes;
+            bias += *row.mean_signed_error_bytes;
+            relative_mae += *row.relative_mean_absolute_error;
+            if (*row.mean_persistence_absolute_error_bytes == 0.0) {
+                if (*row.mean_absolute_error_bytes == 0.0) {
+                    ++persistence_exact_model_exact;
+                } else {
+                    ++persistence_exact_model_error;
+                }
+                continue;
+            }
+            const auto ratio =
+                std::max(static_cast<long double>(*row.mean_absolute_error_bytes) /
+                             static_cast<long double>(*row.mean_persistence_absolute_error_bytes),
+                         kMinimumSkillRatio);
+            log_relative_mae += std::log(ratio);
+            ++skill_epochs;
+        }
+        ForecastEvaluationHorizonSummary summary{
+            .horizon = horizon.duration,
+            .contributing_epoch_count = contributing_epochs,
+            .persistence_exact_model_exact_count = persistence_exact_model_exact,
+            .persistence_exact_model_error_count = persistence_exact_model_error,
+            .mean_epoch_absolute_error_bytes = std::nullopt,
+            .mean_epoch_persistence_absolute_error_bytes = std::nullopt,
+            .mean_epoch_signed_error_bytes = std::nullopt,
+            .mean_epoch_relative_absolute_error = std::nullopt,
+            .skill = std::nullopt};
+        if (contributing_epochs != 0U) {
+            const auto divisor = static_cast<long double>(contributing_epochs);
+            summary.mean_epoch_absolute_error_bytes = static_cast<double>(model_mae / divisor);
+            summary.mean_epoch_persistence_absolute_error_bytes =
+                static_cast<double>(persistence_mae / divisor);
+            summary.mean_epoch_signed_error_bytes = static_cast<double>(bias / divisor);
+            summary.mean_epoch_relative_absolute_error =
+                static_cast<double>(relative_mae / divisor);
+        }
+        if (skill_epochs != 0U) {
+            summary.skill = static_cast<double>(
+                1.0L - std::exp(log_relative_mae / static_cast<long double>(skill_epochs)));
+        }
+        report.summary.horizons.push_back(std::move(summary));
+    }
 }
 
 std::expected<ForecastEvaluationReport, ForecastEvaluationAnalyzerError>
