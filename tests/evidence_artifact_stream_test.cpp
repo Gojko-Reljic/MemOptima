@@ -3,6 +3,8 @@
 #include <memoptima/sampling/jsonl_serializer.hpp>
 #include <memoptima/sampling/sampling_configuration.hpp>
 
+#include "evidence_artifact_reader.hpp"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -97,6 +99,14 @@ class CapturingSink final : public ArtifactSink {
     std::vector<ArtifactSessionEnd> ends;
 };
 
+class DiscardingRecordSink final : public detail::EvidenceArtifactRecordSink {
+  public:
+    std::expected<void, detail::EvidenceArtifactTraversalError>
+    consume(const detail::EvidenceArtifactRecord &) override {
+        return {};
+    }
+};
+
 TEST_F(EvidenceArtifactStreamTest, StreamsValidatedEvidenceThroughThePublicContract) {
     (void)write_artifact();
     CapturingSink sink;
@@ -133,6 +143,29 @@ TEST_F(EvidenceArtifactStreamTest, DeliversProvisionalEventsBeforeALaterValidati
     ASSERT_EQ(sink.starts.size(), 1U);
     EXPECT_TRUE(sink.samples.empty());
     EXPECT_TRUE(sink.ends.empty());
+}
+
+TEST_F(EvidenceArtifactStreamTest, PreservesValidationErrorsBeforeRecordOrderErrors) {
+    const auto path = directory_ / "duplicate-start.jsonl";
+    std::ofstream output{path};
+    ASSERT_TRUE(output.is_open());
+    output
+        << R"({"record_type":"session_start","schema_version":1,"application_version":"0.10.0","started_at_utc":"2026-11-26T12:00:00.000Z","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})"
+        << '\n';
+    output << '\n';
+    output << R"({"record_type":"sample","record_type":"sample"})" << '\n';
+    output
+        << R"({"record_type":"session_start","schema_version":1,"application_version":"0.10.0","started_at_utc":"2026-11-26T12:00:00.000Z","requested_sample_count":1,"requested_interval_ms":"100","output_max_bytes":"536870912","output_permissions_octal":"0600","flush_after_each_record":true,"host_identifiers_included":false})"
+        << '\n';
+    output.close();
+
+    DiscardingRecordSink sink;
+    const auto traversal = detail::traverse_evidence_artifact(path, sink);
+
+    ASSERT_FALSE(traversal.has_value());
+    EXPECT_NE(traversal.error().detail.find("Line 3 at $.record_type [duplicate_key]"),
+              std::string::npos);
+    EXPECT_EQ(traversal.error().detail.find("invalid record order"), std::string::npos);
 }
 
 } // namespace

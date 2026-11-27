@@ -295,9 +295,9 @@ See [Trend Manifest Format](trend-manifest-format.md) for the input contract and
 
 ### Evaluate historical forecast accuracy
 
-Forecast evaluation replays the explicitly selected artifacts from a trend manifest and compares a
-linear `memory.current` projection with the immediately following observed sample. It is a temporal
-holdout measurement: it does not use that following sample when making the evaluated projection.
+Forecast evaluation replays the explicitly selected artifacts from a trend manifest and evaluates
+the shared linear `memory.current` projection at 1m, 5m, 15m, and 1h horizons. It is a rolling-origin
+holdout measurement: a projection uses only data available at its origin.
 
 Run the evaluation with:
 
@@ -305,16 +305,15 @@ Run the evaluation with:
 ./build/debug/src/memoptima forecast evaluate manifest.json
 ```
 
-For a continuous container observation epoch, the evaluator selects the first usable history with
-at least three observations spanning at least ten seconds. The last history point is the forecast
-point; its immediately following observation is the holdout. Rows whose evidence is
-incomplete, discontinuous, too short, or missing a following observation remain visible with an
-explicit status and are excluded from summary accuracy metrics.
+For a continuous container observation epoch, each origin requires at least three observations
+spanning at least ten seconds. A same-epoch holdout must be close enough to the requested horizon;
+rows whose evidence is incomplete, discontinuous, too short, sampled too slowly, or missing a
+compatible holdout remain visible with an explicit status.
 
-The report includes eligible and evaluated row counts, coverage, mean absolute error, signed bias,
-and per-row predicted, actual, and signed-error values. It evaluates `memory.current` only. It does
-not predict an OOM event, diagnose a memory leak, certify workload health, recommend a limit, or
-modify a host, container, or cgroup.
+The report includes per-horizon mean absolute error, persistence-baseline error, signed bias,
+relative error, and skill. It evaluates `memory.current` only. It does not predict an OOM event,
+diagnose a memory leak, certify workload health, recommend a limit, or modify a host, container,
+or cgroup.
 
 See [Trend Manifest Format](trend-manifest-format.md) for the shared input contract and
 [Forecast Evaluation Report Format](forecast-evaluation-report-format.md) for the output, stable

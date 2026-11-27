@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memoptima/forecast/memory_current_forecast.hpp>
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +25,7 @@ enum class MemoryLimitForecastAvailability {
     already_at_or_above_memory_max,
     non_positive_growth,
     time_to_limit_out_of_range,
+    numeric_result_unavailable,
 };
 
 struct MemoryLimitForecast {
@@ -38,16 +41,10 @@ class MemoryLimitForecastAccumulator {
     [[nodiscard]] MemoryLimitForecast finish() const;
 
   private:
-    std::size_t observation_count_{};
-    std::optional<MemoryLimitForecastAvailability> invalid_series_reason_;
-    std::optional<std::chrono::sys_time<std::chrono::milliseconds>> first_captured_at_;
-    std::optional<std::chrono::sys_time<std::chrono::milliseconds>> last_captured_at_;
     std::optional<std::uint64_t> memory_max_bytes_;
+    bool memory_max_changed_{};
     std::uint64_t latest_current_memory_bytes_{};
-    long double sum_time_seconds_{};
-    long double sum_memory_bytes_{};
-    long double sum_time_squared_{};
-    long double sum_time_memory_{};
+    MemoryCurrentForecastAccumulator current_memory_accumulator_;
 };
 
 // Estimates time to a stable finite cgroup memory.max from sufficient timestamped observations.

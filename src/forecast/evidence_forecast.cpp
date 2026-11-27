@@ -44,8 +44,10 @@ EvidenceForecastStatus map_status(MemoryLimitForecastAvailability value) {
         return EvidenceForecastStatus::unavailable_non_positive_growth;
     case MemoryLimitForecastAvailability::time_to_limit_out_of_range:
         return EvidenceForecastStatus::unavailable_time_to_limit_out_of_range;
+    case MemoryLimitForecastAvailability::numeric_result_unavailable:
+        return EvidenceForecastStatus::unavailable_numeric_result;
     }
-    return EvidenceForecastStatus::unavailable_non_positive_growth;
+    return EvidenceForecastStatus::unavailable_numeric_result;
 }
 
 class Sink final : public detail::EvidenceArtifactRecordSink {

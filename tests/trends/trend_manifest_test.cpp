@@ -39,6 +39,60 @@ TEST(TrendManifest, RejectsClosedSchemaViolations) {
     EXPECT_EQ(wrong_path_type.error().code, TrendManifestParseErrorCode::wrong_type);
 }
 
+TEST(TrendManifest, RejectsDuplicateKeysBeforeSchemaValidation) {
+    const auto artifacts = parse_trend_manifest(
+        R"({"manifest_version":1,"artifacts":[],"artifacts":[{"path":"other.jsonl"}]})", "/tmp");
+    const auto version = parse_trend_manifest(
+        R"({"manifest_version":1,"manifest_version":2,"artifacts":[{"path":"one.jsonl"}]})",
+        "/tmp");
+    const auto path = parse_trend_manifest(
+        R"({"manifest_version":1,"artifacts":[{"path":"one.jsonl"},{"path":"two.jsonl","path":"three.jsonl"}]})",
+        "/tmp");
+    const auto escaped_path = parse_trend_manifest(
+        R"({"manifest_version":1,"artifacts":[{"path":"one.jsonl","p\u0061th":"two.jsonl"}]})",
+        "/tmp");
+
+    ASSERT_FALSE(artifacts.has_value());
+    ASSERT_FALSE(version.has_value());
+    ASSERT_FALSE(path.has_value());
+    ASSERT_FALSE(escaped_path.has_value());
+    EXPECT_EQ(artifacts.error().code, TrendManifestParseErrorCode::duplicate_key);
+    EXPECT_EQ(artifacts.error().json_path, "$.artifacts");
+    EXPECT_EQ(version.error().code, TrendManifestParseErrorCode::duplicate_key);
+    EXPECT_EQ(version.error().json_path, "$.manifest_version");
+    EXPECT_EQ(path.error().code, TrendManifestParseErrorCode::duplicate_key);
+    EXPECT_EQ(path.error().json_path, "$.artifacts[1].path");
+    EXPECT_EQ(escaped_path.error().code, TrendManifestParseErrorCode::duplicate_key);
+    EXPECT_EQ(escaped_path.error().json_path, "$.artifacts[0].path");
+}
+
+TEST(TrendManifest, EnforcesTheStrictJsonNestingLimit) {
+    const std::string arrays_63(63U, '[');
+    const std::string closing_63(63U, ']');
+    const std::string arrays_64(64U, '[');
+    const std::string closing_64(64U, ']');
+    const auto within_limit =
+        parse_trend_manifest(R"({"value":)" + arrays_63 + "0" + closing_63 + "}", "/tmp");
+    const auto too_deep =
+        parse_trend_manifest(R"({"value":)" + arrays_64 + "0" + closing_64 + "}", "/tmp");
+
+    ASSERT_FALSE(within_limit.has_value());
+    ASSERT_FALSE(too_deep.has_value());
+    EXPECT_EQ(within_limit.error().code, TrendManifestParseErrorCode::missing_required_field);
+    EXPECT_EQ(too_deep.error().code, TrendManifestParseErrorCode::nesting_too_deep);
+    EXPECT_EQ(too_deep.error().json_path, "$");
+}
+
+TEST(TrendManifest, GivesDuplicateKeyPrecedenceOverDuplicateArtifactPath) {
+    const auto manifest = parse_trend_manifest(
+        R"({"manifest_version":1,"artifacts":[{"path":"one.jsonl","path":"two.jsonl"},{"path":"one.jsonl"}]})",
+        "/tmp");
+
+    ASSERT_FALSE(manifest.has_value());
+    EXPECT_EQ(manifest.error().code, TrendManifestParseErrorCode::duplicate_key);
+    EXPECT_EQ(manifest.error().json_path, "$.artifacts[0].path");
+}
+
 TEST(TrendManifest, RejectsUnsafeOrDuplicatePaths) {
     const auto absolute = parse_trend_manifest(
         R"({"manifest_version":1,"artifacts":[{"path":"/tmp/one.jsonl"}]})", "/tmp");
@@ -81,6 +135,30 @@ TEST(TrendManifest, EnforcesArtifactCountLimit) {
 
     ASSERT_FALSE(manifest.has_value());
     EXPECT_EQ(manifest.error().code, TrendManifestParseErrorCode::invalid_artifact_count);
+}
+
+TEST(TrendManifest, LoaderPreservesDuplicateKeyParseDiagnostics) {
+    const auto directory =
+        std::filesystem::temp_directory_path() /
+        ("memoptima-trend-manifest-" + std::to_string(::getpid()) + "-" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(directory));
+    const auto manifest_path = directory / "manifest.json";
+    {
+        std::ofstream output{manifest_path};
+        ASSERT_TRUE(output.is_open());
+        output << R"({"manifest_version":1,"artifacts":[],"artifacts":[{"path":"other.jsonl"}]})";
+    }
+
+    const auto result = load_trend_manifest(manifest_path);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, TrendManifestLoadErrorCode::parse_failed);
+    EXPECT_NE(result.error().detail.find("$.artifacts: The key occurs more than once"),
+              std::string::npos);
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(directory, cleanup_error);
+    EXPECT_FALSE(cleanup_error) << cleanup_error.message();
 }
 
 TEST(TrendManifest, LoaderRejectsSymbolicLinks) {

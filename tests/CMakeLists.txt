@@ -13,7 +13,9 @@ add_executable(memoptima_core_tests
     evidence_input_reader_test.cpp
     evidence_inspector_test.cpp
     evidence_record_parser_test.cpp
+    strict_json_parser_test.cpp
     forecast/evidence_forecast_test.cpp
+    forecast/memory_current_forecast_test.cpp
     forecast_evaluation/forecast_evaluation_analyzer_test.cpp
     forecast_evaluation/forecast_evaluation_service_test.cpp
     forecast/memory_limit_forecast_test.cpp
@@ -65,6 +67,8 @@ target_link_libraries(memoptima_core_tests
 set_target_properties(memoptima_core_tests PROPERTIES
     CXX_EXTENSIONS OFF
 )
+
+add_subdirectory(fuzz)
 
 include(GoogleTest)
 gtest_discover_tests(memoptima_core_tests DISCOVERY_MODE PRE_TEST)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memoptima/forecast/memory_current_forecast.hpp>
 #include <memoptima/trends/evidence_session_catalog.hpp>
 
 #include <chrono>
@@ -158,15 +159,12 @@ class TrendAnalyzer {
         TrendEpochResult result;
         std::uint64_t last_interval_ms;
         bool observed_in_session;
-        long double mean_time_seconds{};
-        long double mean_memory_offset_bytes{};
-        long double time_variance_sum{};
-        long double time_memory_covariance_sum{};
+        forecast::MemoryCurrentForecastAccumulator current_memory_accumulator;
+        std::optional<forecast::MemoryCurrentForecast> forecast;
     };
 
     void start_epoch(const TrendObservation &observation, std::uint32_t index);
     void append_observation(Epoch &epoch, std::uint64_t current_bytes);
-    static void update_rate_statistics(Epoch &epoch);
     static void finalize_rate(Epoch &epoch);
 
     State state_{State::between_sessions};

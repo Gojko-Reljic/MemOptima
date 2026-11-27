@@ -36,6 +36,19 @@
         "CMAKE_BUILD_TYPE": "Release",
         "MEMOPTIMA_ENABLE_SANITIZERS": "OFF"
       }
+    },
+    {
+      "name": "fuzz",
+      "displayName": "Fuzz",
+      "description": "Opt-in Clang libFuzzer build with a corpus regression test.",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_BUILD_WITH_INSTALL_RPATH": "ON",
+        "MEMOPTIMA_ENABLE_SANITIZERS": "OFF",
+        "MEMOPTIMA_BUILD_FUZZERS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -46,6 +59,10 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz"
     }
   ],
   "testPresets": [
@@ -59,6 +76,13 @@
     {
       "name": "release",
       "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
       "output": {
         "outputOnFailure": true
       }

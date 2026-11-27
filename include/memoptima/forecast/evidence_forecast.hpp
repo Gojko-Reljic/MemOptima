@@ -24,6 +24,7 @@ enum class EvidenceForecastStatus {
     unavailable_already_at_or_above_memory_max,
     unavailable_non_positive_growth,
     unavailable_time_to_limit_out_of_range,
+    unavailable_numeric_result,
 };
 
 struct ContainerEvidenceForecast {

@@ -19,6 +19,8 @@ struct TrendManifest {
 
 enum class TrendManifestParseErrorCode {
     invalid_json,
+    nesting_too_deep,
+    duplicate_key,
     root_not_object,
     missing_required_field,
     wrong_type,

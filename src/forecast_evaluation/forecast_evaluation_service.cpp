@@ -81,7 +81,8 @@ class ReplaySink final : public evidence::ArtifactSink {
     consume(const evidence::ArtifactSessionStart &start) override {
         metadata_.started_at_utc = start.started_at_utc;
         metadata_.requested_interval_ms = start.requested_interval_ms;
-        return forward(analyzer_.begin_session());
+        return forward(
+            analyzer_.begin_session({.requested_interval_ms = start.requested_interval_ms}));
     }
 
     std::expected<void, evidence::ArtifactTraversalError>

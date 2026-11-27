@@ -856,6 +856,188 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   separately designed parser policy; it is required planning work for v0.10 before Intelligence
   features.
 
+## ADR-048: Evaluate shared memory-current forecasts at bounded fixed horizons
+
+- **Status:** Approved
+- **Decision:** v0.10 evaluates the shared `memory.current` forecast primitive at fixed CLI
+  horizons `1m`, `5m`, `15m`, and `1h`. Internally, the evaluator receives horizons as a span of
+  millisecond durations; the CLI supplies `60000`, `300000`, `900000`, and `3600000`. A future CLI
+  horizon option can therefore reuse the methodology without changing the analyzer contract.
+- **Shared model boundary:** A lower-level public forecast interface will fit a memory-current model
+  from prior observations and project it at an explicit elapsed duration. `forecast evidence`
+  derives its memory-max crossing estimate from that primitive, `trends` derives its rate and limit
+  context from it, and forecast evaluation invokes the same primitive. The evaluator will not keep
+  a competing private regression implementation. The model uses only observations available at the
+  origin. Its projection is clamped to zero, rounded to the nearest whole byte, and rejected with
+  `numeric_result_unavailable` when it is non-finite or cannot safely be represented as an unsigned
+  64-bit byte count.
+- **Holdout selection:** A possible origin is an observation after which the session-local epoch
+  has at least three usable observations spanning at least ten seconds. The same retained origins
+  apply to every horizon. For each horizon, the evaluator chooses an observation in the same
+  session-local epoch nearest to the target time. It is eligible only when its actual elapsed time
+  differs from the horizon by at most `min(declared_sampling_interval / 2, horizon / 10)`. The
+  model projects at that actual elapsed time rather than at the nominal horizon. A horizon below
+  the declared sampling interval receives `horizon_below_sampling_interval`; an incomplete source
+  session overrides every other horizon status; a missing compatible
+  observation receives `holdout_unavailable`. Evaluation never crosses a session boundary.
+- **Bounded deterministic origins:** Each eligible epoch retains at most 256 possible origins using
+  deterministic streaming decimation. The stride begins at one. When retained origins exceed 256,
+  the evaluator removes every second retained origin and doubles the stride, also discarding the
+  pending per-horizon state for each removed origin. The first possible origin is retained because
+  its zero-based index is divisible by every stride. The selection uses no randomness and remains
+  identical for the same manifest.
+- **Per-epoch metrics:** An epoch and horizon contributes to aggregate metrics only after at least
+  three evaluated origins. It records model MAE, persistence MAE, and signed model bias. Persistence
+  predicts the `memory.current` value at the origin. Model and persistence use the same origins and
+  holdouts. Relative MAE is calculated within an epoch as
+  `sum(abs(model_bytes - actual_bytes)) / sum(max(origin_current_bytes, 1048576))`; the one MiB
+  floor prevents empty or tiny containers from dominating the metric.
+- **Aggregate metrics:** Every qualifying epoch has equal weight. Per horizon, the report presents
+  mean epoch MAE, mean epoch persistence MAE, mean epoch signed bias, and mean epoch relative MAE.
+  Forecast skill uses AvgRelMAE: `1 - exp(mean(log(max(model_mae / persistence_mae, 1e-6))))`. If persistence
+  MAE is zero, the epoch remains in byte and relative-error aggregates but is excluded from skill.
+  It is counted as `persistence_exact_model_exact` when model MAE is zero or
+  `persistence_exact_model_error` otherwise. If model MAE is zero while persistence MAE is positive,
+  the relative ratio is floored at `1e-6` before the logarithm. Skill is `N/A` when no epoch can
+  contribute to it. An epoch with fewer than three evaluated origins is counted as
+  `insufficient_origins` and is excluded from every aggregate metric.
+- **Result shape and limits:** A non-eligible epoch produces one row with horizon `N/A` and its
+  epoch-level status. An eligible epoch produces one row per fixed horizon. Rows sort by strict
+  identity, epoch index, and numeric horizon duration. The evaluator limits simultaneously active
+  epochs to 1024, total result epochs to 4096, and derives the maximum result rows as
+  `max_result_epochs * horizon_count`, currently 16384. Retained origin state is bounded by 256
+  origins per active epoch. Exceeding any limit fails the entire report atomically with an error
+  naming the exceeded limit and advising the operator to split the manifest or reduce sessions.
+- **Interpretation boundary:** MAE describes absolute error, relative MAE describes error relative
+  to memory in use at the forecast origin, and skill describes performance relative to persistence.
+  None establishes OOM risk, confirms a memory leak, or certifies that a workload is safe.
+- **Alternatives considered:** Evaluate only the first eligible forecast; evaluate time-to-limit
+  directly; configurable CLI horizons in v0.10; a separate evaluator regression; fixed origin
+  strides; selecting origins after a third traversal; forcing a final origin; pooled point-level
+  aggregates; a ratio of byte-level aggregate means; arithmetic mean of per-epoch skills; MAPE
+  against actual holdout memory; headroom-to-memory-max normalization; a wide multi-horizon terminal
+  row; 4096 report rows; and 4096 simultaneously active evaluation epochs.
+- **Reason:** Fixed-horizon current-memory evaluation produces auditable targets without censored
+  time-to-limit outcomes. Shared modeling ensures the evaluator measures the delivered forecast.
+  Session-local holdouts prevent gaps from becoming false accuracy evidence. Deterministic
+  decimation, epoch-equal aggregation, conservative numeric conversion, and named limits make the
+  result reproducible and bounded enough for later Intelligence work.
+- **Consequence:** v0.10 changes the public forecast-evaluation report contract and requires an
+  updated report-format document, unit and integration tests for every status and limit, Debug and
+  Release quality gates, and an approved CodeRabbit review. Duplicate JSON-key policy remains a
+  separate required v0.10 decision before implementation; this ADR does not select that parser
+  policy.
+
+## ADR-049: Reject duplicate JSON object keys at every evidence boundary
+
+- **Status:** Approved
+- **Decision:** Evidence JSONL records and trend manifests reject every duplicate object key during
+  parsing. This applies the I-JSON unique-name requirement to MemOptima's evidence and manifest
+  boundaries. Key equality is evaluated after JSON escape decoding, so `"a"` and `"\u0061"` are
+  duplicates. The parser does not apply Unicode normalization: distinct decoded Unicode sequences
+  remain distinct JSON names, while schema-defined names remain ASCII.
+- **Parser boundary:** Duplicate detection occurs before the JSON DOM is accepted. A shared internal
+  parser callback maintains a stack of object-key sets and records the first duplicate, because a
+  post-DOM check cannot recover a key silently overwritten by the JSON library. The callback tracks
+  array element indexes to report an exact object path such as `$.containers[0].memory`. It does not
+  require a custom SAX DOM builder or a replacement JSON library.
+- **Nesting boundary:** Evidence records and manifests permit at most 64 simultaneously open JSON
+  arrays or objects. The root object therefore has depth one, exactly 64 levels are valid, and
+  opening a 65th level returns the new public `nesting_too_deep` code in both evidence and manifest
+  error enums. A zero-allocation linear pre-scan counts brackets outside JSON strings before the DOM
+  parser runs. It handles escaped quotes and backslashes but intentionally does not validate JSON
+  syntax; the normal parser retains that responsibility. A callback-only depth check is rejected
+  because it cannot stop the underlying parser from consuming a pathological input.
+- **Error precedence:** For one input value, `nesting_too_deep` takes precedence over `invalid_json`,
+  which takes precedence over `duplicate_key`. The pre-scan stops at the first excessive opening
+  bracket, the DOM parse then decides syntactic validity, and duplicate detection is reported only
+  after a syntactically valid DOM exists.
+- **Diagnostics and public errors:** `EvidenceValidationErrorCode` and
+  `TrendManifestParseErrorCode` each gain `duplicate_key`. For JSONL, the validation error includes
+  the physical input line and the JSON path to the repeated member. For a manifest, the parse error
+  includes the repeated member path; no synthetic physical line is reported. Evidence traversal
+  renders its stable error code in brackets after that path. The parser retains raw diagnostic data
+  and the existing terminal boundary escapes it when displayed.
+- **Failure behavior:** The first duplicate key makes that JSONL record or manifest invalid. Schema
+  validation does not continue against a DOM that no longer faithfully represents the input. Existing
+  traversal behavior remains atomic: a malformed artifact or manifest produces no partial analysis
+  report.
+- **Resource boundary:** Key sets exist only while parsing one JSON value. Their memory cost is
+  bounded by the maximum nesting and object width in the current bounded JSONL record or manifest,
+  not by the number of records in an artifact. The new parser state requires focused fuzz coverage.
+- **Compatibility:** Schema version 1 remains unchanged. MemOptima's writers construct JSON objects
+  and cannot emit duplicate names, so artifacts produced by MemOptima remain valid. Rejection of
+  ambiguous third-party input is an intentional trust-boundary tightening.
+- **Verification:** Tests cover top-level and nested duplicate keys, escaped-equivalent keys,
+  duplicate unknown keys, and duplicate manifest `artifacts` keys. They also prove that distinct,
+  non-normalized Unicode sequences remain separate keys. Depth tests cover exactly 64 and 65 levels,
+  arrays and objects, brackets in strings, and escaped quotes. A parser fuzz target exercises both
+  depth and duplicate tracking with untrusted input.
+- **Alternatives considered:** Reject duplicates only for schema-defined fields; retain
+  last-value-wins behavior; replace the JSON library with a stricter parser; or perform a duplicate
+  check after DOM construction; map excessive nesting to `invalid_json`; omit a depth limit; enforce
+  the limit through the parser callback; or build a DOM through a custom SAX handler.
+- **Reason:** Different tools can interpret duplicate names differently. Last-value-wins parsing can
+  make an auditor and MemOptima analyze different manifest or evidence content. Detecting every
+  duplicate during parsing has the same boundary cost as schema-specific detection and preserves an
+  auditable source of truth.
+- **Consequence:** This is a public validation-error expansion within schema version 1. Evidence and
+  manifest parsing share the internal duplicate detector, presentation continues to use the v0.9.1
+  terminal-safety boundary, and implementation must preserve all existing resource and lifecycle
+  protections.
+
+## ADR-050: Keep strict JSON fuzzing opt-in and corpus-backed
+
+- **Status:** Approved
+- **Decision:** MemOptima provides an opt-in Clang `fuzz` preset and
+  `MEMOPTIMA_BUILD_FUZZERS=ON` option for libFuzzer targets. The initial target exercises the
+  private strict JSON parser for 60 seconds with a 65536-byte maximum input, a 512 MiB allocation
+  limit, and a JSON dictionary. It checks semantic parser invariants with traps in addition to
+  AddressSanitizer and UndefinedBehaviorSanitizer findings.
+- **Corpus:** A normal compiler-independent corpus runner executes every strict-JSON seed during
+  CTest. Every minimized libFuzzer finding is added to that corpus as a permanent regression case.
+- **Scope:** The initial changes cover `parse_strict_json`, `parse_evidence_record`, and
+  `escape_terminal_text`. Fuzzing never runs as an unbounded regular CI or pull-request check.
+- **Reason:** The parser is stateful and processes untrusted input. Unit tests cover chosen cases,
+  while fuzzing explores unexpected byte sequences and the corpus prevents regressions after a fix.
+
+## ADR-051: Share a memory-current forecast primitive across analysis features
+
+- **Status:** Approved
+- **Decision:** MemOptima exposes the lower-level public `forecast/memory_current_forecast`
+  interface. `MemoryCurrentObservation` contains only a timestamp and `memory.current` bytes.
+  `fit_memory_current_forecast` fits the timestamped observations and returns a
+  `MemoryCurrentForecast` with an availability status and, when valid, its growth rate. The fitted
+  forecast projects a caller-supplied elapsed duration through `project_after`.
+- **Projection contract:** A projection uses only the observations supplied to fitting. It clamps a
+  negative result to zero, rounds the result to the nearest whole byte, and reports
+  `numeric_result_unavailable` if fitting or conversion cannot produce a finite representable
+  unsigned 64-bit result. `project_after` measures forward from the latest fitted observation; a
+  negative duration is not a valid operational projection. Projection does not incorporate a
+  memory limit. `estimate_duration_to` derives a floor-rounded duration from a caller-supplied
+  current byte value to a strictly greater target byte value using the model's private
+  high-precision regression state. It reports unavailable, non-positive-growth, invalid-target,
+  or out-of-range results without naming a memory limit.
+- **Layering:** `memory_limit_forecast` retains memory-max-specific policy such as unlimited,
+  unstable, and already-reached limits, but derives its growth rate and time-to-limit calculation
+  from the shared primitive. It preserves streaming operation through a shared constant-space
+  `MemoryCurrentForecastAccumulator`. Trends use the shared fit for their rate and limit context.
+  Forecast evaluation fits at each origin and projects at the selected holdout elapsed duration. No
+  consumer keeps a competing regression implementation.
+- **Validation:** The primitive requires at least three observations spanning ten seconds with
+  strictly increasing timestamps. Its distinct availability statuses preserve the existing
+  insufficient-observation, insufficient-window, non-increasing-timestamp, and numeric-result
+  diagnostics. `MemoryLimitForecastAvailability` and `EvidenceForecastStatus` each expose a
+  stable `numeric_result_unavailable` variant so that the CLI does not misrepresent this distinct
+  condition as non-positive growth or an out-of-range time-to-limit estimate.
+- **Alternatives considered:** A generic public linear-regression library was rejected because
+  MemOptima currently has one concrete domain and a generic numerical API would widen the public
+  contract without a second validated use. Keeping separate private regressions was rejected
+  because forecast evaluation would no longer measure the model used by operational commands.
+- **Reason:** One narrowly typed model makes the forecast methodology auditable, removes drift
+  between evaluation and delivery, and keeps memory-limit policy above the reusable
+  memory-current boundary.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

@@ -19,7 +19,7 @@ evidence without modifying the system automatically.
 - `memoptima inspect evidence <FILE>` validates and summarizes a local evidence artifact.
 - `memoptima forecast evidence <FILE>` estimates a cgroup `memory.max` crossing only from sufficient validated evidence.
 - `memoptima trends analyze <MANIFEST>` analyzes validated memory-current trends across explicitly selected local evidence sessions.
-- `memoptima forecast evaluate <MANIFEST>` measures eligible historical forecasts against their immediately following observed memory samples.
+- `memoptima forecast evaluate <MANIFEST>` evaluates rolling historical `memory.current` forecasts at 1m, 5m, 15m, and 1h horizons.
 
 ## Documentation
 
@@ -32,7 +32,7 @@ evidence without modifying the system automatically.
 - [0.5.0 Scope](docs/0.5.0-scope.md) defines local evidence inspection and validation.
 - [0.6.0 Scope](docs/0.6.0-scope.md) defines conservative evidence-based forecasting.
 - [0.7.0 Scope](docs/0.7.0-scope.md) defines read-only cross-session memory trend analysis.
-- [0.8.0 Scope](docs/0.8.0-scope.md) defines read-only temporal holdout evaluation of forecast accuracy.
+- [0.10.0 Scope](docs/0.10.0-scope.md) defines rolling-origin evaluation of shared forecast accuracy.
 - [0.9.0 Scope](docs/0.9.0-scope.md) defines terminal-safe rendering of artifact-derived paths and
   the public evidence-stream callback-finality contract.
 - [0.9.1 Scope](docs/0.9.1-scope.md) defines the terminal trust-boundary remediation and the
