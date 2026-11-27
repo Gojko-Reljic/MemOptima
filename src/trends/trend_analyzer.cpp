@@ -14,9 +14,6 @@ namespace {
 constexpr std::size_t kMaximumSampleIdentities = 4096U;
 constexpr std::size_t kMaximumActiveEpochs = 4096U;
 constexpr std::size_t kMaximumEpochResults = 4096U;
-constexpr std::uint64_t kMinimumRateObservations = 3U;
-constexpr std::uint64_t kMinimumRateWindowMs = 10'000U;
-
 std::optional<TrendContinuityBreakReason> continuity_break(const TrendEpochResult &result,
                                                            const TrendObservation &observation,
                                                            TrendTimePoint captured_at) {
@@ -39,9 +36,9 @@ std::uint64_t elapsed_ms(TrendTimePoint first, TrendTimePoint last) {
            static_cast<std::uint64_t>(first.time_since_epoch().count());
 }
 
-TrendTimeToLimitResult evaluate_time_to_limit(const TrendEpochResult &epoch,
-                                              long double time_variance_sum,
-                                              long double time_memory_covariance_sum) {
+TrendTimeToLimitResult
+evaluate_time_to_limit(const TrendEpochResult &epoch,
+                       const forecast::MemoryCurrentForecast *const current_memory_forecast) {
     using Status = TrendTimeToLimitStatus;
     const auto [maximum_kind, maximum_bytes] = epoch.maximum_memory;
     const auto latest_bytes = epoch.current_memory.last_bytes;
@@ -65,23 +62,24 @@ TrendTimeToLimitResult evaluate_time_to_limit(const TrendEpochResult &epoch,
         return {Status::non_positive_growth, std::nullopt};
     }
 
-    const auto bytes_remaining = maximum_bytes - latest_bytes;
-    const long double scaled_variance = 1000.0L * time_variance_sum;
-    const long double milliseconds_per_byte = scaled_variance / time_memory_covariance_sum;
-    // Recover the rounding error in the inverse slope before flooring the estimate.
-    const long double remainder =
-        std::fma(-milliseconds_per_byte, time_memory_covariance_sum, scaled_variance) +
-        std::fma(1000.0L, time_variance_sum, -scaled_variance);
-    const auto remaining = static_cast<long double>(bytes_remaining);
-    const long double correction = remaining * remainder / time_memory_covariance_sum;
-    const long double duration_ms =
-        std::floor(std::fma(remaining, milliseconds_per_byte, correction));
-    // The exclusive power-of-two bound is exact even if UINT64_MAX would round up.
-    const long double upper_bound = std::ldexp(1.0L, std::numeric_limits<std::uint64_t>::digits);
-    if (!std::isfinite(duration_ms) || duration_ms >= upper_bound) {
+    if (current_memory_forecast == nullptr) {
+        return {Status::rate_unavailable, std::nullopt};
+    }
+    const auto duration =
+        current_memory_forecast->estimate_duration_to(latest_bytes, maximum_bytes);
+    switch (duration.availability) {
+    case forecast::MemoryCurrentDurationAvailability::available:
+        return {Status::available, duration.duration_ms};
+    case forecast::MemoryCurrentDurationAvailability::forecast_unavailable:
+        return {Status::rate_unavailable, std::nullopt};
+    case forecast::MemoryCurrentDurationAvailability::non_positive_growth:
+        return {Status::non_positive_growth, std::nullopt};
+    case forecast::MemoryCurrentDurationAvailability::target_not_above_current:
+        return {Status::already_at_or_above_maximum, std::nullopt};
+    case forecast::MemoryCurrentDurationAvailability::duration_out_of_range:
         return {Status::duration_out_of_range, std::nullopt};
     }
-    return {Status::available, static_cast<std::uint64_t>(duration_ms)};
+    return {Status::duration_out_of_range, std::nullopt};
 }
 
 } // namespace
@@ -202,6 +200,8 @@ void TrendAnalyzer::start_epoch(const TrendObservation &observation, std::uint32
                                      .estimated_duration_ms = std::nullopt}},
         .last_interval_ms = session_interval_ms_,
         .observed_in_session = true,
+        .current_memory_accumulator = {},
+        .forecast = std::nullopt,
     });
     try {
         latest_epoch_by_identity_.insert_or_assign(observation.identity, slot);
@@ -209,6 +209,8 @@ void TrendAnalyzer::start_epoch(const TrendObservation &observation, std::uint32
         epochs_.pop_back();
         throw;
     }
+    epochs_.back().current_memory_accumulator.add(
+        {.captured_at = sample_time_, .current_memory_bytes = bytes});
 }
 
 void TrendAnalyzer::append_observation(Epoch &epoch, std::uint64_t current_bytes) {
@@ -224,50 +226,31 @@ void TrendAnalyzer::append_observation(Epoch &epoch, std::uint64_t current_bytes
     result.observation_window_ms = elapsed_ms(result.first_observed_at, sample_time_);
     result.current_memory.last_bytes = current_bytes;
     ++result.observation_count;
-    update_rate_statistics(epoch);
+    epoch.current_memory_accumulator.add(
+        {.captured_at = sample_time_, .current_memory_bytes = current_bytes});
     epoch.last_interval_ms = session_interval_ms_;
     epoch.observed_in_session = true;
 }
 
-void TrendAnalyzer::update_rate_statistics(Epoch &epoch) {
-    const auto &result = epoch.result;
-    const long double time_seconds =
-        static_cast<long double>(result.observation_window_ms) / 1000.0L;
-    const auto first_bytes = result.current_memory.first_bytes;
-    const auto current_bytes = result.current_memory.last_bytes;
-    const long double memory_offset = current_bytes >= first_bytes
-                                          ? static_cast<long double>(current_bytes - first_bytes)
-                                          : -static_cast<long double>(first_bytes - current_bytes);
-
-    // The first point is at (0, 0), which initializes both means and centered sums.
-    const long double count = static_cast<long double>(result.observation_count);
-    const long double time_delta = time_seconds - epoch.mean_time_seconds;
-    const long double memory_delta = memory_offset - epoch.mean_memory_offset_bytes;
-    epoch.mean_time_seconds += time_delta / count;
-    epoch.mean_memory_offset_bytes += memory_delta / count;
-    const long double weight = static_cast<long double>(result.observation_count - 1U) / count;
-    epoch.time_variance_sum += weight * time_delta * time_delta;
-    epoch.time_memory_covariance_sum += weight * time_delta * memory_delta;
-}
-
 void TrendAnalyzer::finalize_rate(Epoch &epoch) {
     auto &result = epoch.result;
-    if (result.observation_count < kMinimumRateObservations) {
+    const auto forecast = epoch.current_memory_accumulator.finish();
+    switch (forecast.availability()) {
+    case forecast::MemoryCurrentForecastAvailability::available:
+        result.current_memory.growth_bytes_per_second = forecast.growth_bytes_per_second();
+        result.current_memory.rate_status = TrendRateStatus::available;
+        epoch.forecast = forecast;
         return;
-    }
-    if (result.observation_window_ms < kMinimumRateWindowMs) {
+    case forecast::MemoryCurrentForecastAvailability::insufficient_observations:
+        return;
+    case forecast::MemoryCurrentForecastAvailability::insufficient_observation_window:
         result.current_memory.rate_status = TrendRateStatus::insufficient_duration;
         return;
-    }
-
-    const long double slope = epoch.time_memory_covariance_sum / epoch.time_variance_sum;
-    constexpr auto max_double = static_cast<long double>(std::numeric_limits<double>::max());
-    if (!std::isfinite(slope) || std::abs(slope) > max_double) {
+    case forecast::MemoryCurrentForecastAvailability::non_increasing_timestamps:
+    case forecast::MemoryCurrentForecastAvailability::numeric_result_unavailable:
         throw std::overflow_error(
             "The calculated current-memory rate is outside the supported range.");
     }
-    result.current_memory.growth_bytes_per_second = static_cast<double>(slope);
-    result.current_memory.rate_status = TrendRateStatus::available;
 }
 
 std::expected<void, TrendAnalyzerError> TrendAnalyzer::end_sample() {
@@ -311,8 +294,8 @@ std::expected<TrendAnalysis, TrendAnalyzerError> TrendAnalyzer::finish() {
     // Validate each rate before moving any results out of the analyzer.
     for (auto &epoch : epochs_) {
         finalize_rate(epoch);
-        epoch.result.time_to_limit = evaluate_time_to_limit(epoch.result, epoch.time_variance_sum,
-                                                            epoch.time_memory_covariance_sum);
+        epoch.result.time_to_limit =
+            evaluate_time_to_limit(epoch.result, epoch.forecast ? &*epoch.forecast : nullptr);
     }
     for (auto &epoch : epochs_) {
         if (epoch.result.quality == TrendEvidenceQuality::sparse) {

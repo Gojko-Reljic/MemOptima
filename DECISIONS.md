@@ -1013,7 +1013,10 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   `numeric_result_unavailable` if fitting or conversion cannot produce a finite representable
   unsigned 64-bit result. `project_after` measures forward from the latest fitted observation; a
   negative duration is not a valid operational projection. Projection does not incorporate a
-  memory limit.
+  memory limit. `estimate_duration_to` derives a floor-rounded duration from a caller-supplied
+  current byte value to a strictly greater target byte value using the model's private
+  high-precision regression state. It reports unavailable, non-positive-growth, invalid-target,
+  or out-of-range results without naming a memory limit.
 - **Layering:** `memory_limit_forecast` retains memory-max-specific policy such as unlimited,
   unstable, and already-reached limits, but derives its growth rate and time-to-limit calculation
   from the shared primitive. It preserves streaming operation through a shared constant-space

@@ -101,5 +101,28 @@ TEST(MemoryCurrentForecast, AccumulatesWithoutRetainingObservations) {
     EXPECT_EQ(*projection.current_memory_bytes, 2'250U);
 }
 
+TEST(MemoryCurrentForecast, EstimatesAWholeDurationToAGreaterTarget) {
+    const std::array observations{observation(0, 1'000U), observation(10, 1'500U),
+                                  observation(20, 2'000U)};
+    const auto forecast = fit_memory_current_forecast(observations);
+
+    const auto duration = forecast.estimate_duration_to(2'000U, 3'000U);
+
+    ASSERT_EQ(duration.availability, MemoryCurrentDurationAvailability::available);
+    ASSERT_TRUE(duration.duration_ms.has_value());
+    EXPECT_EQ(*duration.duration_ms, 20'000U);
+}
+
+TEST(MemoryCurrentForecast, RejectsANonIncreasingTargetForDurationEstimation) {
+    const std::array observations{observation(0, 1'000U), observation(10, 1'500U),
+                                  observation(20, 2'000U)};
+
+    const auto duration =
+        fit_memory_current_forecast(observations).estimate_duration_to(2'000U, 2'000U);
+
+    EXPECT_EQ(duration.availability, MemoryCurrentDurationAvailability::target_not_above_current);
+    EXPECT_FALSE(duration.duration_ms.has_value());
+}
+
 } // namespace
 } // namespace memoptima::forecast
