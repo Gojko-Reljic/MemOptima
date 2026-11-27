@@ -3,100 +3,76 @@
 ## Purpose
 
 `memoptima forecast evaluate <MANIFEST>` replays explicitly selected local evidence artifacts and
-measures a historical `memory.current` projection against the next observation that was not used to
-produce it. The command is read-only. It does not predict an OOM event, diagnose a memory leak, or
-change a host, container, or cgroup.
+evaluates the shared linear `memory.current` model at fixed horizons: `1m`, `5m`, `15m`, and `1h`.
+It is read-only. It does not predict OOM events, diagnose memory leaks, recommend limits, or change
+a host, container, or cgroup.
 
-The manifest has the same bounded, safe local-path contract as
-[`memoptima trends analyze`](trend-manifest-format.md). Each selected artifact must be valid; one
-catalog, replay, or analyzer failure fails the entire command without a partial report.
+## Rolling-Origin Method
 
-## Evaluation Method
+An origin requires at least three continuous observations spanning ten seconds. The model receives
+only observations at or before that origin. For every horizon, the evaluator selects the nearest
+same-epoch holdout whose elapsed time is within
+`min(requested sampling interval / 2, horizon / 10)`, then projects to that holdout's actual time.
+No evaluation crosses a session boundary.
 
-An evaluation row is keyed by the strict container identity: full Docker container ID and cgroup
-path. The evaluator considers only a continuous `memory.current` epoch with strictly increasing
-capture times and available current-memory values.
-
-For each compatible epoch, it selects the first usable history with at least three observations
-covering at least ten seconds. It projects memory at the immediately following observation, which
-is the holdout. The holdout value is never used in that projection. A negative
-projection is clamped to zero bytes before it is displayed or used in metrics.
-
-`memory.max` is not an input to this evaluation. A finite, unlimited, changed, or unavailable limit
-does not itself interrupt a current-memory epoch.
-
-## Summary Metrics
-
-The report begins with the following values:
-
-| Metric | Meaning |
-|---|---|
-| `ELIGIBLE` | Rows with sufficient continuous historical observations and a long enough window. |
-| `EVALUATED` | Eligible rows with an immediately following usable holdout observation and a representable numeric result. |
-| `COVERAGE` | `EVALUATED / ELIGIBLE`; `N/A` when no row is eligible. |
-| `MAE` | Mean absolute error between predicted and actual `memory.current`, in IEC bytes. |
-| `BIAS` | Mean signed error, `predicted - actual`, in IEC bytes. |
-| `INCOMPLETE EXCLUSIONS` | Rows excluded because their source evidence session lacks `session_end`. |
-
-The summary also lists every nonzero stable status count. Summary metrics are `N/A` when their
-required evaluated values are unavailable.
+An epoch keeps at most 256 origins through deterministic streaming decimation. The first eligible
+origin is retained. Each epoch and horizon needs at least three evaluated origins for metrics.
 
 ## Table Output Contract
 
-One row represents a container observation epoch. Columns are emitted in this order:
+Rows sort by full container identity, epoch, and numeric horizon duration. An epoch that cannot be
+forecast receives one row with `HORIZON` set to `N/A`; otherwise it has one row per horizon.
 
 ```text
-CONTAINER ID  CGROUP PATH           EPOCH  HISTORY  WINDOW  FORECAST AT               HOLDOUT AT                PREDICTED    ACTUAL     ERROR  STATUS
-a1b2c3d4e5f6  /docker/a1b2c3d4e5f6      1        3  10s     2026-01-01T00:00:10.000Z  2026-01-01T00:00:15.000Z  12.00 MiB  11.50 MiB  +512.00 KiB  evaluated
+CONTAINER ID  CGROUP PATH       EPOCH  HORIZON  ORIGINS  MAE         BIAS       STATUS
+a1b2c3d4e5f6  /docker/example       1  1m 00s        12  1.25 MiB   +0.25 MiB  evaluated
 ```
 
-`CONTAINER ID`, `CGROUP PATH`, `FORECAST AT`, `HOLDOUT AT`, and `STATUS` are left-aligned.
-`EPOCH`, `HISTORY`, `WINDOW`, `PREDICTED`, `ACTUAL`, and `ERROR` are right-aligned. Each width is
-at least its header width and expands to the widest value. Columns have two separating spaces and
-the final `STATUS` column has no trailing padding. Times use canonical UTC format
-`YYYY-MM-DDTHH:MM:SS.mmmZ`.
+Text columns are left-aligned and numeric columns are right-aligned. A width is never less than its
+header. Columns use two spaces, and `STATUS` has no trailing padding. Byte values use IEC units and
+two decimals. `N/A` represents an unavailable value.
 
-`PREDICTED`, `ACTUAL`, and available summary errors use IEC byte units with two decimal places.
-`ERROR` is `predicted - actual`, includes a sign, and normalizes a displayed negative zero to zero.
-Unavailable fields are `N/A`. `WINDOW` uses the established operational-duration representation.
+## Horizon Aggregates
+
+For each horizon the summary reports equally weighted qualifying epochs:
+
+| Metric | Meaning |
+|---|---|
+| `MAE` | Mean epoch model absolute error in bytes. |
+| `persistence MAE` | Mean epoch error of predicting the origin value unchanged. |
+| `bias` | Mean epoch signed error, predicted minus actual. |
+| `relative MAE` | Mean epoch error relative to memory used at each origin, with a 1 MiB denominator floor. |
+| `skill` | `1 - geometric mean(model MAE / persistence MAE)`. Positive is better than persistence. |
+
+Epochs with zero persistence error remain in byte and relative metrics. They are excluded from
+skill and separately counted as `persistence exact/model exact` or `persistence exact/model error`.
+Skill is `N/A` when no epoch can contribute.
 
 ## Stable Statuses
 
 | Status | Meaning |
 |---|---|
-| `evaluated` | A projection and its next observation were available and safely evaluated. |
-| `excluded incomplete session` | The source session has no completed lifecycle record; the row is excluded from metrics. |
-| `insufficient observations` | Fewer than three usable historical observations were available. |
-| `insufficient observation window` | Usable historical observations covered less than ten seconds. |
-| `container not observed continuously` | The strict identity was absent between samples. |
-| `historical memory.current unavailable` | A required historical `memory.current` value was unavailable. |
-| `non-increasing timestamps` | Capture times in the epoch were not strictly increasing. |
-| `holdout observation unavailable` | No immediately following usable observation exists for an otherwise eligible row. |
-| `numeric result unavailable` | A projection or error could not be represented safely. |
+| `evaluated` | The epoch and horizon have at least three valid paired origins. |
+| `excluded incomplete session` | Source evidence lacks a completed session lifecycle. |
+| `insufficient observations` | Fewer than three observations exist in the epoch. |
+| `insufficient observation window` | Observations span less than ten seconds. |
+| `container not observed continuously` | The identity is absent between samples. |
+| `historical memory.current unavailable` | A required current-memory value is unavailable. |
+| `non-increasing timestamps` | Epoch timestamps are not strictly increasing. |
+| `horizon below sampling interval` | The requested sampling interval is longer than that horizon. |
+| `holdout observation unavailable` | No compatible same-epoch holdout exists. |
+| `insufficient origins` | Fewer than three origins have compatible holdouts. |
+| `numeric result unavailable` | A model projection cannot safely be represented. |
 
 ## Empty Analysis and Exit Codes
 
-When analysis succeeds but finds no container observation epochs, the command writes:
-
-```text
-No forecast evaluation epochs found in manifest.
-```
-
-It writes no summary or table and returns `0`.
-
-| Code | Meaning |
-|---:|---|
-| `0` | Evaluation and report output succeeded, including a valid empty report. |
-| `1` | Manifest loading/parsing, catalog, evidence replay, analyzer, formatting, or output failed. |
-| `2` | Command syntax or arguments are invalid. |
+An otherwise valid empty analysis prints `No forecast evaluation epochs found in manifest.` and
+returns `0`. Exit code `1` means loading, replay, analysis, formatting, or output failed. Exit code
+`2` means invalid command syntax.
 
 ## Limits and Non-goals
 
-The command accepts an explicit manifest rather than scanning directories. It preserves the manifest
-limits of at most 128 artifacts and 4,096 active container observation epochs. It is an accuracy
-measurement for this one conservative linear current-memory projection, not a comparison of all
-forecast models.
-
-No machine-readable evaluation report is emitted in v0.8. A versioned JSON contract is deferred
-until upcoming PSI, swap, cache, and intelligence-layer requirements define a stable reporting
-model.
+The evaluator accepts the manifest's maximum 128 artifacts and bounds active epochs to 1,024,
+result epochs to 4,096, and result rows to the epoch limit times the number of horizons. A limit
+failure is atomic; no partial report is emitted. JSON evaluation output, configurable horizons,
+time-to-limit accuracy, confidence intervals, anomaly detection, and leak detection are deferred.
