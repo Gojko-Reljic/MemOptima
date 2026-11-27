@@ -2,41 +2,60 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <ranges>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace memoptima::forecast_evaluation {
 namespace {
-
 constexpr std::size_t kMaximumSampleIdentities = 4096U;
-constexpr std::size_t kMaximumActiveEpochs = 4096U;
-constexpr std::size_t kMaximumRows = 4096U;
+constexpr std::size_t kMaximumActiveEpochs = 1024U;
+constexpr std::size_t kMaximumResultEpochs = 4096U;
+constexpr std::size_t kMaximumOriginsPerEpoch = 256U;
 constexpr std::uint64_t kMinimumHistoryObservations = 3U;
-constexpr std::uint64_t kMinimumHistoryWindowMs = 10'000U;
+constexpr auto kMinimumHistoryWindow = std::chrono::seconds{10};
 
-[[nodiscard]] std::uint64_t elapsed_ms(ForecastEvaluationTimePoint first,
-                                       ForecastEvaluationTimePoint last) {
-    return static_cast<std::uint64_t>(last.time_since_epoch().count()) -
-           static_cast<std::uint64_t>(first.time_since_epoch().count());
+[[nodiscard]] std::chrono::milliseconds elapsed(ForecastEvaluationTimePoint from,
+                                                ForecastEvaluationTimePoint to) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(to - from);
 }
 
-[[nodiscard]] bool is_eligible_status(ForecastEvaluationStatus status) {
-    return status == ForecastEvaluationStatus::evaluated ||
-           status == ForecastEvaluationStatus::holdout_observation_unavailable ||
-           status == ForecastEvaluationStatus::numeric_result_unavailable;
+[[nodiscard]] std::chrono::milliseconds holdout_tolerance(std::uint64_t interval_ms,
+                                                          std::chrono::milliseconds horizon) {
+    return std::min(std::chrono::milliseconds{interval_ms / 2U}, horizon / 10);
 }
 
+[[nodiscard]] std::chrono::milliseconds absolute_duration(std::chrono::milliseconds value) {
+    return value < std::chrono::milliseconds::zero() ? -value : value;
+}
 } // namespace
 
-std::expected<void, ForecastEvaluationAnalyzerError> ForecastEvaluationAnalyzer::begin_session() {
-    if (state_ != State::between_sessions) {
+ForecastEvaluationAnalyzer::ForecastEvaluationAnalyzer(
+    std::vector<ForecastEvaluationHorizon> horizons)
+    : horizons_(std::move(horizons)) {
+    std::ranges::sort(horizons_, {}, &ForecastEvaluationHorizon::duration);
+    horizons_.erase(std::unique(horizons_.begin(), horizons_.end(),
+                                [](const auto &left, const auto &right) {
+                                    return left.duration == right.duration;
+                                }),
+                    horizons_.end());
+}
+
+std::vector<ForecastEvaluationHorizon> ForecastEvaluationAnalyzer::default_horizons() {
+    using namespace std::chrono_literals;
+    return {{.duration = 1min}, {.duration = 5min}, {.duration = 15min}, {.duration = 1h}};
+}
+
+std::expected<void, ForecastEvaluationAnalyzerError>
+ForecastEvaluationAnalyzer::begin_session(const SessionStart &start) {
+    if (state_ != State::between_sessions || start.requested_interval_ms == 0U) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "A session can begin only between sessions.",
-        });
+            .detail =
+                "A session requires a positive interval and can begin only between sessions."});
     }
-    current_session_row_indices_.clear();
+    session_interval_ms_ = start.requested_interval_ms;
     state_ = State::in_session;
     return {};
 }
@@ -46,8 +65,7 @@ ForecastEvaluationAnalyzer::begin_sample(const SampleStart &sample) {
     if (state_ != State::in_session) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "A sample can begin only in an open session with no open sample.",
-        });
+            .detail = "A sample can begin only in an open session with no open sample."});
     }
     sample_time_ = sample.captured_at;
     sample_identities_.clear();
@@ -57,143 +75,179 @@ ForecastEvaluationAnalyzer::begin_sample(const SampleStart &sample) {
 
 void ForecastEvaluationAnalyzer::start_epoch(const Observation &observation) {
     const auto [next, inserted] = next_epoch_indices_.try_emplace(observation.identity, 1U);
-    const auto index = next->second;
+    Epoch epoch{.identity = observation.identity,
+                .index = next->second,
+                .history = {},
+                .first_time = std::nullopt,
+                .latest_time = std::nullopt,
+                .observation_count = 0U,
+                .candidate_count = 0U,
+                .decimation_stride = 1U,
+                .contains_incomplete_session = false,
+                .observed_in_session = false,
+                .origins = {}};
     ++next->second;
-    Epoch epoch{};
-    epoch.identity = observation.identity;
-    epoch.index = index;
-    append_history(epoch, *observation.current_memory_bytes);
+    append_observation(epoch, *observation.current_memory_bytes);
     active_epochs_.emplace(epoch.identity, std::move(epoch));
 }
 
-void ForecastEvaluationAnalyzer::append_history(Epoch &epoch, std::uint64_t current_memory_bytes) {
-    const auto captured_at = sample_time_;
-    if (epoch.history_count == 0U) {
-        epoch.first_history_time = captured_at;
+void ForecastEvaluationAnalyzer::append_observation(Epoch &epoch,
+                                                    std::uint64_t current_memory_bytes) {
+    epoch.history.add({.captured_at = sample_time_, .current_memory_bytes = current_memory_bytes});
+    if (!epoch.first_time) {
+        epoch.first_time = sample_time_;
     }
-    const auto first = *epoch.first_history_time;
-    const auto time_seconds =
-        static_cast<long double>(elapsed_ms(first, captured_at)) / static_cast<long double>(1000U);
-    const auto memory_bytes = static_cast<long double>(current_memory_bytes);
-    ++epoch.history_count;
-    const auto count = static_cast<long double>(epoch.history_count);
-    const auto time_delta = time_seconds - epoch.mean_time_seconds;
-    const auto memory_delta = memory_bytes - epoch.mean_memory_bytes;
-    epoch.mean_time_seconds += time_delta / count;
-    epoch.mean_memory_bytes += memory_delta / count;
-    const auto weight = static_cast<long double>(epoch.history_count - 1U) / count;
-    epoch.time_variance_sum += weight * time_delta * time_delta;
-    epoch.time_memory_covariance_sum += weight * time_delta * memory_delta;
-    epoch.last_history_time = captured_at;
-    epoch.latest_time = captured_at;
+    epoch.latest_time = sample_time_;
+    ++epoch.observation_count;
+}
 
-    if (epoch.history_count >= kMinimumHistoryObservations &&
-        elapsed_ms(first, captured_at) >= kMinimumHistoryWindowMs) {
-        epoch.candidate_ready = true;
+void ForecastEvaluationAnalyzer::update_holdouts(Epoch &epoch, std::uint64_t current_memory_bytes) {
+    for (auto &origin : epoch.origins) {
+        const auto actual_elapsed = elapsed(origin.captured_at, sample_time_);
+        if (actual_elapsed <= std::chrono::milliseconds::zero()) {
+            continue;
+        }
+        for (std::size_t index = 0U; index < horizons_.size(); ++index) {
+            const auto horizon = horizons_[index].duration;
+            if (horizon < std::chrono::milliseconds{session_interval_ms_}) {
+                continue;
+            }
+            const auto tolerance = holdout_tolerance(session_interval_ms_, horizon);
+            if (actual_elapsed < horizon - tolerance || actual_elapsed > horizon + tolerance) {
+                continue;
+            }
+            const Holdout candidate{.captured_at = sample_time_,
+                                    .actual_memory_bytes = current_memory_bytes};
+            if (!origin.holdouts[index]) {
+                origin.holdouts[index] = candidate;
+                continue;
+            }
+            const auto previous_distance = absolute_duration(
+                (origin.holdouts[index]->captured_at - origin.captured_at) - horizon);
+            const auto candidate_distance =
+                absolute_duration((candidate.captured_at - origin.captured_at) - horizon);
+            if (candidate_distance < previous_distance ||
+                (candidate_distance == previous_distance &&
+                 candidate.captured_at < origin.holdouts[index]->captured_at)) {
+                origin.holdouts[index] = candidate;
+            }
+        }
     }
 }
 
-void ForecastEvaluationAnalyzer::emit_epoch(Epoch &epoch, ForecastEvaluationStatus status) {
-    if (epoch.emitted) {
-        return;
+void ForecastEvaluationAnalyzer::decimate_origins(Epoch &epoch) {
+    while (epoch.origins.size() > kMaximumOriginsPerEpoch) {
+        epoch.decimation_stride *= 2U;
+        std::erase_if(epoch.origins, [&epoch](const Origin &origin) {
+            return origin.candidate_index % epoch.decimation_stride != 0U;
+        });
     }
-    if (rows_.size() >= kMaximumRows) {
-        throw std::length_error("The forecast evaluation row limit was reached.");
-    }
-    const auto first = epoch.first_history_time;
-    const auto last = epoch.last_history_time;
-    const auto window = first && last ? elapsed_ms(*first, *last) : 0U;
-    if (epoch.contains_incomplete_session) {
-        status = ForecastEvaluationStatus::excluded_incomplete_session;
-    }
-    rows_.push_back({.identity = epoch.identity,
-                     .epoch_index = epoch.index,
-                     .history_first_timestamp = first,
-                     .history_last_timestamp = last,
-                     .holdout_timestamp = std::nullopt,
-                     .history_observation_count = epoch.history_count,
-                     .history_window_ms = window,
-                     .status = status,
-                     .predicted_current_bytes = std::nullopt,
-                     .actual_current_bytes = std::nullopt,
-                     .signed_error_bytes = std::nullopt,
-                     .absolute_error_bytes = std::nullopt});
-    epoch.emitted = true;
-    epoch.emitted_row_index = rows_.size() - 1U;
-    current_session_row_indices_.push_back(*epoch.emitted_row_index);
 }
 
-void ForecastEvaluationAnalyzer::emit_evaluated_epoch(Epoch &epoch,
-                                                      std::uint64_t actual_memory_bytes) {
-    if (epoch.emitted) {
+void ForecastEvaluationAnalyzer::retain_origin_if_eligible(Epoch &epoch,
+                                                           std::uint64_t current_memory_bytes) {
+    if (epoch.observation_count < kMinimumHistoryObservations || !epoch.first_time ||
+        !epoch.latest_time ||
+        elapsed(*epoch.first_time, *epoch.latest_time) < kMinimumHistoryWindow) {
         return;
     }
-    if (rows_.size() >= kMaximumRows) {
-        throw std::length_error("The forecast evaluation row limit was reached.");
-    }
-    const auto first = *epoch.first_history_time;
-    const auto holdout_seconds =
-        static_cast<long double>(elapsed_ms(first, sample_time_)) / static_cast<long double>(1000U);
-    const auto slope = epoch.time_memory_covariance_sum / epoch.time_variance_sum;
-    const auto intercept = epoch.mean_memory_bytes - slope * epoch.mean_time_seconds;
-    const auto projection = std::fma(slope, holdout_seconds, intercept);
-    const auto double_max = static_cast<long double>(std::numeric_limits<double>::max());
-    if (!std::isfinite(slope) || !std::isfinite(intercept) || !std::isfinite(projection) ||
-        std::abs(projection) > double_max) {
-        emit_epoch(epoch, ForecastEvaluationStatus::numeric_result_unavailable);
+    const auto candidate_index = epoch.candidate_count++;
+    if (candidate_index % epoch.decimation_stride != 0U) {
         return;
     }
-    const auto predicted = static_cast<double>(std::max(projection, 0.0L));
-    const auto actual = static_cast<double>(actual_memory_bytes);
-    const auto signed_error = predicted - actual;
-    const auto absolute_error = std::abs(signed_error);
-    const auto last = *epoch.last_history_time;
-    rows_.push_back(
-        {.identity = epoch.identity,
-         .epoch_index = epoch.index,
-         .history_first_timestamp = first,
-         .history_last_timestamp = last,
-         .holdout_timestamp = sample_time_,
-         .history_observation_count = epoch.history_count,
-         .history_window_ms = elapsed_ms(first, last),
-         .status = epoch.contains_incomplete_session
-                       ? ForecastEvaluationStatus::excluded_incomplete_session
-                       : ForecastEvaluationStatus::evaluated,
-         .predicted_current_bytes =
-             epoch.contains_incomplete_session ? std::nullopt : std::optional<double>{predicted},
-         .actual_current_bytes = epoch.contains_incomplete_session
-                                     ? std::nullopt
-                                     : std::optional<std::uint64_t>{actual_memory_bytes},
-         .signed_error_bytes =
-             epoch.contains_incomplete_session ? std::nullopt : std::optional<double>{signed_error},
-         .absolute_error_bytes = epoch.contains_incomplete_session
-                                     ? std::nullopt
-                                     : std::optional<double>{absolute_error}});
-    epoch.emitted = true;
-    epoch.emitted_row_index = rows_.size() - 1U;
-    current_session_row_indices_.push_back(*epoch.emitted_row_index);
+    epoch.origins.push_back({.candidate_index = candidate_index,
+                             .captured_at = sample_time_,
+                             .current_memory_bytes = current_memory_bytes,
+                             .model = epoch.history.finish(),
+                             .holdouts = std::vector<std::optional<Holdout>>(horizons_.size())});
+    decimate_origins(epoch);
 }
 
-void ForecastEvaluationAnalyzer::emit_missing_memory(const ContainerIdentity &identity) {
-    if (rows_.size() >= kMaximumRows) {
-        throw std::length_error("The forecast evaluation row limit was reached.");
+void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
+                                                   ForecastEvaluationStatus epoch_status) {
+    const auto row_limit = kMaximumResultEpochs * horizons_.size();
+    if (rows_.size() >= row_limit) {
+        throw std::length_error("The forecast evaluation result row limit was reached.");
     }
-    const auto [next, inserted] = next_epoch_indices_.try_emplace(identity, 1U);
-    const auto index = next->second;
-    ++next->second;
-    rows_.push_back({.identity = identity,
-                     .epoch_index = index,
-                     .history_first_timestamp = std::nullopt,
-                     .history_last_timestamp = std::nullopt,
-                     .holdout_timestamp = std::nullopt,
-                     .history_observation_count = 0U,
-                     .history_window_ms = 0U,
-                     .status = ForecastEvaluationStatus::historical_current_memory_unavailable,
-                     .predicted_current_bytes = std::nullopt,
-                     .actual_current_bytes = std::nullopt,
-                     .signed_error_bytes = std::nullopt,
-                     .absolute_error_bytes = std::nullopt});
-    current_session_row_indices_.push_back(rows_.size() - 1U);
+    if (epoch_status != ForecastEvaluationStatus::evaluated) {
+        rows_.push_back({.identity = epoch.identity,
+                         .epoch_index = epoch.index,
+                         .horizon = std::nullopt,
+                         .origin_count = 0U,
+                         .status = epoch.contains_incomplete_session
+                                       ? ForecastEvaluationStatus::excluded_incomplete_session
+                                       : epoch_status,
+                         .mean_absolute_error_bytes = std::nullopt,
+                         .mean_persistence_absolute_error_bytes = std::nullopt,
+                         .mean_signed_error_bytes = std::nullopt});
+        return;
+    }
+    for (std::size_t index = 0U; index < horizons_.size(); ++index) {
+        const auto horizon = horizons_[index].duration;
+        ForecastEvaluationRow row{.identity = epoch.identity,
+                                  .epoch_index = epoch.index,
+                                  .horizon = horizon,
+                                  .origin_count = 0U,
+                                  .status = ForecastEvaluationStatus::evaluated,
+                                  .mean_absolute_error_bytes = std::nullopt,
+                                  .mean_persistence_absolute_error_bytes = std::nullopt,
+                                  .mean_signed_error_bytes = std::nullopt};
+        if (horizon < std::chrono::milliseconds{session_interval_ms_}) {
+            row.status = ForecastEvaluationStatus::horizon_below_sampling_interval;
+            rows_.push_back(std::move(row));
+            continue;
+        }
+        long double absolute_error{};
+        long double persistence_error{};
+        long double signed_error{};
+        bool numeric_failure{};
+        for (const auto &origin : epoch.origins) {
+            if (!origin.holdouts[index]) {
+                continue;
+            }
+            const auto projection = origin.model.project_after(
+                elapsed(origin.captured_at, origin.holdouts[index]->captured_at));
+            if (projection.availability !=
+                    forecast::MemoryCurrentProjectionAvailability::available ||
+                !projection.current_memory_bytes) {
+                numeric_failure = true;
+                continue;
+            }
+            const auto predicted = static_cast<long double>(*projection.current_memory_bytes);
+            const auto actual =
+                static_cast<long double>(origin.holdouts[index]->actual_memory_bytes);
+            absolute_error += std::abs(predicted - actual);
+            persistence_error +=
+                std::abs(static_cast<long double>(origin.current_memory_bytes) - actual);
+            signed_error += predicted - actual;
+            ++row.origin_count;
+        }
+        if (epoch.contains_incomplete_session) {
+            row.status = ForecastEvaluationStatus::excluded_incomplete_session;
+        } else if (row.origin_count == 0U) {
+            row.status = numeric_failure
+                             ? ForecastEvaluationStatus::numeric_result_unavailable
+                             : ForecastEvaluationStatus::holdout_observation_unavailable;
+        } else if (row.origin_count < 3U) {
+            row.status = ForecastEvaluationStatus::insufficient_origins;
+        } else {
+            const auto count = static_cast<long double>(row.origin_count);
+            row.mean_absolute_error_bytes = static_cast<double>(absolute_error / count);
+            row.mean_persistence_absolute_error_bytes =
+                static_cast<double>(persistence_error / count);
+            row.mean_signed_error_bytes = static_cast<double>(signed_error / count);
+        }
+        rows_.push_back(std::move(row));
+    }
+}
+
+void ForecastEvaluationAnalyzer::close_epoch(Epoch &&epoch, ForecastEvaluationStatus status) {
+    if (completed_epoch_count_ >= kMaximumResultEpochs) {
+        throw std::length_error(
+            "The forecast evaluation epoch limit of 4096 was reached; split the manifest.");
+    }
+    append_epoch_rows(epoch, status);
+    ++completed_epoch_count_;
 }
 
 std::expected<void, ForecastEvaluationAnalyzerError>
@@ -201,40 +255,46 @@ ForecastEvaluationAnalyzer::observe(const Observation &observation) {
     if (state_ != State::in_sample) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "An observation requires an open sample.",
-        });
+            .detail = "An observation requires an open sample."});
     }
     if (observation.identity.container_id.empty() || observation.identity.cgroup_path.empty()) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_observation,
-            .detail = "A container observation requires a non-empty identity.",
-        });
+            .detail = "A container observation requires a non-empty identity."});
     }
-    if (sample_identities_.contains(observation.identity)) {
+    if (!sample_identities_.insert(observation.identity).second) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::duplicate_observation,
-            .detail = "The container identity already has an observation in this sample.",
-        });
+            .detail = "The container identity already has an observation in this sample."});
     }
-    if (sample_identities_.size() >= kMaximumSampleIdentities) {
+    if (sample_identities_.size() > kMaximumSampleIdentities) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-            .detail = "The sample identity limit was reached.",
-        });
+            .detail = "The sample identity limit was reached."});
     }
-    sample_identities_.insert(observation.identity);
-
-    auto active = active_epochs_.find(observation.identity);
     try {
+        auto active = active_epochs_.find(observation.identity);
         if (!observation.current_memory_bytes) {
             if (active != active_epochs_.end()) {
-                emit_epoch(active->second,
-                           active->second.candidate_ready
-                               ? ForecastEvaluationStatus::holdout_observation_unavailable
-                               : ForecastEvaluationStatus::historical_current_memory_unavailable);
+                close_epoch(std::move(active->second),
+                            ForecastEvaluationStatus::historical_current_memory_unavailable);
                 active_epochs_.erase(active);
             } else {
-                emit_missing_memory(observation.identity);
+                const auto [next, inserted] =
+                    next_epoch_indices_.try_emplace(observation.identity, 1U);
+                Epoch epoch{.identity = observation.identity,
+                            .index = next->second++,
+                            .history = {},
+                            .first_time = std::nullopt,
+                            .latest_time = std::nullopt,
+                            .observation_count = 0U,
+                            .candidate_count = 0U,
+                            .decimation_stride = 1U,
+                            .contains_incomplete_session = false,
+                            .observed_in_session = false,
+                            .origins = {}};
+                close_epoch(std::move(epoch),
+                            ForecastEvaluationStatus::historical_current_memory_unavailable);
             }
             return {};
         }
@@ -242,8 +302,7 @@ ForecastEvaluationAnalyzer::observe(const Observation &observation) {
             if (active_epochs_.size() >= kMaximumActiveEpochs) {
                 return std::unexpected(ForecastEvaluationAnalyzerError{
                     .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-                    .detail = "The active epoch limit was reached.",
-                });
+                    .detail = "The active epoch limit of 1024 was reached."});
             }
             start_epoch(observation);
             active_epochs_.find(observation.identity)->second.observed_in_session = true;
@@ -251,32 +310,21 @@ ForecastEvaluationAnalyzer::observe(const Observation &observation) {
         }
         auto &epoch = active->second;
         epoch.observed_in_session = true;
-        if (sample_time_ <= epoch.latest_time) {
-            emit_epoch(epoch, ForecastEvaluationStatus::non_increasing_timestamps);
+        if (sample_time_ <= *epoch.latest_time) {
+            close_epoch(std::move(epoch), ForecastEvaluationStatus::non_increasing_timestamps);
             active_epochs_.erase(active);
-            if (active_epochs_.size() >= kMaximumActiveEpochs) {
-                return std::unexpected(ForecastEvaluationAnalyzerError{
-                    .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-                    .detail = "The active epoch limit was reached.",
-                });
-            }
             start_epoch(observation);
             active_epochs_.find(observation.identity)->second.observed_in_session = true;
             return {};
         }
-        if (epoch.candidate_ready) {
-            emit_evaluated_epoch(epoch, *observation.current_memory_bytes);
-            // Preserve timestamp continuity after freezing the first eligible forecast result.
-            epoch.latest_time = sample_time_;
-            return {};
-        }
-        append_history(epoch, *observation.current_memory_bytes);
+        update_holdouts(epoch, *observation.current_memory_bytes);
+        append_observation(epoch, *observation.current_memory_bytes);
+        retain_origin_if_eligible(epoch, *observation.current_memory_bytes);
         return {};
     } catch (const std::length_error &error) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-            .detail = error.what(),
-        });
+            .detail = error.what()});
     }
 }
 
@@ -284,18 +332,13 @@ void ForecastEvaluationAnalyzer::close_absent_epochs() {
     std::vector<ContainerIdentity> absent;
     for (const auto &[identity, epoch] : active_epochs_) {
         (void)epoch;
-        if (!sample_identities_.contains(identity)) {
+        if (!sample_identities_.contains(identity))
             absent.push_back(identity);
-        }
     }
     for (const auto &identity : absent) {
         auto active = active_epochs_.find(identity);
-        if (!active->second.emitted) {
-            emit_epoch(active->second,
-                       active->second.candidate_ready
-                           ? ForecastEvaluationStatus::holdout_observation_unavailable
-                           : ForecastEvaluationStatus::container_not_observed_continuously);
-        }
+        close_epoch(std::move(active->second),
+                    ForecastEvaluationStatus::container_not_observed_continuously);
         active_epochs_.erase(active);
     }
 }
@@ -304,19 +347,17 @@ std::expected<void, ForecastEvaluationAnalyzerError> ForecastEvaluationAnalyzer:
     if (state_ != State::in_sample) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "Ending a sample requires an open sample.",
-        });
+            .detail = "Ending a sample requires an open sample."});
     }
     try {
         close_absent_epochs();
+        state_ = State::in_session;
+        return {};
     } catch (const std::length_error &error) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-            .detail = error.what(),
-        });
+            .detail = error.what()});
     }
-    state_ = State::in_session;
-    return {};
 }
 
 std::expected<void, ForecastEvaluationAnalyzerError>
@@ -324,24 +365,12 @@ ForecastEvaluationAnalyzer::end_session(const SessionEnd &session) {
     if (state_ != State::in_session) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "Ending a session requires an open session with no open sample.",
-        });
-    }
-    if (session.incomplete) {
-        for (const auto index : current_session_row_indices_) {
-            auto &row = rows_[index];
-            row.status = ForecastEvaluationStatus::excluded_incomplete_session;
-            row.predicted_current_bytes.reset();
-            row.actual_current_bytes.reset();
-            row.signed_error_bytes.reset();
-            row.absolute_error_bytes.reset();
-        }
+            .detail = "Ending a session requires an open session with no open sample."});
     }
     for (auto &[identity, epoch] : active_epochs_) {
         (void)identity;
-        if (session.incomplete && epoch.observed_in_session) {
+        if (session.incomplete && epoch.observed_in_session)
             epoch.contains_incomplete_session = true;
-        }
         epoch.observed_in_session = false;
     }
     state_ = State::between_sessions;
@@ -349,33 +378,12 @@ ForecastEvaluationAnalyzer::end_session(const SessionEnd &session) {
 }
 
 void ForecastEvaluationAnalyzer::summarize(ForecastEvaluationReport &report) const {
-    long double total_absolute_error{};
-    long double total_signed_error{};
     for (const auto &row : report.rows) {
         ++report.summary.status_counts[row.status];
-        if (row.status == ForecastEvaluationStatus::excluded_incomplete_session) {
-            ++report.summary.excluded_incomplete_session_count;
-        }
-        if (is_eligible_status(row.status)) {
-            ++report.summary.eligible_forecast_count;
-        }
-        if (row.status == ForecastEvaluationStatus::evaluated) {
-            ++report.summary.evaluated_forecast_count;
-            total_absolute_error += *row.absolute_error_bytes;
-            total_signed_error += *row.signed_error_bytes;
-        }
+        if (row.status == ForecastEvaluationStatus::evaluated)
+            ++report.summary.evaluated_epoch_horizon_count;
     }
     report.summary.row_count = report.rows.size();
-    if (report.summary.eligible_forecast_count != 0U) {
-        report.summary.coverage = static_cast<double>(report.summary.evaluated_forecast_count) /
-                                  static_cast<double>(report.summary.eligible_forecast_count);
-    }
-    if (report.summary.evaluated_forecast_count != 0U) {
-        const auto count = static_cast<long double>(report.summary.evaluated_forecast_count);
-        report.summary.mean_absolute_error_bytes =
-            static_cast<double>(total_absolute_error / count);
-        report.summary.mean_signed_error_bytes = static_cast<double>(total_signed_error / count);
-    }
 }
 
 std::expected<ForecastEvaluationReport, ForecastEvaluationAnalyzerError>
@@ -383,35 +391,32 @@ ForecastEvaluationAnalyzer::finish() {
     if (state_ != State::between_sessions) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
-            .detail = "Finishing evaluation requires closed sessions and an unfinished analyzer.",
-        });
+            .detail = "Finishing evaluation requires closed sessions and an unfinished analyzer."});
     }
     try {
         for (auto &[identity, epoch] : active_epochs_) {
             (void)identity;
-            if (!epoch.emitted) {
-                emit_epoch(epoch, epoch.candidate_ready
-                                      ? ForecastEvaluationStatus::holdout_observation_unavailable
-                                  : epoch.history_count >= kMinimumHistoryObservations
-                                      ? ForecastEvaluationStatus::insufficient_observation_window
-                                      : ForecastEvaluationStatus::insufficient_observations);
-            }
+            const auto status =
+                epoch.observation_count < kMinimumHistoryObservations
+                    ? ForecastEvaluationStatus::insufficient_observations
+                : (!epoch.first_time || !epoch.latest_time ||
+                   elapsed(*epoch.first_time, *epoch.latest_time) < kMinimumHistoryWindow)
+                    ? ForecastEvaluationStatus::insufficient_observation_window
+                    : ForecastEvaluationStatus::evaluated;
+            close_epoch(std::move(epoch), status);
         }
+        active_epochs_.clear();
     } catch (const std::length_error &error) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,
-            .detail = error.what(),
-        });
+            .detail = error.what()});
     }
-
-    ForecastEvaluationReport report{};
-    report.rows = std::move(rows_);
+    ForecastEvaluationReport report{.summary = {}, .rows = std::move(rows_)};
     std::ranges::sort(report.rows, {}, [](const ForecastEvaluationRow &row) {
-        return std::pair{row.identity, row.epoch_index};
+        return std::tuple{row.identity, row.epoch_index,
+                          row.horizon.value_or(std::chrono::milliseconds::zero())};
     });
     summarize(report);
-    active_epochs_.clear();
-    next_epoch_indices_.clear();
     state_ = State::finished;
     return report;
 }
