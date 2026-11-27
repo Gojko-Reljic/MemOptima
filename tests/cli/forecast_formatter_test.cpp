@@ -71,5 +71,20 @@ TEST(ForecastFormatter, OmitsNumbersForAnUnavailableResult) {
     EXPECT_EQ(output.find("estimate:"), std::string::npos);
 }
 
+TEST(ForecastFormatter, ExplainsAnUnavailableNumericResult) {
+    const forecast::EvidenceForecastSummary summary{
+        .artifact_path = "/tmp/numeric.jsonl",
+        .incomplete = false,
+        .sample_count = 3,
+        .containers = {{.container_id = "eeeeeeee",
+                        .observed_sample_count = 3,
+                        .status = forecast::EvidenceForecastStatus::unavailable_numeric_result,
+                        .growth_bytes_per_second = std::nullopt,
+                        .estimated_time_to_memory_max = std::nullopt}}};
+
+    EXPECT_NE(format_evidence_forecast(summary).find("Unavailable: numeric result"),
+              std::string::npos);
+}
+
 } // namespace
 } // namespace memoptima::cli

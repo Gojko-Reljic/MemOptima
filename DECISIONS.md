@@ -1016,13 +1016,16 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   memory limit.
 - **Layering:** `memory_limit_forecast` retains memory-max-specific policy such as unlimited,
   unstable, and already-reached limits, but derives its growth rate and time-to-limit calculation
-  from the shared primitive. Trends use the shared fit for their rate and limit context. Forecast
-  evaluation fits at each origin and projects at the selected holdout elapsed duration. No consumer
-  keeps a competing regression implementation.
+  from the shared primitive. It preserves streaming operation through a shared constant-space
+  `MemoryCurrentForecastAccumulator`. Trends use the shared fit for their rate and limit context.
+  Forecast evaluation fits at each origin and projects at the selected holdout elapsed duration. No
+  consumer keeps a competing regression implementation.
 - **Validation:** The primitive requires at least three observations spanning ten seconds with
   strictly increasing timestamps. Its distinct availability statuses preserve the existing
   insufficient-observation, insufficient-window, non-increasing-timestamp, and numeric-result
-  diagnostics.
+  diagnostics. `MemoryLimitForecastAvailability` and `EvidenceForecastStatus` each expose a
+  stable `numeric_result_unavailable` variant so that the CLI does not misrepresent this distinct
+  condition as non-positive growth or an out-of-range time-to-limit estimate.
 - **Alternatives considered:** A generic public linear-regression library was rejected because
   MemOptima currently has one concrete domain and a generic numerical API would widen the public
   contract without a second validated use. Keeping separate private regressions was rejected

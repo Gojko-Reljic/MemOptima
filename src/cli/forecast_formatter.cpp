@@ -36,6 +36,8 @@ std::string status_name(forecast::EvidenceForecastStatus status) {
         return "Unavailable: non-positive growth";
     case unavailable_time_to_limit_out_of_range:
         return "Unavailable: estimate out of range";
+    case unavailable_numeric_result:
+        return "Unavailable: numeric result";
     }
     return "Unavailable";
 }

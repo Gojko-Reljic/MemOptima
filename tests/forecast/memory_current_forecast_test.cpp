@@ -88,5 +88,18 @@ TEST(MemoryCurrentForecast, GivesTimestampOrderingPrecedenceOverAnInvalidWindow)
               MemoryCurrentForecastAvailability::non_increasing_timestamps);
 }
 
+TEST(MemoryCurrentForecast, AccumulatesWithoutRetainingObservations) {
+    MemoryCurrentForecastAccumulator accumulator;
+    accumulator.add(observation(0, 1'000U));
+    accumulator.add(observation(10, 1'500U));
+    accumulator.add(observation(20, 2'000U));
+
+    const auto projection = accumulator.finish().project_after(std::chrono::seconds{5});
+
+    ASSERT_EQ(projection.availability, MemoryCurrentProjectionAvailability::available);
+    ASSERT_TRUE(projection.current_memory_bytes.has_value());
+    EXPECT_EQ(*projection.current_memory_bytes, 2'250U);
+}
+
 } // namespace
 } // namespace memoptima::forecast

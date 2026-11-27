@@ -51,26 +51,45 @@ MemoryCurrentForecast::project_after(const std::chrono::milliseconds elapsed) co
     return {MemoryCurrentProjectionAvailability::available, static_cast<std::uint64_t>(rounded)};
 }
 
-MemoryCurrentForecast
-fit_memory_current_forecast(const std::span<const MemoryCurrentObservation> observations) {
+void MemoryCurrentForecastAccumulator::add(const MemoryCurrentObservation &observation) {
+    if (!first_captured_at_.has_value()) {
+        first_captured_at_ = observation.captured_at;
+    } else if (observation.captured_at <= *last_captured_at_) {
+        invalid_series_reason_ = MemoryCurrentForecastAvailability::non_increasing_timestamps;
+    }
+
+    const long double time_seconds =
+        (static_cast<long double>(observation.captured_at.time_since_epoch().count()) -
+         static_cast<long double>(first_captured_at_->time_since_epoch().count())) /
+        static_cast<long double>(1000U);
+    const long double memory_bytes = static_cast<long double>(observation.current_memory_bytes);
+    ++observation_count_;
+    const long double count = static_cast<long double>(observation_count_);
+    const long double time_delta = time_seconds - mean_time_seconds_;
+    const long double memory_delta = memory_bytes - mean_memory_bytes_;
+    mean_time_seconds_ += time_delta / count;
+    mean_memory_bytes_ += memory_delta / count;
+    const long double weight = static_cast<long double>(observation_count_ - 1U) / count;
+    time_variance_sum_ += weight * time_delta * time_delta;
+    time_memory_covariance_sum_ += weight * time_delta * memory_delta;
+    last_captured_at_ = observation.captured_at;
+}
+
+MemoryCurrentForecast MemoryCurrentForecastAccumulator::finish() const {
     const auto unavailable = [](const MemoryCurrentForecastAvailability availability) {
         return MemoryCurrentForecast{availability, std::nullopt, 0.0L, 0.0L};
     };
 
-    if (observations.size() < kMinimumObservationCount) {
+    if (observation_count_ < kMinimumObservationCount) {
         return unavailable(MemoryCurrentForecastAvailability::insufficient_observations);
     }
-
-    const auto first = observations.front().captured_at;
-    const auto latest = observations.back().captured_at;
-    for (std::size_t index{1U}; index < observations.size(); ++index) {
-        if (observations[index].captured_at <= observations[index - 1U].captured_at) {
-            return unavailable(MemoryCurrentForecastAvailability::non_increasing_timestamps);
-        }
+    if (invalid_series_reason_.has_value()) {
+        return unavailable(*invalid_series_reason_);
     }
+
     const long double observation_window_ms =
-        static_cast<long double>(latest.time_since_epoch().count()) -
-        static_cast<long double>(first.time_since_epoch().count());
+        static_cast<long double>(last_captured_at_->time_since_epoch().count()) -
+        static_cast<long double>(first_captured_at_->time_since_epoch().count());
     if (observation_window_ms <
         static_cast<long double>(
             std::chrono::duration_cast<std::chrono::milliseconds>(kMinimumObservationWindow)
@@ -78,34 +97,12 @@ fit_memory_current_forecast(const std::span<const MemoryCurrentObservation> obse
         return unavailable(MemoryCurrentForecastAvailability::insufficient_observation_window);
     }
 
-    long double mean_time_seconds{};
-    long double mean_memory_bytes{};
-    long double time_variance_sum{};
-    long double time_memory_covariance_sum{};
-
-    for (std::size_t index{}; index < observations.size(); ++index) {
-        const auto &observation = observations[index];
-        const long double time_seconds =
-            (static_cast<long double>(observation.captured_at.time_since_epoch().count()) -
-             static_cast<long double>(first.time_since_epoch().count())) /
-            static_cast<long double>(1000U);
-        const long double memory_bytes = static_cast<long double>(observation.current_memory_bytes);
-        const long double count = static_cast<long double>(index + 1U);
-        const long double time_delta = time_seconds - mean_time_seconds;
-        const long double memory_delta = memory_bytes - mean_memory_bytes;
-        mean_time_seconds += time_delta / count;
-        mean_memory_bytes += memory_delta / count;
-        const long double weight = static_cast<long double>(index) / count;
-        time_variance_sum += weight * time_delta * time_delta;
-        time_memory_covariance_sum += weight * time_delta * memory_delta;
-    }
-
-    const long double slope = time_memory_covariance_sum / time_variance_sum;
-    const long double intercept = mean_memory_bytes - slope * mean_time_seconds;
+    const long double slope = time_memory_covariance_sum_ / time_variance_sum_;
+    const long double intercept = mean_memory_bytes_ - slope * mean_time_seconds_;
     const double growth = static_cast<double>(slope);
     const long double latest_offset_seconds =
-        (static_cast<long double>(latest.time_since_epoch().count()) -
-         static_cast<long double>(first.time_since_epoch().count())) /
+        (static_cast<long double>(last_captured_at_->time_since_epoch().count()) -
+         static_cast<long double>(first_captured_at_->time_since_epoch().count())) /
         static_cast<long double>(1000U);
     if (!std::isfinite(slope) || !std::isfinite(intercept) || !std::isfinite(growth) ||
         !std::isfinite(latest_offset_seconds)) {
@@ -113,6 +110,15 @@ fit_memory_current_forecast(const std::span<const MemoryCurrentObservation> obse
     }
 
     return {MemoryCurrentForecastAvailability::available, growth, intercept, latest_offset_seconds};
+}
+
+MemoryCurrentForecast
+fit_memory_current_forecast(const std::span<const MemoryCurrentObservation> observations) {
+    MemoryCurrentForecastAccumulator accumulator;
+    for (const MemoryCurrentObservation &observation : observations) {
+        accumulator.add(observation);
+    }
+    return accumulator.finish();
 }
 
 } // namespace memoptima::forecast
