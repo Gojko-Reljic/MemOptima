@@ -877,7 +877,8 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   session-local epoch nearest to the target time. It is eligible only when its actual elapsed time
   differs from the horizon by at most `min(declared_sampling_interval / 2, horizon / 10)`. The
   model projects at that actual elapsed time rather than at the nominal horizon. A horizon below
-  the declared sampling interval receives `horizon_below_sampling_interval`; a missing compatible
+  the declared sampling interval receives `horizon_below_sampling_interval`; an incomplete source
+  session overrides every other horizon status; a missing compatible
   observation receives `holdout_unavailable`. Evaluation never crosses a session boundary.
 - **Bounded deterministic origins:** Each eligible epoch retains at most 256 possible origins using
   deterministic streaming decimation. The stride begins at one. When retained origins exceed 256,
@@ -893,7 +894,7 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   floor prevents empty or tiny containers from dominating the metric.
 - **Aggregate metrics:** Every qualifying epoch has equal weight. Per horizon, the report presents
   mean epoch MAE, mean epoch persistence MAE, mean epoch signed bias, and mean epoch relative MAE.
-  Forecast skill uses AvgRelMAE: `1 - exp(mean(log(model_mae / persistence_mae)))`. If persistence
+  Forecast skill uses AvgRelMAE: `1 - exp(mean(log(max(model_mae / persistence_mae, 1e-6))))`. If persistence
   MAE is zero, the epoch remains in byte and relative-error aggregates but is excluded from skill.
   It is counted as `persistence_exact_model_exact` when model MAE is zero or
   `persistence_exact_model_error` otherwise. If model MAE is zero while persistence MAE is positive,

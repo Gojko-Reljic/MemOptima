@@ -160,6 +160,8 @@ class ForecastEvaluationAnalyzer {
     std::map<ContainerIdentity, Epoch> active_epochs_;
     std::map<ContainerIdentity, std::uint32_t> next_epoch_indices_;
     std::vector<ForecastEvaluationRow> rows_;
+    // Rows emitted during the open session must be invalidated if its terminal record is absent.
+    std::vector<std::size_t> current_session_row_indices_;
     std::size_t completed_epoch_count_{};
 };
 

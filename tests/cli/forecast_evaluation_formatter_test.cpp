@@ -9,21 +9,21 @@ TEST(ForecastEvaluationFormatter, PrintsExactEmptyEvaluationMessage) {
 
 TEST(ForecastEvaluationFormatter, FormatsHorizonAndAggregatedMetrics) {
     using namespace std::chrono_literals;
-    forecast_evaluation::ForecastEvaluationReport report{
-        .summary = {.row_count = 1U,
-                    .evaluated_epoch_horizon_count = 1U,
-                    .status_counts = {{forecast_evaluation::ForecastEvaluationStatus::evaluated,
-                                       1U}},
-                    .horizons = {}},
-        .rows = {{.identity = {.container_id = "container", .cgroup_path = "/docker/example"},
-                  .epoch_index = 1U,
-                  .horizon = 1min,
-                  .origin_count = 3U,
-                  .status = forecast_evaluation::ForecastEvaluationStatus::evaluated,
-                  .mean_absolute_error_bytes = 1024.0,
-                  .mean_persistence_absolute_error_bytes = 2048.0,
-                  .mean_signed_error_bytes = -0.0001,
-                  .relative_mean_absolute_error = 0.001}}};
+    forecast_evaluation::ForecastEvaluationReport report{};
+    report.summary.row_count = 1U;
+    report.summary.evaluated_epoch_horizon_count = 1U;
+    report.summary.status_counts.emplace(forecast_evaluation::ForecastEvaluationStatus::evaluated,
+                                         1U);
+    report.rows.push_back(
+        {.identity = {.container_id = "container", .cgroup_path = "/docker/example"},
+         .epoch_index = 1U,
+         .horizon = 1min,
+         .origin_count = 3U,
+         .status = forecast_evaluation::ForecastEvaluationStatus::evaluated,
+         .mean_absolute_error_bytes = 1024.0,
+         .mean_persistence_absolute_error_bytes = 2048.0,
+         .mean_signed_error_bytes = -0.0001,
+         .relative_mean_absolute_error = 0.001});
 
     const auto output = format_forecast_evaluation(report);
 

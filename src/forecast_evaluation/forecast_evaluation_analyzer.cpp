@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <ranges>
 #include <stdexcept>
 #include <tuple>
@@ -28,6 +29,10 @@ constexpr long double kMinimumSkillRatio = 1e-6L;
     return std::min(std::chrono::milliseconds{interval_ms / 2U}, horizon / 10);
 }
 
+[[nodiscard]] constexpr std::uint64_t maximum_duration_milliseconds() {
+    return static_cast<std::uint64_t>(std::numeric_limits<std::chrono::milliseconds::rep>::max());
+}
+
 [[nodiscard]] std::chrono::milliseconds absolute_duration(std::chrono::milliseconds value) {
     return value < std::chrono::milliseconds::zero() ? -value : value;
 }
@@ -42,6 +47,9 @@ ForecastEvaluationAnalyzer::ForecastEvaluationAnalyzer(
                                     return left.duration == right.duration;
                                 }),
                     horizons_.end());
+    if (horizons_.empty()) {
+        horizons_ = default_horizons();
+    }
 }
 
 std::vector<ForecastEvaluationHorizon> ForecastEvaluationAnalyzer::default_horizons() {
@@ -51,13 +59,16 @@ std::vector<ForecastEvaluationHorizon> ForecastEvaluationAnalyzer::default_horiz
 
 std::expected<void, ForecastEvaluationAnalyzerError>
 ForecastEvaluationAnalyzer::begin_session(const SessionStart &start) {
-    if (state_ != State::between_sessions || start.requested_interval_ms == 0U) {
+    if (state_ != State::between_sessions || start.requested_interval_ms == 0U ||
+        start.requested_interval_ms > maximum_duration_milliseconds()) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence,
             .detail =
-                "A session requires a positive interval and can begin only between sessions."});
+                "A session requires a representable positive interval and can begin only between "
+                "sessions."});
     }
     session_interval_ms_ = start.requested_interval_ms;
+    current_session_row_indices_.clear();
     state_ = State::in_session;
     return {};
 }
@@ -115,7 +126,8 @@ void ForecastEvaluationAnalyzer::update_holdouts(Epoch &epoch, std::uint64_t cur
                 continue;
             }
             const auto tolerance = holdout_tolerance(session_interval_ms_, horizon);
-            if (actual_elapsed < horizon - tolerance || actual_elapsed > horizon + tolerance) {
+            const auto distance = absolute_duration(actual_elapsed - horizon);
+            if (distance > tolerance) {
                 continue;
             }
             const Holdout candidate{.captured_at = sample_time_,
@@ -183,6 +195,7 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                          .mean_persistence_absolute_error_bytes = std::nullopt,
                          .mean_signed_error_bytes = std::nullopt,
                          .relative_mean_absolute_error = std::nullopt});
+        current_session_row_indices_.push_back(rows_.size() - 1U);
         return;
     }
     for (std::size_t index = 0U; index < horizons_.size(); ++index) {
@@ -196,9 +209,16 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                                   .mean_persistence_absolute_error_bytes = std::nullopt,
                                   .mean_signed_error_bytes = std::nullopt,
                                   .relative_mean_absolute_error = std::nullopt};
+        if (epoch.contains_incomplete_session) {
+            row.status = ForecastEvaluationStatus::excluded_incomplete_session;
+            rows_.push_back(std::move(row));
+            current_session_row_indices_.push_back(rows_.size() - 1U);
+            continue;
+        }
         if (horizon < std::chrono::milliseconds{session_interval_ms_}) {
             row.status = ForecastEvaluationStatus::horizon_below_sampling_interval;
             rows_.push_back(std::move(row));
+            current_session_row_indices_.push_back(rows_.size() - 1U);
             continue;
         }
         long double absolute_error{};
@@ -229,9 +249,7 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                                              kRelativeErrorDenominatorFloor);
             ++row.origin_count;
         }
-        if (epoch.contains_incomplete_session) {
-            row.status = ForecastEvaluationStatus::excluded_incomplete_session;
-        } else if (row.origin_count == 0U) {
+        if (row.origin_count == 0U) {
             row.status = numeric_failure
                              ? ForecastEvaluationStatus::numeric_result_unavailable
                              : ForecastEvaluationStatus::holdout_observation_unavailable;
@@ -247,6 +265,7 @@ void ForecastEvaluationAnalyzer::append_epoch_rows(const Epoch &epoch,
                 static_cast<double>(absolute_error / relative_denominator);
         }
         rows_.push_back(std::move(row));
+        current_session_row_indices_.push_back(rows_.size() - 1U);
     }
 }
 
@@ -392,6 +411,17 @@ ForecastEvaluationAnalyzer::end_session(const SessionEnd &session) {
             close_epoch(std::move(epoch), status);
         }
         active_epochs_.clear();
+        if (session.incomplete) {
+            for (const auto row_index : current_session_row_indices_) {
+                auto &row = rows_[row_index];
+                row.status = ForecastEvaluationStatus::excluded_incomplete_session;
+                row.origin_count = 0U;
+                row.mean_absolute_error_bytes = std::nullopt;
+                row.mean_persistence_absolute_error_bytes = std::nullopt;
+                row.mean_signed_error_bytes = std::nullopt;
+                row.relative_mean_absolute_error = std::nullopt;
+            }
+        }
     } catch (const std::length_error &error) {
         return std::unexpected(ForecastEvaluationAnalyzerError{
             .code = ForecastEvaluationAnalyzerErrorCode::resource_limit_exceeded,

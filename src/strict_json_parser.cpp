@@ -20,7 +20,14 @@ enum class ContainerKind {
 
 struct ContainerFrame {
     ContainerKind kind;
-    std::string path;
+    enum class PathKind {
+        root,
+        member,
+        array_index,
+    };
+    PathKind path_kind{PathKind::root};
+    std::string parent_member;
+    std::size_t parent_array_index{};
     std::unordered_set<std::string> keys;
     std::optional<std::string> pending_key;
     std::size_t next_array_index{};
@@ -114,22 +121,47 @@ struct ContainerFrame {
     return std::string{array_path} + "[" + std::to_string(index) + "]";
 }
 
-[[nodiscard]] std::string consume_value_path(std::vector<ContainerFrame> &frames) {
+void consume_value(std::vector<ContainerFrame> &frames, ContainerFrame &child) {
     if (frames.empty()) {
-        return "$";
+        return;
     }
 
     ContainerFrame &parent = frames.back();
     if (parent.kind == ContainerKind::array) {
-        return append_array_path(parent.path, parent.next_array_index++);
+        child.path_kind = ContainerFrame::PathKind::array_index;
+        child.parent_array_index = parent.next_array_index++;
+        return;
     }
 
     if (!parent.pending_key.has_value()) {
-        return parent.path;
+        return;
     }
 
-    std::string path = append_property_path(parent.path, *parent.pending_key);
+    child.path_kind = ContainerFrame::PathKind::member;
+    child.parent_member = std::move(*parent.pending_key);
     parent.pending_key.reset();
+}
+
+void consume_scalar_value(std::vector<ContainerFrame> &frames) {
+    ContainerFrame ignored{};
+    ignored.kind = ContainerKind::array;
+    consume_value(frames, ignored);
+}
+
+[[nodiscard]] std::string object_path(const std::vector<ContainerFrame> &frames) {
+    std::string path{"$"};
+    for (const auto &frame : frames) {
+        switch (frame.path_kind) {
+        case ContainerFrame::PathKind::root:
+            break;
+        case ContainerFrame::PathKind::member:
+            path = append_property_path(path, frame.parent_member);
+            break;
+        case ContainerFrame::PathKind::array_index:
+            path = append_array_path(path, frame.parent_array_index);
+            break;
+        }
+    }
     return path;
 }
 
@@ -152,20 +184,20 @@ std::expected<Json, StrictJsonError> parse_strict_json(const std::string_view te
                                                                    const Json::parse_event_t event,
                                                                    Json &parsed) {
         switch (event) {
-        case Json::parse_event_t::object_start:
-            frames.push_back(ContainerFrame{.kind = ContainerKind::object,
-                                            .path = consume_value_path(frames),
-                                            .keys = {},
-                                            .pending_key = std::nullopt,
-                                            .next_array_index = 0U});
+        case Json::parse_event_t::object_start: {
+            ContainerFrame object{};
+            object.kind = ContainerKind::object;
+            consume_value(frames, object);
+            frames.push_back(std::move(object));
             break;
-        case Json::parse_event_t::array_start:
-            frames.push_back(ContainerFrame{.kind = ContainerKind::array,
-                                            .path = consume_value_path(frames),
-                                            .keys = {},
-                                            .pending_key = std::nullopt,
-                                            .next_array_index = 0U});
+        }
+        case Json::parse_event_t::array_start: {
+            ContainerFrame array{};
+            array.kind = ContainerKind::array;
+            consume_value(frames, array);
+            frames.push_back(std::move(array));
             break;
+        }
         case Json::parse_event_t::key: {
             if (frames.empty() || frames.back().kind != ContainerKind::object) {
                 break;
@@ -174,13 +206,13 @@ std::expected<Json, StrictJsonError> parse_strict_json(const std::string_view te
             std::string key = parsed.get<std::string>();
             ContainerFrame &object = frames.back();
             if (!object.keys.insert(key).second && !duplicate.has_value()) {
-                duplicate = StrictJsonDuplicateKey{.object_path = object.path, .key = key};
+                duplicate = StrictJsonDuplicateKey{.object_path = object_path(frames), .key = key};
             }
             object.pending_key = std::move(key);
             break;
         }
         case Json::parse_event_t::value:
-            static_cast<void>(consume_value_path(frames));
+            consume_scalar_value(frames);
             break;
         case Json::parse_event_t::object_end:
         case Json::parse_event_t::array_end:

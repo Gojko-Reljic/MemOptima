@@ -1,8 +1,5 @@
 #include <memoptima/forecast/memory_limit_forecast.hpp>
 
-#include <cmath>
-#include <limits>
-
 namespace memoptima::forecast {
 namespace {
 
@@ -63,21 +60,22 @@ MemoryLimitForecast MemoryLimitForecastAccumulator::finish() const {
         return unavailable(MemoryLimitForecastAvailability::non_positive_growth, growth);
     }
 
-    const long double bytes_remaining =
-        static_cast<long double>(*memory_max_bytes_ - latest_current_memory_bytes_);
-    const long double milliseconds_to_limit =
-        bytes_remaining / static_cast<long double>(growth) * static_cast<long double>(1000U);
-    if (!std::isfinite(milliseconds_to_limit) ||
-        milliseconds_to_limit >
-            static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
+    const auto duration = current_memory_forecast.estimate_duration_to(latest_current_memory_bytes_,
+                                                                       *memory_max_bytes_);
+    if (duration.availability == MemoryCurrentDurationAvailability::duration_out_of_range) {
         return unavailable(MemoryLimitForecastAvailability::time_to_limit_out_of_range, growth);
+    }
+    if (duration.availability != MemoryCurrentDurationAvailability::available ||
+        !duration.duration_ms) {
+        return unavailable(MemoryLimitForecastAvailability::numeric_result_unavailable, growth);
     }
 
     return {
         .availability = MemoryLimitForecastAvailability::available,
         .growth_bytes_per_second = growth,
         .estimated_time_to_memory_max =
-            std::chrono::milliseconds{static_cast<std::int64_t>(std::ceil(milliseconds_to_limit))},
+            std::chrono::milliseconds{
+                static_cast<std::chrono::milliseconds::rep>(*duration.duration_ms)},
     };
 }
 

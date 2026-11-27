@@ -42,11 +42,12 @@ For each horizon the summary reports equally weighted qualifying epochs:
 | `persistence MAE` | Mean epoch error of predicting the origin value unchanged. |
 | `bias` | Mean epoch signed error, predicted minus actual. |
 | `relative MAE` | Mean epoch error relative to memory used at each origin, with a 1 MiB denominator floor. |
-| `skill` | `1 - geometric mean(model MAE / persistence MAE)`. Positive is better than persistence. |
+| `skill` | `1 - geometric mean(max(model MAE / persistence MAE, 1e-6))`. Positive is better than persistence. |
 
 Epochs with zero persistence error remain in byte and relative metrics. They are excluded from
 skill and separately counted as `persistence exact/model exact` or `persistence exact/model error`.
-Skill is `N/A` when no epoch can contribute.
+Skill is `N/A` when no epoch can contribute. An incomplete source session overrides every other
+epoch or horizon status, including `horizon below sampling interval`.
 
 ## Stable Statuses
 

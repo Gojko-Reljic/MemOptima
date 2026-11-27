@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <limits>
 #include <string>
 
 namespace memoptima::forecast_evaluation {
@@ -49,6 +50,54 @@ TEST(ForecastEvaluationAnalyzerTest, ReportsHorizonBelowSamplingIntervalExplicit
     ASSERT_TRUE(report.has_value());
     ASSERT_EQ(report->rows.size(), 1U);
     EXPECT_EQ(report->rows[0].status, ForecastEvaluationStatus::horizon_below_sampling_interval);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, DefaultsAnEmptyHorizonConfiguration) {
+    ForecastEvaluationAnalyzer analyzer{{}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 1'000U}).has_value());
+    sample(analyzer, ForecastEvaluationTimePoint{}, 100U);
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    EXPECT_EQ(report->summary.horizons.size(), 4U);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, RejectsAnUnrepresentableSamplingInterval) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    const auto result = analyzer.begin_session(
+        {.requested_interval_ms = static_cast<std::uint64_t>(
+                                      std::numeric_limits<std::chrono::milliseconds::rep>::max()) +
+                                  1U});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code, ForecastEvaluationAnalyzerErrorCode::invalid_event_sequence);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionOverridesRowsClosedBeforeSessionEnd) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    for (std::uint64_t index{}; index < 3U; ++index)
+        sample(analyzer, start + 10s * index, 100U + index);
+    ASSERT_TRUE(analyzer.begin_sample({.captured_at = start + 30s}).has_value());
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+    ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 1U);
+    EXPECT_EQ(report->rows.front().status, ForecastEvaluationStatus::excluded_incomplete_session);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionOverridesBelowIntervalStatus) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 120'000U}).has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    for (std::uint64_t index{}; index < 4U; ++index)
+        sample(analyzer, start + 2min * index, 100U + index);
+    ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 1U);
+    EXPECT_EQ(report->rows.front().status, ForecastEvaluationStatus::excluded_incomplete_session);
 }
 
 TEST(ForecastEvaluationAnalyzerTest, KeepsAnEpochLevelRowWhenHistoryIsNotUsable) {
