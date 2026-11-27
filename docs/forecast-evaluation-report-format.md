@@ -24,13 +24,15 @@ Rows sort by full container identity, epoch, and numeric horizon duration. An ep
 forecast receives one row with `HORIZON` set to `N/A`; otherwise it has one row per horizon.
 
 ```text
-CONTAINER ID  CGROUP PATH       EPOCH  HORIZON  ORIGINS  MAE         BIAS       STATUS
-a1b2c3d4e5f6  /docker/example       1  1m 00s        12  1.25 MiB   +0.25 MiB  evaluated
+CONTAINER ID  CGROUP PATH       EPOCH  HORIZON  ORIGINS  MAE         BIAS       STATUS                       UNDERLYING STATUS
+a1b2c3d4e5f6  /docker/example       1  1m 00s        12  1.25 MiB   +0.25 MiB  excluded incomplete session  evaluated
 ```
 
 Text columns are left-aligned and numeric columns are right-aligned. A width is never less than its
-header. Columns use two spaces, and `STATUS` has no trailing padding. Byte values use IEC units and
-two decimals. `N/A` represents an unavailable value.
+header. Columns use two spaces, and `UNDERLYING STATUS` has no trailing padding. Byte values use
+IEC units and two decimals. `N/A` represents an unavailable value. `STATUS` is the primary final
+disposition. `UNDERLYING STATUS` is `N/A` unless a primary exclusion masks the otherwise applicable
+stable status.
 
 ## Horizon Aggregates
 
@@ -64,6 +66,10 @@ epoch or horizon status, including `horizon below sampling interval`.
 | `holdout observation unavailable` | No compatible same-epoch holdout exists. |
 | `insufficient origins` | Fewer than three origins have compatible holdouts. |
 | `numeric result unavailable` | A model projection cannot safely be represented. |
+
+An incomplete source session assigns `excluded incomplete session` as the primary status to every
+row in that session and preserves the otherwise applicable status in `UNDERLYING STATUS`. Summary
+status counts use only the primary status.
 
 ## Empty Analysis and Exit Codes
 
