@@ -6,7 +6,7 @@
 
 namespace memoptima::cli {
 
-// Formats a complete v0.8 forecast evaluation as a stable human-readable summary and table.
+// Formats a complete v0.10 forecast evaluation as a stable human-readable summary and table.
 [[nodiscard]] std::string
 format_forecast_evaluation(const forecast_evaluation::ForecastEvaluationReport &report);
 
