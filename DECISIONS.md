@@ -1064,6 +1064,22 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
 - **Reason:** A final exclusion should not erase the data-quality reason that made a row
   operationally interesting. Coalesced unavailable episodes make reports bounded and auditable.
 
+## ADR-053: Release forecast-evaluation integrity as version 0.10.0
+
+- **Status:** Approved
+- **Decision:** MemOptima's next public release is version `0.10.0`. CMake remains the single
+  source of truth for the generated application version, `memoptima --version`, and the
+  application version written into new evidence artifacts. The evidence and trend-manifest schema
+  versions remain `1`.
+- **Reason:** v0.10 introduces a shared public memory-current forecast primitive, a changed public
+  forecast-evaluation report model with stable underlying diagnostics, strict JSON trust-boundary
+  validation, and a changed forecast-evaluation table. A minor version communicates these
+  backward-compatible but material public-contract additions.
+- **Consequence:** Release preparation updates the CMake version, installs the v0.10 scope
+  document, verifies the exact application version in Debug and Release installations, records the
+  completed quality gates in a v0.10 verification document, and requires owner approval before a
+  Git tag or GitHub release is created.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |
