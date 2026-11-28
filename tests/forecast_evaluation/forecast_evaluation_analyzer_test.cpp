@@ -23,6 +23,21 @@ void sample(ForecastEvaluationAnalyzer &analyzer, ForecastEvaluationTimePoint ti
     ASSERT_TRUE(analyzer.end_sample().has_value());
 }
 
+void unavailable_sample(ForecastEvaluationAnalyzer &analyzer, ForecastEvaluationTimePoint time) {
+    ASSERT_TRUE(analyzer.begin_sample({.captured_at = time}).has_value());
+    ASSERT_TRUE(analyzer
+                    .observe({.identity = {.container_id = std::string(64U, 'a'),
+                                           .cgroup_path = "/docker/evaluation"},
+                              .current_memory_bytes = std::nullopt})
+                    .has_value());
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+}
+
+void empty_sample(ForecastEvaluationAnalyzer &analyzer, ForecastEvaluationTimePoint time) {
+    ASSERT_TRUE(analyzer.begin_sample({.captured_at = time}).has_value());
+    ASSERT_TRUE(analyzer.end_sample().has_value());
+}
+
 TEST(ForecastEvaluationAnalyzerTest, EvaluatesRollingOriginsAtTheConfiguredHorizon) {
     ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
     ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
@@ -85,6 +100,8 @@ TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionOverridesRowsClosedBeforeS
     ASSERT_TRUE(report.has_value());
     ASSERT_EQ(report->rows.size(), 1U);
     EXPECT_EQ(report->rows.front().status, ForecastEvaluationStatus::excluded_incomplete_session);
+    EXPECT_EQ(report->rows.front().underlying_status,
+              ForecastEvaluationStatus::container_not_observed_continuously);
 }
 
 TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionOverridesBelowIntervalStatus) {
@@ -98,6 +115,55 @@ TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionOverridesBelowIntervalStat
     ASSERT_TRUE(report.has_value());
     ASSERT_EQ(report->rows.size(), 1U);
     EXPECT_EQ(report->rows.front().status, ForecastEvaluationStatus::excluded_incomplete_session);
+    EXPECT_EQ(report->rows.front().underlying_status,
+              ForecastEvaluationStatus::horizon_below_sampling_interval);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, CoalescesConsecutiveUnavailableMemoryObservations) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    unavailable_sample(analyzer, start);
+    unavailable_sample(analyzer, start + 10s);
+    unavailable_sample(analyzer, start + 20s);
+    sample(analyzer, start + 30s, 100U);
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 2U);
+    EXPECT_EQ(report->rows[0].epoch_index, 1U);
+    EXPECT_EQ(report->rows[0].status,
+              ForecastEvaluationStatus::historical_current_memory_unavailable);
+    EXPECT_FALSE(report->rows[0].underlying_status.has_value());
+    EXPECT_EQ(report->rows[1].epoch_index, 2U);
+    EXPECT_EQ(report->rows[1].status, ForecastEvaluationStatus::insufficient_observations);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, RetainsUnavailableDiagnosticWhenIdentityBecomesAbsent) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    const auto start = ForecastEvaluationTimePoint{};
+    unavailable_sample(analyzer, start);
+    empty_sample(analyzer, start + 10s);
+    ASSERT_TRUE(analyzer.end_session({.incomplete = false}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 1U);
+    EXPECT_EQ(report->rows.front().status,
+              ForecastEvaluationStatus::historical_current_memory_unavailable);
+}
+
+TEST(ForecastEvaluationAnalyzerTest, IncompleteSessionPreservesUnavailableUnderlyingStatus) {
+    ForecastEvaluationAnalyzer analyzer{{{.duration = 1min}}};
+    ASSERT_TRUE(analyzer.begin_session({.requested_interval_ms = 10'000U}).has_value());
+    unavailable_sample(analyzer, ForecastEvaluationTimePoint{});
+    ASSERT_TRUE(analyzer.end_session({.incomplete = true}).has_value());
+    const auto report = analyzer.finish();
+    ASSERT_TRUE(report.has_value());
+    ASSERT_EQ(report->rows.size(), 1U);
+    EXPECT_EQ(report->rows.front().status, ForecastEvaluationStatus::excluded_incomplete_session);
+    EXPECT_EQ(report->rows.front().underlying_status,
+              ForecastEvaluationStatus::historical_current_memory_unavailable);
 }
 
 TEST(ForecastEvaluationAnalyzerTest, KeepsAnEpochLevelRowWhenHistoryIsNotUsable) {

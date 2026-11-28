@@ -19,11 +19,12 @@ namespace {
 using forecast_evaluation::ForecastEvaluationRow;
 using forecast_evaluation::ForecastEvaluationStatus;
 
-constexpr std::size_t kColumnCount = 8U;
+constexpr std::size_t kColumnCount = 9U;
 constexpr std::array<std::string_view, kColumnCount> kHeaders{
-    "CONTAINER ID", "CGROUP PATH", "EPOCH", "HORIZON", "ORIGINS", "MAE", "BIAS", "STATUS"};
-constexpr std::array<bool, kColumnCount> kRightAligned{false, false, true, true,
-                                                       true,  true,  true, false};
+    "CONTAINER ID", "CGROUP PATH", "EPOCH",  "HORIZON",          "ORIGINS",
+    "MAE",          "BIAS",        "STATUS", "UNDERLYING STATUS"};
+constexpr std::array<bool, kColumnCount> kRightAligned{false, false, true,  true, true,
+                                                       true,  true,  false, false};
 constexpr std::array<std::string_view, 5U> kByteUnits{"B", "KiB", "MiB", "GiB", "TiB"};
 constexpr double kBytesPerUnit = 1024.0;
 using Row = std::array<std::string, kColumnCount>;
@@ -87,7 +88,8 @@ using Row = std::array<std::string, kColumnCount>;
             std::to_string(row.origin_count),
             format_optional_bytes(row.mean_absolute_error_bytes),
             format_optional_bytes(row.mean_signed_error_bytes, true),
-            status_name(row.status)};
+            status_name(row.status),
+            row.underlying_status ? status_name(*row.underlying_status) : "N/A"};
 }
 
 void append_row(std::ostringstream &output, const Row &row,

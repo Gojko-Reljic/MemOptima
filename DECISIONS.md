@@ -1038,6 +1038,32 @@ finite, finite-to-unlimited, and unlimited-to-finite changes.
   between evaluation and delivery, and keeps memory-limit policy above the reusable
   memory-current boundary.
 
+## ADR-052: Preserve forecast-evaluation exclusion and diagnostic status separately
+
+- **Status:** Approved
+- **Decision:** Each public `ForecastEvaluationRow` keeps `status` as its primary final
+  disposition and adds an optional stable `underlying_status`. An incomplete source session sets
+  the primary status to `excluded_incomplete_session` for every row in that session. The optional
+  underlying status records the result that the row would have had if the session had completed,
+  including `evaluated`, `horizon_below_sampling_interval`,
+  `historical_current_memory_unavailable`, or a continuity diagnostic. Summary status counts use
+  the primary status only.
+- **Unavailable-memory continuity:** Consecutive observations for one strict container identity
+  with unavailable `memory.current` form one unavailable epoch and produce one
+  `historical_current_memory_unavailable` row. The epoch ends only when the identity regains an
+  available value, is absent from a later sample, or the session ends. An unavailable epoch that
+  is followed by absence remains an unavailable diagnostic; it does not emit a second redundant
+  continuity row. A later available value starts a new forecast epoch.
+- **Presentation:** The human-readable report adds an `UNDERLYING STATUS` column. It displays
+  `N/A` when no primary exclusion masks an underlying result. The report remains read-only and
+  does not interpret unavailable memory data as an OOM, leak, or anomaly signal.
+- **Alternatives considered:** Combining all exclusion and diagnostic states into one enum was
+  rejected because it creates an unstable cross-product of statuses. A free-form diagnostic string
+  was rejected because it is not a stable public contract. Retaining one row per unavailable
+  observation was rejected because it inflates reports without adding evidence.
+- **Reason:** A final exclusion should not erase the data-quality reason that made a row
+  operationally interesting. Coalesced unavailable episodes make reports bounded and auditable.
+
 ## Pending decisions
 
 | ID | Decision required before implementation |

@@ -20,6 +20,7 @@ TEST(ForecastEvaluationFormatter, FormatsHorizonAndAggregatedMetrics) {
          .horizon = 1min,
          .origin_count = 3U,
          .status = forecast_evaluation::ForecastEvaluationStatus::evaluated,
+         .underlying_status = std::nullopt,
          .mean_absolute_error_bytes = 1024.0,
          .mean_persistence_absolute_error_bytes = 2048.0,
          .mean_signed_error_bytes = -0.0001,
@@ -29,9 +30,32 @@ TEST(ForecastEvaluationFormatter, FormatsHorizonAndAggregatedMetrics) {
 
     EXPECT_NE(output.find("HORIZON"), std::string::npos);
     EXPECT_NE(output.find("ORIGINS"), std::string::npos);
+    EXPECT_NE(output.find("UNDERLYING STATUS"), std::string::npos);
     EXPECT_NE(output.find("1m 00s"), std::string::npos);
     EXPECT_NE(output.find("1.00 KiB"), std::string::npos);
     EXPECT_NE(output.find("+0.00 B"), std::string::npos);
     EXPECT_NE(output.find("evaluated"), std::string::npos);
+    EXPECT_NE(output.find("N/A"), std::string::npos);
+}
+
+TEST(ForecastEvaluationFormatter, DisplaysTheUnderlyingStatusOfAnExcludedRow) {
+    forecast_evaluation::ForecastEvaluationReport report{};
+    report.rows.push_back(
+        {.identity = {.container_id = "container", .cgroup_path = "/docker/example"},
+         .epoch_index = 1U,
+         .horizon = std::nullopt,
+         .origin_count = 0U,
+         .status = forecast_evaluation::ForecastEvaluationStatus::excluded_incomplete_session,
+         .underlying_status =
+             forecast_evaluation::ForecastEvaluationStatus::historical_current_memory_unavailable,
+         .mean_absolute_error_bytes = std::nullopt,
+         .mean_persistence_absolute_error_bytes = std::nullopt,
+         .mean_signed_error_bytes = std::nullopt,
+         .relative_mean_absolute_error = std::nullopt});
+
+    const auto output = format_forecast_evaluation(report);
+
+    EXPECT_NE(output.find("excluded incomplete session"), std::string::npos);
+    EXPECT_NE(output.find("historical memory.current unavailable"), std::string::npos);
 }
 } // namespace memoptima::cli

@@ -61,6 +61,7 @@ struct ForecastEvaluationRow {
     std::optional<std::chrono::milliseconds> horizon;
     std::uint64_t origin_count;
     ForecastEvaluationStatus status;
+    std::optional<ForecastEvaluationStatus> underlying_status;
     std::optional<double> mean_absolute_error_bytes;
     std::optional<double> mean_persistence_absolute_error_bytes;
     std::optional<double> mean_signed_error_bytes;
@@ -143,12 +144,16 @@ class ForecastEvaluationAnalyzer {
         bool observed_in_session{};
         std::vector<Origin> origins;
     };
+    struct UnavailableEpoch {
+        std::optional<std::uint32_t> pending_row_index;
+    };
     void start_epoch(const Observation &observation);
     void append_observation(Epoch &epoch, std::uint64_t current_memory_bytes);
     void update_holdouts(Epoch &epoch, std::uint64_t current_memory_bytes);
     void retain_origin_if_eligible(Epoch &epoch, std::uint64_t current_memory_bytes);
     void decimate_origins(Epoch &epoch);
     void close_epoch(Epoch &&epoch, ForecastEvaluationStatus status);
+    void close_unavailable_epoch(const ContainerIdentity &identity, UnavailableEpoch &&epoch);
     void close_absent_epochs();
     void append_epoch_rows(const Epoch &epoch, ForecastEvaluationStatus epoch_status);
     void summarize(ForecastEvaluationReport &report) const;
@@ -158,6 +163,7 @@ class ForecastEvaluationAnalyzer {
     ForecastEvaluationTimePoint sample_time_{};
     std::set<ContainerIdentity> sample_identities_;
     std::map<ContainerIdentity, Epoch> active_epochs_;
+    std::map<ContainerIdentity, UnavailableEpoch> unavailable_epochs_;
     std::map<ContainerIdentity, std::uint32_t> next_epoch_indices_;
     std::vector<ForecastEvaluationRow> rows_;
     // Rows emitted during the open session must be invalidated if its terminal record is absent.
